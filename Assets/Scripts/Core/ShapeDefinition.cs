@@ -2,10 +2,24 @@ using UnityEngine;
 
 namespace CubeFly.Core
 {
-    // One placeable shape — geometry + collider only. Stats / colour /
-    // gameplay identity come from the chosen MaterialDefinition at
-    // spawn time. A shape is independent of material so the toolbar
-    // can present them as orthogonal axes.
+    // Shape categories — orthogonal axis to material. Armour shapes
+    // (Cube, Slope) pull their material from the MaterialRegistry's
+    // A/B/C/D pool, with the per-shape memory dict in BuildManager
+    // remembering each shape's last-armed choice. Weapon shapes
+    // (Pyramid, future) are 1:1 coupled with their own dedicated
+    // MaterialDefinition referenced by `weaponMaterial`; the regular
+    // material flyout is suppressed for them.
+    public enum ShapeCategory
+    {
+        Armour,
+        Weapon,
+    }
+
+    // One placeable shape — geometry + collider only. For armour
+    // shapes, stats / colour / gameplay identity come from the chosen
+    // MaterialDefinition at spawn time. For weapon shapes, the
+    // MaterialDefinition is fixed (`weaponMaterial`) and the toolbar
+    // doesn't offer alternatives.
     [CreateAssetMenu(fileName = "Shape", menuName = "CubeFly/Shape")]
     public class ShapeDefinition : ScriptableObject
     {
@@ -14,6 +28,12 @@ namespace CubeFly.Core
 
         [Tooltip("Prefab spawned for this shape. Must carry a CubeStats and a 1×1×1 collider so adjacency/face-detection works in the cell-based grid. The MaterialDefinition supplies the renderer material and stat values at spawn.")]
         public GameObject prefab;
+
+        [Tooltip("Armour shapes use the MaterialRegistry's A/B/C/D pool. Weapon shapes use their own coupled `weaponMaterial`.")]
+        public ShapeCategory category = ShapeCategory.Armour;
+
+        [Tooltip("Material applied at spawn time when category == Weapon. Ignored for armour shapes (the chosen MaterialDefinition from MaterialRegistry is used instead).")]
+        public MaterialDefinition weaponMaterial;
 
         // ---------- Valid attachment faces ----------
         //
@@ -70,5 +90,19 @@ namespace CubeFly.Core
             Vector3Int localDir = Vector3Int.RoundToInt(localF);
             return IsLocalFaceValid(localDir);
         }
+
+        // Resolves the MaterialDefinition that should be applied to a
+        // placement of this shape. Armour shapes consult the supplied
+        // registry by index; weapon shapes ignore the registry and
+        // return their coupled `weaponMaterial`. Returns null when
+        // either the registry is missing or the index is out of range
+        // (armour) / weaponMaterial is unassigned (weapon).
+        public MaterialDefinition ResolveMaterial(int materialIndex, MaterialRegistry materialRegistry)
+        {
+            if (category == ShapeCategory.Weapon) return weaponMaterial;
+            return materialRegistry != null ? materialRegistry.Get(materialIndex) : null;
+        }
+
+        public bool IsWeapon => category == ShapeCategory.Weapon;
     }
 }

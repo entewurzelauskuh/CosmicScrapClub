@@ -79,7 +79,12 @@ namespace CubeFly.HangarSelect
                     break;
                 }
             }
-            if (kb.escapeKey.wasPressedThisFrame) OnCancel();
+            // PauseMenu doesn't open in this scene, but if it ever
+            // did (a future feature might add a pause-on-loading
+            // screen), defer ESC to it on its toggle frame.
+            if (kb.escapeKey.wasPressedThisFrame
+                && (PauseMenu.Instance == null || !PauseMenu.Instance.EscConsumedThisFrame))
+                OnCancel();
         }
 
         // ---------- UI construction ----------

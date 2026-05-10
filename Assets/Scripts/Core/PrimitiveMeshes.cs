@@ -8,6 +8,7 @@ namespace CubeFly.Core
     public static class PrimitiveMeshes
     {
         static Mesh _triangularPrism;
+        static Mesh _squarePyramid;
 
         // 1×1×1 right-triangular prism centred at the origin. The
         // hypotenuse (slope) runs from the front-bottom edge to the
@@ -73,6 +74,69 @@ namespace CubeFly.Core
             };
 
             Mesh m = new Mesh { name = "TriangularPrism" };
+            m.vertices = verts;
+            m.triangles = tris;
+            m.RecalculateNormals();
+            m.RecalculateBounds();
+            return m;
+        }
+
+        // 1×1×1 square-base right pyramid. Base at y=-0.5 (the only
+        // valid attachment face per ShapeWeaponPyramid), apex at
+        // y=+0.5. Designed to fully occupy one grid cell so the cell-
+        // graph adjacency / face-detection raycasts behave the same
+        // as for cubes and slopes. Triangle windings produce
+        // outward-facing normals in Unity's left-handed CW-front
+        // convention; verified analytically.
+        public static Mesh SquarePyramid
+        {
+            get
+            {
+                if (_squarePyramid == null) _squarePyramid = BuildSquarePyramid();
+                return _squarePyramid;
+            }
+        }
+
+        static Mesh BuildSquarePyramid()
+        {
+            const float h = 0.5f;
+            Vector3 BBL = new Vector3(-h, -h, -h);
+            Vector3 BBR = new Vector3( h, -h, -h);
+            Vector3 BFR = new Vector3( h, -h,  h);
+            Vector3 BFL = new Vector3(-h, -h,  h);
+            Vector3 APX = new Vector3( 0,  h,  0);
+
+            // Vertices duplicated per face → flat per-face normals
+            // after RecalculateNormals.
+            Vector3[] verts =
+            {
+                // Base (0..3): BBL, BBR, BFR, BFL
+                BBL, BBR, BFR, BFL,
+                // Front (4..6): BFL, BFR, APX
+                BFL, BFR, APX,
+                // Right (7..9): BFR, BBR, APX
+                BFR, BBR, APX,
+                // Back (10..12): BBR, BBL, APX
+                BBR, BBL, APX,
+                // Left (13..15): BBL, BFL, APX
+                BBL, BFL, APX,
+            };
+
+            int[] tris =
+            {
+                // Base (-Y normal): 0..3 wound (0,1,2)+(0,2,3) for outward.
+                0, 1, 2,  0, 2, 3,
+                // Front (+Y+Z normal): 4..6
+                4, 5, 6,
+                // Right (+X+Y normal): 7..9
+                7, 8, 9,
+                // Back (-Z+Y normal): 10..12
+                10, 11, 12,
+                // Left (-X+Y normal): 13..15
+                13, 14, 15,
+            };
+
+            Mesh m = new Mesh { name = "SquarePyramid" };
             m.vertices = verts;
             m.triangles = tris;
             m.RecalculateNormals();

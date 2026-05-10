@@ -81,7 +81,7 @@ namespace CubeFly.Fly
                 CubeStats stats = alphaCubePrefab.GetComponent<CubeStats>();
                 if (stats != null && !Mathf.Approximately(stats.mass, 0f)) alphaMass = stats.mass;
             }
-            return alphaMass + GameData.SumPlacedMasses(materialRegistry);
+            return alphaMass + GameData.SumPlacedMasses(shapeRegistry, materialRegistry);
         }
 
         // Linear lerp from (mass=baseMassThreshold → multiplier=1.0) to
@@ -125,19 +125,31 @@ namespace CubeFly.Fly
                 // Apply the orientation chosen at build-time so each cube
                 // keeps its placed pose relative to the construct.
                 go.transform.localRotation = p.Rotation;
-                // Apply the chosen material's renderer + stats. Mirrors
-                // the build-scene spawn pipeline so the construct's
-                // baselines are identical across the scene transition.
-                if (materialRegistry != null)
-                {
-                    MaterialDefinition mdef = materialRegistry.Get(p.MaterialIndex);
-                    mdef?.ApplyTo(go);
-                }
+                // ResolveMaterial picks the right MaterialDefinition for
+                // the placement's shape category — armour pulls from
+                // the registry by index, weapons return their coupled
+                // weaponMaterial.
+                MaterialDefinition mdef = shape.ResolveMaterial(p.MaterialIndex, materialRegistry);
+                mdef?.ApplyTo(go);
             }
         }
 
         void Update()
         {
+            // Pause overlay catches gameplay input. Time.timeScale = 0
+            // already freezes FixedUpdate (so the velocity-integration
+            // step is paused); this guard zeroes the per-frame input
+            // sample so the velocity accumulator doesn't keep rising
+            // while the menu is up.
+            if (PauseMenu.Instance != null && PauseMenu.Instance.IsOpen)
+            {
+                _thrustInput = Vector3.zero;
+                _pitchInput  = 0f;
+                _yawInput    = 0f;
+                _rollInput   = 0f;
+                return;
+            }
+
             // Sample the input every frame; physics-paced application happens
             // in FixedUpdate to keep the throttle integration stable.
             _thrustInput = _input.Fly.Thrust.ReadValue<Vector3>();

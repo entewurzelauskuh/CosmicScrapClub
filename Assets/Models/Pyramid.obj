@@ -1,0 +1,56 @@
+# Pyramid — square-base right pyramid, 1×1×1, centered horizontally.
+# Square base sits at y=-0.5 (the only valid attachment face); apex
+# at y=+0.5. All four side faces are isosceles triangles.
+#
+# Vertex layout:
+#   v1 = back-bottom-left   (-, -, -)
+#   v2 = back-bottom-right  (+, -, -)
+#   v3 = front-bottom-right (+, -, +)
+#   v4 = front-bottom-left  (-, -, +)
+#   v5 = apex               ( 0, +, 0)
+#
+# Faces: 1 base quad + 4 side triangles.
+#
+# Winding: each face is wound so the right-hand-rule cross product
+# of (v1→v2) × (v1→v3) points outward. In Unity's left-handed coord
+# system this corresponds to clockwise screen-space winding when
+# viewed from outside, so single-sided rendering shows every face.
+# PyramidWeaponMat is also set to render double-sided as a safety net.
+
+o Pyramid
+
+v -0.5 -0.5 -0.5
+v  0.5 -0.5 -0.5
+v  0.5 -0.5  0.5
+v -0.5 -0.5  0.5
+v  0.0  0.5  0.0
+
+# Per-face flat normals.
+vn  0.0 -1.0       0.0
+vn  0.0  0.4472136 0.8944272
+vn  0.8944272  0.4472136  0.0
+vn  0.0  0.4472136 -0.8944272
+vn -0.8944272  0.4472136  0.0
+
+# Unit-square UVs reused across faces (apex re-uses index 5).
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+vt 0.5 1.0
+
+# Base quad — normal -Y. CCW from below gives outward normal.
+f 1/1/1 2/2/1 3/3/1
+f 1/1/1 3/3/1 4/4/1
+
+# Front side — normal +Y +Z.
+f 4/1/2 3/2/2 5/5/2
+
+# Right side — normal +X +Y.
+f 3/1/3 2/2/3 5/5/3
+
+# Back side — normal -Z +Y.
+f 2/1/4 1/2/4 5/5/4
+
+# Left side — normal -X +Y.
+f 1/1/5 4/2/5 5/5/5

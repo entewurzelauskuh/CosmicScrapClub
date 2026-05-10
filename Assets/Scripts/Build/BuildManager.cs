@@ -303,6 +303,16 @@ namespace CubeFly.Build
         // querying stale UI state.
         void Update()
         {
+            // Pause overlay catches all gameplay input — placement,
+            // delete-hover, R/T rotation. The overlay's full-screen
+            // panel already absorbs mouse clicks at the UI layer; this
+            // guard handles keyboard polling.
+            if (PauseMenu.Instance != null && PauseMenu.Instance.IsOpen)
+            {
+                ClearDeleteHover();
+                return;
+            }
+
             if (IsPointerOverUI())
             {
                 ClearDeleteHover();
@@ -360,11 +370,13 @@ namespace CubeFly.Build
             if (data == null) data = go.AddComponent<PlacedCubeData>();
             data.cell = cell;
 
-            if (materialRegistry != null)
-            {
-                MaterialDefinition mdef = materialRegistry.Get(materialIndex);
-                mdef?.ApplyTo(go);
-            }
+            // ResolveMaterial returns the coupled weaponMaterial for
+            // weapon shapes and the registry-indexed MaterialDefinition
+            // for armour shapes — single call site, no caller-side
+            // category branching.
+            ShapeDefinition shape = shapeRegistry != null ? shapeRegistry.Get(shapeIndex) : null;
+            MaterialDefinition mdef = shape != null ? shape.ResolveMaterial(materialIndex, materialRegistry) : null;
+            mdef?.ApplyTo(go);
 
             _spawned[cell] = go;
         }
@@ -395,12 +407,18 @@ namespace CubeFly.Build
             Vector3Int cell = preview.CandidateCell;
             int materialIndex = CurrentMaterialIndex;
 
-            // Mass-budget gate: deny placement if the additional cube would
-            // push the construct over the limit, surface a transient message.
+            // Mass-budget gate: deny placement if the additional cube
+            // would push the construct over the limit, surface a
+            // transient message. Use ResolveMaterial so weapon shapes
+            // pull mass from their coupled weaponMaterial instead of
+            // the (irrelevant) MaterialRegistry index.
             float prospectiveCubeMass = 0f;
-            if (materialRegistry != null)
+            if (shapeRegistry != null)
             {
-                MaterialDefinition mdef = materialRegistry.Get(materialIndex);
+                ShapeDefinition shape = shapeRegistry.Get(_currentShapeIndex);
+                MaterialDefinition mdef = shape != null
+                    ? shape.ResolveMaterial(materialIndex, materialRegistry)
+                    : null;
                 if (mdef != null) prospectiveCubeMass = mdef.mass;
             }
             float prospectiveTotal = ComputeCurrentMass() + prospectiveCubeMass;

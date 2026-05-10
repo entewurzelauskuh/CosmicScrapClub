@@ -38,6 +38,18 @@ namespace CubeFly.Core
 
         public static IReadOnlyList<Placement> PlacedCubes => _placedCubes;
 
+        // Which slot the BuildScene autosaves to. Set by HangarSelect
+        // before transitioning into BuildScene. -1 means "no slot
+        // armed" — autosave is disabled in that case (e.g. when the
+        // developer presses Play directly on BuildScene).
+        public static int ActiveSlot { get; private set; } = -1;
+
+        // True while LoadFromSave is replaying a serialised construct.
+        // The flag is consumed by TryAdd to bypass adjacency / occupancy
+        // validation on load, so saves are treated as authoritative
+        // even if the validation rules have evolved between versions.
+        static bool _loading;
+
         internal static readonly Vector3Int[] Neighbors =
         {
             new Vector3Int( 1, 0, 0),
@@ -55,14 +67,27 @@ namespace CubeFly.Core
                 Debug.unityLogger.LogWarning(TAG, "TryAdd rejected: cannot place at origin (0,0,0)");
                 return false;
             }
-            if (IsOccupied(cell))
+            // Adjacency / occupancy checks are skipped during LoadFromSave —
+            // we trust the persisted construct as authoritative. Origin
+            // remains rejected because that cell is the alpha cube's slot.
+            if (!_loading)
             {
-                Debug.unityLogger.LogWarning(TAG, $"TryAdd rejected (occupied): {cell}");
-                return false;
+                if (IsOccupied(cell))
+                {
+                    Debug.unityLogger.LogWarning(TAG, $"TryAdd rejected (occupied): {cell}");
+                    return false;
+                }
+                if (!IsAdjacentToExisting(cell))
+                {
+                    Debug.unityLogger.LogWarning(TAG, $"TryAdd rejected (not adjacent): {cell}");
+                    return false;
+                }
             }
-            if (!IsAdjacentToExisting(cell))
+            else if (IsOccupied(cell))
             {
-                Debug.unityLogger.LogWarning(TAG, $"TryAdd rejected (not adjacent): {cell}");
+                // Duplicate cell within a single save is still nonsense —
+                // log and skip rather than overwrite.
+                Debug.unityLogger.LogWarning(TAG, $"LoadFromSave: duplicate cell {cell} skipped.");
                 return false;
             }
             Placement p = new Placement(cell, shapeIndex, materialIndex, rotation);
@@ -137,6 +162,117 @@ namespace CubeFly.Core
                 if (def != null) total += def.mass;
             }
             return total;
+        }
+
+        public static float SumPlacedHealthPoints(MaterialRegistry registry)
+        {
+            if (registry == null) return 0f;
+            float total = 0f;
+            for (int i = 0; i < _placedCubes.Count; i++)
+            {
+                MaterialDefinition def = registry.Get(_placedCubes[i].MaterialIndex);
+                if (def != null) total += def.healthPoints;
+            }
+            return total;
+        }
+
+        // Sets which slot subsequent autosaves target. -1 disables
+        // autosave (used when BuildScene is entered without going
+        // through HangarSelect — e.g. Play-from-scene during dev).
+        public static void SetActiveSlot(int slotIndex)
+        {
+            ActiveSlot = slotIndex;
+            Debug.unityLogger.Log(TAG, $"Active slot set to {slotIndex}.");
+        }
+
+        // Replay a serialised construct into in-memory state. Clears
+        // existing placements, then re-adds each PlacementRecord with
+        // adjacency / occupancy validation suspended. Unknown shape /
+        // material names are logged and skipped — the caller can then
+        // run flood-fill cleanup if it cares about graph integrity.
+        public static void LoadFromSave(ConstructSave save,
+            ShapeRegistry shapeRegistry, MaterialRegistry materialRegistry)
+        {
+            Clear();
+            if (save == null || save.placements == null)
+            {
+                Debug.unityLogger.LogWarning(TAG, "LoadFromSave: null or empty save.");
+                return;
+            }
+            if (shapeRegistry == null || materialRegistry == null)
+            {
+                Debug.unityLogger.LogError(TAG, "LoadFromSave: registry references missing.");
+                return;
+            }
+
+            _loading = true;
+            try
+            {
+                int loaded = 0, skipped = 0;
+                for (int i = 0; i < save.placements.Length; i++)
+                {
+                    PlacementRecord r = save.placements[i];
+                    int shapeIndex = shapeRegistry.FindIndexByName(r.shape);
+                    int materialIndex = materialRegistry.FindIndexByName(r.material);
+                    if (shapeIndex < 0)
+                    {
+                        Debug.unityLogger.LogWarning(TAG,
+                            $"LoadFromSave: unknown shape '{r.shape}' at {r.cell} — skipped.");
+                        skipped++;
+                        continue;
+                    }
+                    if (materialIndex < 0)
+                    {
+                        Debug.unityLogger.LogWarning(TAG,
+                            $"LoadFromSave: unknown material '{r.material}' at {r.cell} — skipped.");
+                        skipped++;
+                        continue;
+                    }
+                    if (TryAdd(r.cell, shapeIndex, materialIndex, Quaternion.Euler(r.rotEuler)))
+                        loaded++;
+                    else
+                        skipped++;
+                }
+                Debug.unityLogger.Log(TAG,
+                    $"LoadFromSave: {loaded} placement(s) loaded, {skipped} skipped " +
+                    $"(slot '{save.slotName}', version {save.version}).");
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+
+        // Build a fresh ConstructSave from current state. Stores
+        // shape / material names (not indices) for registry-stable
+        // saves; denormalised totals are recomputed from registries.
+        public static ConstructSave ToSave(string slotName,
+            ShapeRegistry shapeRegistry, MaterialRegistry materialRegistry)
+        {
+            ConstructSave save = new ConstructSave
+            {
+                version = ConstructSave.CurrentVersion,
+                slotName = slotName ?? string.Empty,
+                placements = new PlacementRecord[_placedCubes.Count],
+            };
+
+            for (int i = 0; i < _placedCubes.Count; i++)
+            {
+                Placement p = _placedCubes[i];
+                ShapeDefinition s = shapeRegistry != null ? shapeRegistry.Get(p.ShapeIndex) : null;
+                MaterialDefinition m = materialRegistry != null ? materialRegistry.Get(p.MaterialIndex) : null;
+                save.placements[i] = new PlacementRecord
+                {
+                    cell = p.Cell,
+                    shape = s != null ? s.displayName : string.Empty,
+                    material = m != null ? m.displayName : string.Empty,
+                    rotEuler = p.Rotation.eulerAngles,
+                };
+            }
+
+            save.totalMass = SumPlacedMasses(materialRegistry);
+            save.totalHealthPoints = SumPlacedHealthPoints(materialRegistry);
+            return save;
         }
     }
 }

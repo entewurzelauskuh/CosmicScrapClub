@@ -19,5 +19,19 @@ namespace CubeFly.Core
             if (shapes == null || index < 0 || index >= shapes.Length) return null;
             return shapes[index];
         }
+
+        // Looks up a shape by its displayName. Used by the save layer
+        // so saves reference shapes by name (registry-stable) rather
+        // than index (brittle if the registry is reordered). Returns
+        // -1 when no match. Comparison is ordinal case-sensitive.
+        public int FindIndexByName(string displayName)
+        {
+            if (shapes == null || string.IsNullOrEmpty(displayName)) return -1;
+            for (int i = 0; i < shapes.Length; i++)
+            {
+                if (shapes[i] != null && shapes[i].displayName == displayName) return i;
+            }
+            return -1;
+        }
     }
 }

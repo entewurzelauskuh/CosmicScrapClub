@@ -12,7 +12,10 @@ namespace CubeFly.MainMenu
     public class MainMenuController : MonoBehaviour
     {
         const string TAG = "MainMenu";
-        const string BuildSceneName = "BuildScene";
+        // Hangar button now leads into the slot picker scene rather than
+        // jumping straight into the build scene. The picker resolves the
+        // active slot before BuildScene is loaded.
+        const string HangarSelectSceneName = "HangarSelect";
 
         void Awake()
         {
@@ -54,8 +57,8 @@ namespace CubeFly.MainMenu
 
         void OnHangar()
         {
-            Debug.unityLogger.Log(TAG, "Hangar selected — loading BuildScene.");
-            SceneManager.LoadScene(BuildSceneName);
+            Debug.unityLogger.Log(TAG, "Hangar selected — loading HangarSelect (slot picker).");
+            SceneManager.LoadScene(HangarSelectSceneName);
         }
 
         void OnSettings()

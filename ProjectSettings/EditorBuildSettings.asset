@@ -9,6 +9,9 @@ EditorBuildSettings:
     path: Assets/Scenes/MainMenu.unity
     guid: d3d3d3d3000000030000000000000003
   - enabled: 1
+    path: Assets/Scenes/HangarSelect.unity
+    guid: d3d3d3d3000000040000000000000004
+  - enabled: 1
     path: Assets/Scenes/BuildScene.unity
     guid: d3d3d3d3000000010000000000000001
   - enabled: 1

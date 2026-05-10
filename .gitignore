@@ -105,3 +105,7 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Local construct save slots (project-folder dev path; the SAVES_IN_PROJECT
+# scripting define / UNITY_EDITOR routes SaveManager writes here).
+/Saves/

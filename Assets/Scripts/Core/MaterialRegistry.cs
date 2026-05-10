@@ -17,5 +17,19 @@ namespace CubeFly.Core
             if (materials == null || index < 0 || index >= materials.Length) return null;
             return materials[index];
         }
+
+        // Looks up a material by its displayName. Used by the save
+        // layer so saves reference materials by name (registry-stable)
+        // rather than index. Returns -1 when no match. Comparison is
+        // ordinal case-sensitive.
+        public int FindIndexByName(string displayName)
+        {
+            if (materials == null || string.IsNullOrEmpty(displayName)) return -1;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                if (materials[i] != null && materials[i].displayName == displayName) return i;
+            }
+            return -1;
+        }
     }
 }

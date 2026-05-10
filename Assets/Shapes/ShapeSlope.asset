@@ -14,3 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   displayName: Slope
   prefab: {fileID: 7700000, guid: c2c2c2c2000000200000000000000020, type: 3}
+  faceNegX: 1
+  facePosX: 1
+  faceNegY: 1
+  facePosY: 0
+  faceNegZ: 1
+  facePosZ: 0

@@ -53,6 +53,20 @@ namespace CubeFly.Build
         int _innerSourceShapeIndex = -1;
         int _innerSourceMaterialIndex = -1;
 
+        // Tint state for the bounds ghost. Valid placements clear the
+        // property block (so the material's default green shows
+        // through); invalid placements paint it red. Tracked so we
+        // don't push the same colour every frame.
+        Renderer _boundsRenderer;
+        MaterialPropertyBlock _validityPropertyBlock;
+        bool? _currentValidityTint;
+        static readonly int BaseColorId     = Shader.PropertyToID("_BaseColor");
+        static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+        // Alpha matches PreviewCubeMat's transparent baseline so the
+        // inner mesh stays visible inside the red ghost.
+        static readonly Color InvalidTint     = new Color(1f, 0.30f, 0.30f, 0.40f);
+        static readonly Color InvalidEmission = new Color(0.40f, 0f, 0f, 1f);
+
         int _layerMask;
         int _previewLayer;
         bool _wasVisible;
@@ -157,6 +171,32 @@ namespace CubeFly.Build
             _boundsGhost.transform.localScale = Vector3.one * boundsGhostScale;
             StripGameplayComponents(_boundsGhost);
             if (_previewLayer >= 0) SetLayerRecursive(_boundsGhost, _previewLayer);
+            // Cache the renderer so ApplyValidityTint can paint it red
+            // for invalid placements without a per-frame component lookup.
+            _boundsRenderer = _boundsGhost.GetComponentInChildren<Renderer>(true);
+        }
+
+        // Tints the bounds ghost red for invalid placements; clears the
+        // property block (restoring the material's default green) for
+        // valid ones. No-ops when the validity hasn't changed since the
+        // last call to avoid redundant property-block writes.
+        void ApplyValidityTint(bool valid)
+        {
+            if (_boundsRenderer == null) return;
+            if (_currentValidityTint == valid) return;
+            _currentValidityTint = valid;
+
+            if (valid)
+            {
+                _boundsRenderer.SetPropertyBlock(null);
+                return;
+            }
+
+            if (_validityPropertyBlock == null) _validityPropertyBlock = new MaterialPropertyBlock();
+            _boundsRenderer.GetPropertyBlock(_validityPropertyBlock);
+            _validityPropertyBlock.SetColor(BaseColorId,    InvalidTint);
+            _validityPropertyBlock.SetColor(EmissionColorId, InvalidEmission);
+            _boundsRenderer.SetPropertyBlock(_validityPropertyBlock);
         }
 
         void EnsureInnerMatchesActive()
@@ -264,13 +304,27 @@ namespace CubeFly.Build
 
             if (candidate == Vector3Int.zero || GameData.IsOccupied(candidate))
             { Show(false); return; }
-            if (!GameData.IsAdjacentToExisting(candidate))
-            { Show(false); return; }
+            if (_buildManager == null) { Show(false); return; }
+
+            // Symmetric face-validity check — both the new piece's face
+            // toward an existing piece AND that piece's face toward us
+            // must be backed by real surface area. Unlike the other
+            // early-outs above (which hide the preview entirely), an
+            // invalid attachment still has a meaningful candidate cell;
+            // we show the bounds ghost in red so the player gets
+            // immediate feedback about where they're aiming, while
+            // IsValid stays false to block the actual placement.
+            bool validAttachment = GameData.IsValidAttachment(
+                candidate,
+                _buildManager.CurrentShapeIndex,
+                _buildManager.CurrentRotation,
+                _buildManager.Shapes);
 
             CandidateCell = candidate;
-            IsValid = true;
+            IsValid = validAttachment;
             _previewRoot.transform.position = new Vector3(candidate.x, candidate.y, candidate.z);
             ApplyCurrentRotation();
+            ApplyValidityTint(validAttachment);
             Show(true);
         }
 

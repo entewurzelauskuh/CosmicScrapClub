@@ -413,7 +413,7 @@ namespace CubeFly.Build
                 return;
             }
 
-            if (!GameData.TryAdd(cell, _currentShapeIndex, materialIndex, _currentRotation)) return;
+            if (!GameData.TryAdd(cell, _currentShapeIndex, materialIndex, _currentRotation, shapeRegistry)) return;
             SpawnPlacedCube(cell, _currentShapeIndex, materialIndex, _currentRotation);
             Debug.unityLogger.Log(TAG,
                 $"Cube placed at {cell} (shape {_currentShapeIndex}, material {materialIndex}, rot {_currentRotation.eulerAngles}). " +

@@ -209,12 +209,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a0a0a0a0000000060000000000000006, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  cubeTypeRegistry: {fileID: 11400000, guid: e5e5e5e5000000030000000000000003, type: 2}
+  shapeRegistry: {fileID: 11400000, guid: 2b2a4f1c8e3a4d6db5f1eecf4a0a2c03, type: 2}
+  materialRegistry: {fileID: 11400000, guid: 2b2a4f1c8e3a4d6db5f1eecf4a0a2c15, type: 2}
   alphaCubePrefab: {fileID: 7100000, guid: c2c2c2c2000000010000000000000001, type: 3}
   preview: {fileID: 200003}
   buildCamera: {fileID: 300002}
   cubeRoot: {fileID: 250001}
   maxRayDistance: 100
+  massLimit: 100
+  massDeniedMessage: Too much mass!
+  massDeniedMessageDuration: 5
 --- !u!114 &200003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -230,7 +234,8 @@ MonoBehaviour:
   previewPrefab: {fileID: 7300000, guid: c2c2c2c2000000030000000000000003, type: 3}
   buildCamera: {fileID: 300002}
   maxDistance: 100
-  previewScale: 0.99
+  boundsGhostScale: 0.99
+  innerMeshScale: 0.7
 --- !u!1 &250000
 GameObject:
   m_ObjectHideFlags: 0
@@ -600,6 +605,19 @@ MonoBehaviour:
   hintFontSize: 50
   hintAnchoredPosition: {x: 20, y: -20}
   hintSize: {x: 220, y: 32}
+  floatingFontSize: 36
+  floatingAnchoredPosition: {x: 0, y: -40}
+  floatingSize: {x: 700, y: 60}
+  floatingColor: {r: 1, g: 0.45, b: 0.45, a: 1}
+  deleteButtonLabel: Delete
+  deleteSelectedColor: {r: 0.85, g: 0.25, b: 0.25, a: 0.95}
+  statFontSize: 20
+  massLabelAnchoredPosition: {x: 20, y: 60}
+  hpLabelAnchoredPosition: {x: 20, y: 28}
+  statLabelSize: {x: 260, y: 28}
+  selectedStatsAnchoredPosition: {x: 200, y: 28}
+  selectedStatsSize: {x: 460, y: 60}
+  deleteToolLabelText: "Delete tool \u2014 click a cube to remove"
 --- !u!1 &600000
 GameObject:
   m_ObjectHideFlags: 0

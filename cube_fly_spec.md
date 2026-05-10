@@ -1,4 +1,4 @@
-# Cube Fly — Specification
+# Cube Fly, also known as Cosmic Scrap Club — Specification
 
 **Engine:** Unity 6.3 LTS (6000.3) · **Render Pipeline:** Universal Render
 Pipeline (URP) — Universal 3D template.

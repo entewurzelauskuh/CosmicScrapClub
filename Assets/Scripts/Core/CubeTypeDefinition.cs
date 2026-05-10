@@ -38,14 +38,26 @@ namespace CubeFly.Core
         // ApplyDefaultsTo precedence: prefab CubeStats.mass when explicit,
         // otherwise the SO defaultMass. Used by mass-budget checks before
         // any GameObject is actually instantiated.
-        public float EffectiveMass()
+        public float EffectiveMass() => Resolve(s => s.mass, defaultMass);
+
+        // Resolved HP/AV values, same precedence as EffectiveMass. Used by
+        // the build-scene UI to show the currently-selected cube's stats
+        // before any cube is actually placed.
+        public float EffectiveHealthPoints() => Resolve(s => s.healthPoints, defaultHealthPoints);
+        public float EffectiveArmourValue()  => Resolve(s => s.armourValue,  defaultArmourValue);
+
+        float Resolve(System.Func<CubeStats, float> read, float fallback)
         {
             if (prefab != null)
             {
                 CubeStats stats = prefab.GetComponent<CubeStats>();
-                if (stats != null && !Mathf.Approximately(stats.mass, 0f)) return stats.mass;
+                if (stats != null)
+                {
+                    float v = read(stats);
+                    if (!Mathf.Approximately(v, 0f)) return v;
+                }
             }
-            return defaultMass;
+            return fallback;
         }
     }
 }

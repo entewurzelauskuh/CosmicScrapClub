@@ -1,0 +1,58 @@
+# Slope — right triangular prism, 1×1×1, centered at origin.
+# Geometrically: a unit cube cut diagonally in half with a single
+# straight cut. The 90° corner sits along the back-bottom edge.
+# The hypotenuse (slope face) runs from the front-bottom edge to
+# the back-top edge, so the ramp faces forward-and-up.
+#
+# Coordinates: standard right-handed (.obj convention).
+# Unity's ModelImporter converts to its left-handed system on import.
+# Pair with a double-sided material for safety; the shipped
+# PlacedPrismMat is set up that way.
+#
+# Vertex layout:
+#   v1 = back-bottom-left   (-, -, -)
+#   v2 = back-bottom-right  (+, -, -)
+#   v3 = front-bottom-right (+, -, +)
+#   v4 = front-bottom-left  (-, -, +)
+#   v5 = top-back-left      (-, +, -)
+#   v6 = top-back-right     (+, +, -)
+#
+# Faces: 1 bottom quad + 1 back quad + 1 slope quad + 2 side triangles.
+
+o Slope
+
+v -0.5 -0.5 -0.5
+v  0.5 -0.5 -0.5
+v  0.5 -0.5  0.5
+v -0.5 -0.5  0.5
+v -0.5  0.5 -0.5
+v  0.5  0.5 -0.5
+
+# Per-face flat normals.
+vn  0.0 -1.0  0.0
+vn  0.0  0.0 -1.0
+vn  0.0  0.7071068  0.7071068
+vn -1.0  0.0  0.0
+vn  1.0  0.0  0.0
+
+# Unit-square UVs reused across faces; good enough for a flat-coloured
+# placeholder material. Replace if you ever apply a textured material.
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+
+# Bottom (quad) — normal -Y. CCW from outside (below).
+f 1/1/1 4/2/1 3/3/1 2/4/1
+
+# Back wall (quad) — normal -Z. CCW from outside (-Z direction).
+f 1/1/2 2/2/2 6/3/2 5/4/2
+
+# Slope (quad) — normal +Y+Z. The hypotenuse face. CCW from outside.
+f 4/1/3 5/2/3 6/3/3 3/4/3
+
+# Left side (triangle) — normal -X. CCW from outside (-X).
+f 1/1/4 5/2/4 4/3/4
+
+# Right side (triangle) — normal +X. CCW from outside (+X).
+f 2/1/5 3/2/5 6/3/5

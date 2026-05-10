@@ -1,4 +1,4 @@
-# Cube Fly — Architecture Overview
+# Cube Fly, also known as Cosmic Scrap Club — Architecture Overview
 
 A three-scene Unity 6.3 LTS / URP demonstrator. Players navigate from a
 **Main Menu** into the **Hangar** (BuildScene), assemble a cube

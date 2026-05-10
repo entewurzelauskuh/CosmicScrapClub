@@ -3,23 +3,27 @@ using UnityEngine;
 
 namespace CubeFly.Core
 {
-    // A single placed cube: which grid cell it occupies and which CubeType it
-    // is. The TypeIndex is an offset into the active CubeTypeRegistry so the
-    // build and fly scenes resolve to the same prefab.
+    // A single placed cube: which grid cell it occupies and which
+    // (shape, material) tuple it is. Both indices reference the active
+    // ShapeRegistry / MaterialRegistry so the build and fly scenes
+    // resolve to the same prefabs and materials.
     public readonly struct Placement
     {
         public readonly Vector3Int Cell;
-        public readonly int TypeIndex;
+        public readonly int ShapeIndex;
+        public readonly int MaterialIndex;
         public readonly Quaternion Rotation;
 
-        public Placement(Vector3Int cell, int typeIndex, Quaternion rotation)
+        public Placement(Vector3Int cell, int shapeIndex, int materialIndex, Quaternion rotation)
         {
             Cell = cell;
-            TypeIndex = typeIndex;
+            ShapeIndex = shapeIndex;
+            MaterialIndex = materialIndex;
             Rotation = rotation;
         }
 
-        public override string ToString() => $"{Cell}@type{TypeIndex}@rot{Rotation.eulerAngles}";
+        public override string ToString()
+            => $"{Cell}@shape{ShapeIndex}+mat{MaterialIndex}@rot{Rotation.eulerAngles}";
     }
 
     public static class GameData
@@ -28,9 +32,9 @@ namespace CubeFly.Core
 
         // Both structures stay in sync. The list preserves insertion order
         // (used by re-instantiation, flood-fill snapshots, bounds). The dict
-        // is for O(1) occupancy / type lookups.
+        // is for O(1) occupancy / placement lookups.
         static readonly List<Placement> _placedCubes = new();
-        static readonly Dictionary<Vector3Int, int> _typeByCell = new();
+        static readonly Dictionary<Vector3Int, Placement> _byCell = new();
 
         public static IReadOnlyList<Placement> PlacedCubes => _placedCubes;
 
@@ -44,7 +48,7 @@ namespace CubeFly.Core
             new Vector3Int( 0, 0,-1),
         };
 
-        public static bool TryAdd(Vector3Int cell, int typeIndex, Quaternion rotation)
+        public static bool TryAdd(Vector3Int cell, int shapeIndex, int materialIndex, Quaternion rotation)
         {
             if (cell == Vector3Int.zero)
             {
@@ -61,10 +65,11 @@ namespace CubeFly.Core
                 Debug.unityLogger.LogWarning(TAG, $"TryAdd rejected (not adjacent): {cell}");
                 return false;
             }
-            _placedCubes.Add(new Placement(cell, typeIndex, rotation));
-            _typeByCell[cell] = typeIndex;
+            Placement p = new Placement(cell, shapeIndex, materialIndex, rotation);
+            _placedCubes.Add(p);
+            _byCell[cell] = p;
             Debug.unityLogger.Log(TAG,
-                $"Cell added: {cell} (type {typeIndex}, rot {rotation.eulerAngles}). Total placed: {_placedCubes.Count}");
+                $"Cell added: {cell} (shape {shapeIndex}, material {materialIndex}, rot {rotation.eulerAngles}). Total placed: {_placedCubes.Count}");
             return true;
         }
 
@@ -75,17 +80,19 @@ namespace CubeFly.Core
                 if (_placedCubes[i].Cell == cell)
                 {
                     _placedCubes.RemoveAt(i);
-                    _typeByCell.Remove(cell);
+                    _byCell.Remove(cell);
                     Debug.unityLogger.Log(TAG, $"Cell removed: {cell}. Total placed: {_placedCubes.Count}");
                     return;
                 }
             }
         }
 
-        public static bool IsOccupied(Vector3Int cell) => _typeByCell.ContainsKey(cell);
+        public static bool IsOccupied(Vector3Int cell) => _byCell.ContainsKey(cell);
 
-        public static int GetTypeAt(Vector3Int cell)
-            => _typeByCell.TryGetValue(cell, out int t) ? t : -1;
+        // Returns the full placement at a cell, or default(Placement) when
+        // empty. Callers should check IsOccupied first.
+        public static Placement GetPlacementAt(Vector3Int cell)
+            => _byCell.TryGetValue(cell, out Placement p) ? p : default;
 
         public static bool IsAdjacentToExisting(Vector3Int cell)
         {
@@ -112,20 +119,22 @@ namespace CubeFly.Core
         public static void Clear()
         {
             _placedCubes.Clear();
-            _typeByCell.Clear();
+            _byCell.Clear();
             Debug.unityLogger.Log(TAG, "GameData cleared.");
         }
 
-        // Sum of all placed cubes' effective masses (per CubeTypeDefinition).
-        // Does NOT include the alpha cube — callers add that separately.
-        public static float SumPlacedMasses(CubeTypeRegistry registry)
+        // Sum of all placed cubes' masses, looked up by their material
+        // index. Does NOT include the alpha cube — callers add that
+        // separately. Returns 0 if the registry is null or any
+        // placement's material lookup fails.
+        public static float SumPlacedMasses(MaterialRegistry registry)
         {
             if (registry == null) return 0f;
             float total = 0f;
             for (int i = 0; i < _placedCubes.Count; i++)
             {
-                CubeTypeDefinition def = registry.Get(_placedCubes[i].TypeIndex);
-                if (def != null) total += def.EffectiveMass();
+                MaterialDefinition def = registry.Get(_placedCubes[i].MaterialIndex);
+                if (def != null) total += def.mass;
             }
             return total;
         }

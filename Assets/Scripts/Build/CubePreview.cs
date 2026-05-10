@@ -6,21 +6,53 @@ using UnityEngine.Rendering;
 
 namespace CubeFly.Build
 {
+    // Build-mode placement preview. The grid system is cell-based: every
+    // placeable mesh is required to fit inside one 1×1×1 grid cell, even
+    // when the mesh itself isn't a cube (e.g. a triangular-prism ramp).
+    //
+    // The preview reflects that contract by rendering a *composite* ghost:
+    //
+    //   1. An outer translucent CUBE — the cell-bounds visualisation. It
+    //      shows the player which grid cell will be occupied. Always a
+    //      unit cube regardless of what type is selected.
+    //
+    //   2. An inner mesh — an instance of the currently selected cube
+    //      type's prefab, scaled down so it fits visibly inside the
+    //      bounds ghost. This shows the player WHAT they'll be placing.
+    //
+    // The inner mesh inherits the active rotation (R/T) so the player can
+    // see the prism ramp's orientation. The bounds cube stays world-axis
+    // aligned — rotating a cube within its own cell doesn't change which
+    // cell is occupied.
     public class CubePreview : MonoBehaviour
     {
-        // Kept as a fallback for early-init / missing-registry scenarios; the
-        // primary preview source is BuildManager.Registry's current cube type.
+        // The bounds-ghost prefab (transparent unit cube). Must be a
+        // 1×1×1 cube on the PreviewCube layer with a transparent
+        // material. The shipped PreviewCube prefab fits this role.
         [SerializeField] GameObject previewPrefab;
         [SerializeField] Camera buildCamera;
         [SerializeField] float maxDistance = 100f;
-        [SerializeField] float previewScale = 0.99f;
+
+        [Tooltip("Scale of the outer bounds ghost. Slightly under 1.0 avoids z-fighting with adjacent placed cubes.")]
+        [SerializeField] float boundsGhostScale = 0.99f;
+
+        [Tooltip("Scale of the inner mesh inside the bounds ghost. < 1.0 leaves a clear visible gap so the player sees both the cell-bounds cube and the actual mesh that will be placed.")]
+        [SerializeField] float innerMeshScale = 0.7f;
 
         public Vector3Int CandidateCell { get; private set; }
         public bool IsValid { get; private set; }
 
         BuildManager _buildManager;
-        GameObject _previewInstance;
-        int _previewSourceTypeIndex = -1;
+
+        // Composite preview root — child of nothing, repositioned each
+        // frame to the candidate cell. Parents both the bounds ghost and
+        // the inner mesh so they move/show together.
+        GameObject _previewRoot;
+        GameObject _boundsGhost;
+        GameObject _innerMesh;
+        int _innerSourceShapeIndex = -1;
+        int _innerSourceMaterialIndex = -1;
+
         int _layerMask;
         int _previewLayer;
         bool _wasVisible;
@@ -45,23 +77,25 @@ namespace CubeFly.Build
             if (_buildManager == null) _buildManager = FindAnyObjectByType<BuildManager>();
             if (_buildManager != null)
             {
-                _buildManager.CurrentTypeChanged     += OnCurrentTypeChanged;
+                _buildManager.CurrentShapeChanged    += OnCurrentShapeChanged;
+                _buildManager.CurrentMaterialChanged += OnCurrentMaterialChanged;
                 _buildManager.CurrentRotationChanged += OnCurrentRotationChanged;
                 _buildManager.CurrentToolChanged     += OnCurrentToolChanged;
                 _currentTool = _buildManager.CurrentTool;
             }
 
-            Debug.unityLogger.Log(TAG, "CubePreview ghost cube spawned.");
+            EnsurePreviewRoot();
+            EnsureBoundsGhost();
+            Debug.unityLogger.Log(TAG, "CubePreview composite (bounds ghost + inner mesh) ready.");
         }
 
         void Start()
         {
-            // Build the initial preview now that BuildManager has fully
-            // initialised. After this, OnCurrentTypeChanged keeps it in sync.
+            // Build the initial inner now that BuildManager has fully
+            // initialised. After this, OnCurrentShapeChanged /
+            // OnCurrentMaterialChanged keep it in sync.
             if (_buildManager != null)
-                EnsurePreviewMatchesType(_buildManager.CurrentTypeIndex);
-            else
-                EnsurePreviewFromFallback();
+                EnsureInnerMatchesActive();
             ApplyCurrentRotation();
         }
 
@@ -69,15 +103,27 @@ namespace CubeFly.Build
         {
             if (_buildManager != null)
             {
-                _buildManager.CurrentTypeChanged     -= OnCurrentTypeChanged;
+                _buildManager.CurrentShapeChanged    -= OnCurrentShapeChanged;
+                _buildManager.CurrentMaterialChanged -= OnCurrentMaterialChanged;
                 _buildManager.CurrentRotationChanged -= OnCurrentRotationChanged;
                 _buildManager.CurrentToolChanged     -= OnCurrentToolChanged;
             }
         }
 
-        void OnCurrentTypeChanged(int typeIndex)
+        void OnCurrentShapeChanged(int shapeIndex)
         {
-            EnsurePreviewMatchesType(typeIndex);
+            EnsureInnerMatchesActive();
+            ApplyCurrentRotation();
+        }
+
+        void OnCurrentMaterialChanged(int shapeIndex, int materialIndex)
+        {
+            // Only rebuild if the change touches the active shape — we
+            // don't want a Slope-material swap to redraw the inner when
+            // Cube is the armed shape.
+            if (_buildManager == null) return;
+            if (shapeIndex != _buildManager.CurrentShapeIndex) return;
+            EnsureInnerMatchesActive();
             ApplyCurrentRotation();
         }
 
@@ -91,61 +137,93 @@ namespace CubeFly.Build
             if (tool != BuildTool.Place) Show(false);
         }
 
-        void EnsurePreviewMatchesType(int typeIndex)
+        // ---------- Composite construction ----------
+
+        void EnsurePreviewRoot()
         {
-            if (_previewSourceTypeIndex == typeIndex && _previewInstance != null) return;
-            if (_buildManager == null || _buildManager.Registry == null)
-            {
-                EnsurePreviewFromFallback();
-                return;
-            }
-            CubeTypeDefinition def = _buildManager.Registry.Get(typeIndex);
-            if (def == null || def.prefab == null)
-            {
-                EnsurePreviewFromFallback();
-                return;
-            }
-            RebuildPreview(def.prefab, typeIndex);
+            if (_previewRoot != null) return;
+            _previewRoot = new GameObject("PreviewRoot");
+            if (_previewLayer >= 0) _previewRoot.layer = _previewLayer;
+            _previewRoot.SetActive(false);
         }
 
-        void EnsurePreviewFromFallback()
+        void EnsureBoundsGhost()
         {
-            if (previewPrefab == null) return;
-            if (_previewInstance != null && _previewSourceTypeIndex == -2) return;
-            RebuildPreview(previewPrefab, -2);
+            if (_boundsGhost != null || previewPrefab == null) return;
+            _boundsGhost = Instantiate(previewPrefab, _previewRoot.transform);
+            _boundsGhost.name = "BoundsGhost";
+            _boundsGhost.transform.localPosition = Vector3.zero;
+            _boundsGhost.transform.localRotation = Quaternion.identity;
+            _boundsGhost.transform.localScale = Vector3.one * boundsGhostScale;
+            StripGameplayComponents(_boundsGhost);
+            if (_previewLayer >= 0) SetLayerRecursive(_boundsGhost, _previewLayer);
         }
 
-        void RebuildPreview(GameObject sourcePrefab, int typeIndexTag)
+        void EnsureInnerMatchesActive()
         {
-            if (_previewInstance != null) Destroy(_previewInstance);
-            _previewInstance = Instantiate(sourcePrefab);
-            _previewInstance.name = "PreviewCube";
+            if (_buildManager == null) return;
+            int shapeIndex = _buildManager.CurrentShapeIndex;
+            int materialIndex = _buildManager.CurrentMaterialIndex;
 
-            // Disable colliders so build raycasts can't hit the preview, and
-            // strip any PlacedCubeData copies from the prefab so leftover data
-            // never gets confused with a real placed cube.
-            foreach (Collider col in _previewInstance.GetComponentsInChildren<Collider>(true))
+            // No-op if both axes match what we already built.
+            if (_innerMesh != null
+                && _innerSourceShapeIndex == shapeIndex
+                && _innerSourceMaterialIndex == materialIndex)
+                return;
+
+            ShapeRegistry shapes = _buildManager.Shapes;
+            MaterialRegistry materials = _buildManager.Materials;
+            if (shapes == null) return;
+
+            ShapeDefinition shape = shapes.Get(shapeIndex);
+            if (shape == null || shape.prefab == null) return;
+
+            if (_innerMesh != null) Destroy(_innerMesh);
+            _innerMesh = Instantiate(shape.prefab, _previewRoot.transform);
+            _innerMesh.name = "InnerMesh";
+            _innerMesh.transform.localPosition = Vector3.zero;
+            _innerMesh.transform.localRotation = Quaternion.identity;
+            _innerMesh.transform.localScale = Vector3.one * innerMeshScale;
+
+            // Apply the active material to mirror the spawn pipeline —
+            // the player sees exactly what they'll place.
+            if (materials != null)
+            {
+                MaterialDefinition mdef = materials.Get(materialIndex);
+                mdef?.ApplyTo(_innerMesh);
+            }
+
+            StripGameplayComponents(_innerMesh);
+            if (_previewLayer >= 0) SetLayerRecursive(_innerMesh, _previewLayer);
+
+            _innerSourceShapeIndex = shapeIndex;
+            _innerSourceMaterialIndex = materialIndex;
+        }
+
+        // Disable colliders so build raycasts can't hit the preview, drop
+        // PlacedCubeData (any leftover would be confused with a real placed
+        // cube), and turn off shadow casting so the preview doesn't leave
+        // ghostly shadow artifacts on the construct.
+        static void StripGameplayComponents(GameObject root)
+        {
+            foreach (Collider col in root.GetComponentsInChildren<Collider>(true))
                 col.enabled = false;
-            foreach (PlacedCubeData data in _previewInstance.GetComponentsInChildren<PlacedCubeData>(true))
+            foreach (PlacedCubeData data in root.GetComponentsInChildren<PlacedCubeData>(true))
                 Destroy(data);
-            foreach (Renderer rend in _previewInstance.GetComponentsInChildren<Renderer>(true))
+            foreach (Renderer rend in root.GetComponentsInChildren<Renderer>(true))
                 rend.shadowCastingMode = ShadowCastingMode.Off;
-
-            // Drop the entire hierarchy onto the PreviewCube layer so we
-            // additionally protect against raycast hits, and inset the cube
-            // very slightly so it doesn't z-fight with adjacent placed cubes.
-            if (_previewLayer >= 0) SetLayerRecursive(_previewInstance, _previewLayer);
-            _previewInstance.transform.localScale = Vector3.one * previewScale;
-            _previewInstance.SetActive(false);
-
-            _previewSourceTypeIndex = typeIndexTag;
         }
 
         void ApplyCurrentRotation()
         {
-            if (_previewInstance == null) return;
+            // Rotation is applied to the inner mesh only — the bounds
+            // cube is rotation-invariant (same cell occupied either way),
+            // and rotating the cube would just produce flicker without
+            // any visible change. The prism, by contrast, clearly shows
+            // its facing.
+            if (_innerMesh == null) return;
             Quaternion rot = _buildManager != null ? _buildManager.CurrentRotation : Quaternion.identity;
-            _previewInstance.transform.rotation = rot;
+            _innerMesh.transform.localRotation = rot;
         }
 
         static void SetLayerRecursive(GameObject root, int layer)
@@ -154,6 +232,8 @@ namespace CubeFly.Build
             for (int i = 0; i < root.transform.childCount; i++)
                 SetLayerRecursive(root.transform.GetChild(i).gameObject, layer);
         }
+
+        // ---------- Per-frame placement query ----------
 
         void Update()
         {
@@ -167,7 +247,7 @@ namespace CubeFly.Build
                 buildCamera = Camera.main;
                 if (buildCamera == null) { Show(false); return; }
             }
-            if (_previewInstance == null) return;
+            if (_previewRoot == null) return;
 
             Mouse mouse = Mouse.current;
             if (mouse == null) { Show(false); return; }
@@ -189,7 +269,7 @@ namespace CubeFly.Build
 
             CandidateCell = candidate;
             IsValid = true;
-            _previewInstance.transform.position = new Vector3(candidate.x, candidate.y, candidate.z);
+            _previewRoot.transform.position = new Vector3(candidate.x, candidate.y, candidate.z);
             ApplyCurrentRotation();
             Show(true);
         }
@@ -205,8 +285,8 @@ namespace CubeFly.Build
 
         void Show(bool visible)
         {
-            if (_previewInstance == null) return;
-            if (_previewInstance.activeSelf != visible) _previewInstance.SetActive(visible);
+            if (_previewRoot == null) return;
+            if (_previewRoot.activeSelf != visible) _previewRoot.SetActive(visible);
 
             // Log on state changes only — Update runs every frame and per-frame
             // log lines would flood the file.

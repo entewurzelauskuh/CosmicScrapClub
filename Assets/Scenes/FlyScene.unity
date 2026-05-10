@@ -239,7 +239,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a0a0a0a0000000070000000000000007, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  cubeTypeRegistry: {fileID: 11400000, guid: e5e5e5e5000000030000000000000003, type: 2}
+  shapeRegistry: {fileID: 11400000, guid: 2b2a4f1c8e3a4d6db5f1eecf4a0a2c03, type: 2}
+  materialRegistry: {fileID: 11400000, guid: 2b2a4f1c8e3a4d6db5f1eecf4a0a2c15, type: 2}
   alphaCubePrefab: {fileID: 7100000, guid: c2c2c2c2000000010000000000000001, type: 3}
   construct: {fileID: 200001}
   accelerationRate: 9

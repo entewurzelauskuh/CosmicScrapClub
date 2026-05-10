@@ -226,12 +226,11 @@ namespace CubeFly.Build
             _innerMesh.transform.localScale = Vector3.one * innerMeshScale;
 
             // Apply the active material to mirror the spawn pipeline —
-            // the player sees exactly what they'll place.
-            if (materials != null)
-            {
-                MaterialDefinition mdef = materials.Get(materialIndex);
-                mdef?.ApplyTo(_innerMesh);
-            }
+            // the player sees exactly what they'll place. ResolveMaterial
+            // returns the coupled weaponMaterial for weapon shapes and
+            // the registry-indexed MaterialDefinition for armour shapes.
+            MaterialDefinition mdef = shape.ResolveMaterial(materialIndex, materials);
+            mdef?.ApplyTo(_innerMesh);
 
             StripGameplayComponents(_innerMesh);
             if (_previewLayer >= 0) SetLayerRecursive(_innerMesh, _previewLayer);

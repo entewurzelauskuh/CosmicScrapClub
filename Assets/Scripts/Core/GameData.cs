@@ -183,29 +183,38 @@ namespace CubeFly.Core
             Debug.unityLogger.Log(TAG, "GameData cleared.");
         }
 
-        // Sum of all placed cubes' masses, looked up by their material
-        // index. Does NOT include the alpha cube — callers add that
-        // separately. Returns 0 if the registry is null or any
-        // placement's material lookup fails.
-        public static float SumPlacedMasses(MaterialRegistry registry)
+        // Sum of all placed cubes' masses. Does NOT include the alpha
+        // cube — callers add that separately. Resolves each
+        // placement's material via ShapeDefinition.ResolveMaterial so
+        // weapon shapes pull from their coupled weaponMaterial and
+        // armour shapes pull from MaterialRegistry by index.
+        public static float SumPlacedMasses(ShapeRegistry shapes, MaterialRegistry materials)
         {
-            if (registry == null) return 0f;
+            if (shapes == null) return 0f;
             float total = 0f;
             for (int i = 0; i < _placedCubes.Count; i++)
             {
-                MaterialDefinition def = registry.Get(_placedCubes[i].MaterialIndex);
+                Placement p = _placedCubes[i];
+                ShapeDefinition shape = shapes.Get(p.ShapeIndex);
+                MaterialDefinition def = shape != null
+                    ? shape.ResolveMaterial(p.MaterialIndex, materials)
+                    : null;
                 if (def != null) total += def.mass;
             }
             return total;
         }
 
-        public static float SumPlacedHealthPoints(MaterialRegistry registry)
+        public static float SumPlacedHealthPoints(ShapeRegistry shapes, MaterialRegistry materials)
         {
-            if (registry == null) return 0f;
+            if (shapes == null) return 0f;
             float total = 0f;
             for (int i = 0; i < _placedCubes.Count; i++)
             {
-                MaterialDefinition def = registry.Get(_placedCubes[i].MaterialIndex);
+                Placement p = _placedCubes[i];
+                ShapeDefinition shape = shapes.Get(p.ShapeIndex);
+                MaterialDefinition def = shape != null
+                    ? shape.ResolveMaterial(p.MaterialIndex, materials)
+                    : null;
                 if (def != null) total += def.healthPoints;
             }
             return total;
@@ -248,7 +257,6 @@ namespace CubeFly.Core
                 {
                     PlacementRecord r = save.placements[i];
                     int shapeIndex = shapeRegistry.FindIndexByName(r.shape);
-                    int materialIndex = materialRegistry.FindIndexByName(r.material);
                     if (shapeIndex < 0)
                     {
                         Debug.unityLogger.LogWarning(TAG,
@@ -256,13 +264,30 @@ namespace CubeFly.Core
                         skipped++;
                         continue;
                     }
-                    if (materialIndex < 0)
+
+                    // Weapon shapes have a coupled material that the
+                    // load path resolves via the shape, not via name
+                    // lookup in MaterialRegistry — the saved material
+                    // name is informational for those entries. Set
+                    // MaterialIndex to -1 (sentinel "use coupled").
+                    ShapeDefinition shape = shapeRegistry.Get(shapeIndex);
+                    int materialIndex;
+                    if (shape != null && shape.IsWeapon)
                     {
-                        Debug.unityLogger.LogWarning(TAG,
-                            $"LoadFromSave: unknown material '{r.material}' at {r.cell} — skipped.");
-                        skipped++;
-                        continue;
+                        materialIndex = -1;
                     }
+                    else
+                    {
+                        materialIndex = materialRegistry.FindIndexByName(r.material);
+                        if (materialIndex < 0)
+                        {
+                            Debug.unityLogger.LogWarning(TAG,
+                                $"LoadFromSave: unknown material '{r.material}' at {r.cell} — skipped.");
+                            skipped++;
+                            continue;
+                        }
+                    }
+
                     if (TryAdd(r.cell, shapeIndex, materialIndex, Quaternion.Euler(r.rotEuler), shapeRegistry))
                         loaded++;
                     else
@@ -295,7 +320,11 @@ namespace CubeFly.Core
             {
                 Placement p = _placedCubes[i];
                 ShapeDefinition s = shapeRegistry != null ? shapeRegistry.Get(p.ShapeIndex) : null;
-                MaterialDefinition m = materialRegistry != null ? materialRegistry.Get(p.MaterialIndex) : null;
+                // For weapon shapes the material is implicit (coupled
+                // to the shape) — we still write a non-empty name for
+                // diagnosability, but the load path resolves via the
+                // shape rather than name-lookup.
+                MaterialDefinition m = s != null ? s.ResolveMaterial(p.MaterialIndex, materialRegistry) : null;
                 save.placements[i] = new PlacementRecord
                 {
                     cell = p.Cell,
@@ -305,8 +334,8 @@ namespace CubeFly.Core
                 };
             }
 
-            save.totalMass = SumPlacedMasses(materialRegistry);
-            save.totalHealthPoints = SumPlacedHealthPoints(materialRegistry);
+            save.totalMass = SumPlacedMasses(shapeRegistry, materialRegistry);
+            save.totalHealthPoints = SumPlacedHealthPoints(shapeRegistry, materialRegistry);
             return save;
         }
     }

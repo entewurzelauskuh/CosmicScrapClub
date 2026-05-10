@@ -65,7 +65,14 @@ namespace CubeFly.Fly
 
         void Update()
         {
-            bool lookHeld = _input.Fly.LookHeld.IsPressed();
+            // While paused, behave as if RMB is released: free the
+            // cursor (so the player can click the menu buttons),
+            // ignore mouse delta, and let the offset snap back to
+            // neutral over real time. Time.timeScale = 0 already
+            // freezes the LateUpdate Lerps via Time.deltaTime, so the
+            // camera body doesn't follow during the pause anyway.
+            bool paused = PauseMenu.Instance != null && PauseMenu.Instance.IsOpen;
+            bool lookHeld = !paused && _input.Fly.LookHeld.IsPressed();
 
             if (lookHeld)
             {

@@ -17,7 +17,10 @@ namespace CubeFly.Build
 
     public class BuildManager : MonoBehaviour
     {
-        [SerializeField] CubeTypeRegistry cubeTypeRegistry;
+        [Header("Registries (decoupled shape × material)")]
+        [SerializeField] ShapeRegistry shapeRegistry;
+        [SerializeField] MaterialRegistry materialRegistry;
+
         [SerializeField] GameObject alphaCubePrefab;
         [SerializeField] CubePreview preview;
         [SerializeField] Camera buildCamera;
@@ -31,10 +34,16 @@ namespace CubeFly.Build
 
         readonly Dictionary<Vector3Int, GameObject> _spawned = new();
 
+        // Per-shape last-armed material. Key = shape index, value =
+        // material index. Switching shape via the toolbar re-arms its
+        // last material (default 0 if never set), so the player's choice
+        // for one shape persists when they swap to another and back.
+        readonly Dictionary<int, int> _shapeMaterialMemory = new();
+
         CubeFlyInputActions _input;
         int _buildLayerMask;
         int _placedLayerMask;
-        int _currentTypeIndex;
+        int _currentShapeIndex;
         Quaternion _currentRotation = Quaternion.identity;
         BuildTool _currentTool = BuildTool.Place;
         BuildToolbarController _toolbar;
@@ -53,15 +62,28 @@ namespace CubeFly.Build
         const string TAG = "BuildManager";
 
         public int BuildLayerMask => _buildLayerMask;
-        public CubeTypeRegistry Registry => cubeTypeRegistry;
-        public int CurrentTypeIndex => _currentTypeIndex;
+        public ShapeRegistry Shapes => shapeRegistry;
+        public MaterialRegistry Materials => materialRegistry;
+        public int CurrentShapeIndex => _currentShapeIndex;
+        public int CurrentMaterialIndex => GetMaterialForShape(_currentShapeIndex);
         public Quaternion CurrentRotation => _currentRotation;
         public BuildTool CurrentTool => _currentTool;
         public float MassLimit => massLimit;
 
-        // Fired when SetCurrentType changes the active selection — the build
-        // toolbar listens for this to highlight the matching button.
-        public event Action<int> CurrentTypeChanged;
+        // Looks up the material that is currently armed for a given
+        // shape — first checks the per-shape memory dict, falls back
+        // to material 0 if the shape has never been selected.
+        public int GetMaterialForShape(int shapeIndex)
+            => _shapeMaterialMemory.TryGetValue(shapeIndex, out int m) ? m : 0;
+
+        // Fired when SetCurrentShape changes the active shape — the
+        // build toolbar listens to highlight the matching button.
+        public event Action<int> CurrentShapeChanged;
+
+        // Fired whenever a shape's material memory is updated, even
+        // when the shape isn't the active one. The toolbar uses this
+        // to refresh the corner swatch on each shape button.
+        public event Action<int, int> CurrentMaterialChanged;
 
         // Fired whenever the set of placed cubes changes (Place / Remove,
         // including flood-fill cleanup) and once during Start after the
@@ -90,21 +112,49 @@ namespace CubeFly.Build
         public bool TryGetSpawnedCube(Vector3Int cell, out GameObject go)
             => _spawned.TryGetValue(cell, out go);
 
-        public void SetCurrentType(int typeIndex)
+        public void SetCurrentShape(int shapeIndex)
         {
-            if (cubeTypeRegistry == null) return;
-            if (typeIndex < 0 || typeIndex >= cubeTypeRegistry.Count) return;
+            if (shapeRegistry == null) return;
+            if (shapeIndex < 0 || shapeIndex >= shapeRegistry.Count) return;
 
-            // Selecting a cube type implies the player wants to place — flip
+            // Selecting a shape implies the player wants to place — flip
             // back to Place if the Delete tool was active.
             if (_currentTool != BuildTool.Place) SetCurrentTool(BuildTool.Place);
 
-            if (_currentTypeIndex == typeIndex) return;
-            _currentTypeIndex = typeIndex;
-            CubeTypeDefinition def = cubeTypeRegistry.Get(typeIndex);
-            string label = def != null ? def.displayName : $"Cube #{typeIndex}";
-            Debug.unityLogger.Log(TAG, $"Active cube type set to '{label}' (index {typeIndex}).");
-            CurrentTypeChanged?.Invoke(typeIndex);
+            if (_currentShapeIndex == shapeIndex) return;
+            _currentShapeIndex = shapeIndex;
+            ShapeDefinition def = shapeRegistry.Get(shapeIndex);
+            string label = def != null ? def.displayName : $"Shape #{shapeIndex}";
+            Debug.unityLogger.Log(TAG,
+                $"Active shape set to '{label}' (index {shapeIndex}, material {CurrentMaterialIndex}).");
+            CurrentShapeChanged?.Invoke(shapeIndex);
+        }
+
+        // Set the material armed for the *active* shape. Each shape
+        // remembers its own last-armed material independently.
+        public void SetCurrentMaterial(int materialIndex)
+            => SetMaterialForShape(_currentShapeIndex, materialIndex);
+
+        // Set the material armed for a specific shape (allows the
+        // toolbar's flyout to set materials for non-active shapes too,
+        // e.g. via right-click on a shape button).
+        public void SetMaterialForShape(int shapeIndex, int materialIndex)
+        {
+            if (materialRegistry == null) return;
+            if (materialIndex < 0 || materialIndex >= materialRegistry.Count) return;
+            if (shapeRegistry == null) return;
+            if (shapeIndex < 0 || shapeIndex >= shapeRegistry.Count) return;
+
+            int previous = GetMaterialForShape(shapeIndex);
+            _shapeMaterialMemory[shapeIndex] = materialIndex;
+            if (previous == materialIndex) return;
+
+            MaterialDefinition def = materialRegistry.Get(materialIndex);
+            string mlabel = def != null ? def.displayName : $"Material #{materialIndex}";
+            ShapeDefinition sdef = shapeRegistry.Get(shapeIndex);
+            string slabel = sdef != null ? sdef.displayName : $"Shape #{shapeIndex}";
+            Debug.unityLogger.Log(TAG, $"Material for '{slabel}' set to '{mlabel}' (index {materialIndex}).");
+            CurrentMaterialChanged?.Invoke(shapeIndex, materialIndex);
         }
 
         void Awake()
@@ -178,7 +228,8 @@ namespace CubeFly.Build
             // Surface the initial state so listeners can render the
             // toolbar's selected state and stat labels without waiting
             // for the first placement.
-            CurrentTypeChanged?.Invoke(_currentTypeIndex);
+            CurrentShapeChanged?.Invoke(_currentShapeIndex);
+            CurrentMaterialChanged?.Invoke(_currentShapeIndex, CurrentMaterialIndex);
             CurrentToolChanged?.Invoke(_currentTool);
             ConstructChanged?.Invoke();
         }
@@ -258,42 +309,45 @@ namespace CubeFly.Build
             for (int i = 0; i < GameData.PlacedCubes.Count; i++)
             {
                 Placement p = GameData.PlacedCubes[i];
-                SpawnPlacedCube(p.Cell, p.TypeIndex, p.Rotation);
+                SpawnPlacedCube(p.Cell, p.ShapeIndex, p.MaterialIndex, p.Rotation);
             }
         }
 
-        void SpawnPlacedCube(Vector3Int cell, int typeIndex, Quaternion rotation)
+        // Instantiate a shape prefab at a cell, then apply the chosen
+        // material's renderer + stats. Order matters: material apply
+        // overwrites the prefab's stat fields so the per-cube CubeStats
+        // reflects MaterialDefinition values, not prefab placeholders.
+        void SpawnPlacedCube(Vector3Int cell, int shapeIndex, int materialIndex, Quaternion rotation)
         {
-            GameObject prefab = ResolvePrefab(typeIndex);
+            GameObject prefab = ResolveShapePrefab(shapeIndex);
             if (prefab == null) return;
             Vector3 pos = new Vector3(cell.x, cell.y, cell.z);
             GameObject go = Instantiate(prefab, pos, rotation, cubeRoot);
+
             PlacedCubeData data = go.GetComponent<PlacedCubeData>();
             if (data == null) data = go.AddComponent<PlacedCubeData>();
             data.cell = cell;
 
-            // Seed any zero-valued CubeStats fields from the type's defaults.
-            // No-op when the prefab carries explicit values.
-            if (cubeTypeRegistry != null)
+            if (materialRegistry != null)
             {
-                CubeTypeDefinition def = cubeTypeRegistry.Get(typeIndex);
-                def?.ApplyDefaultsTo(go.GetComponent<CubeStats>());
+                MaterialDefinition mdef = materialRegistry.Get(materialIndex);
+                mdef?.ApplyTo(go);
             }
 
             _spawned[cell] = go;
         }
 
-        GameObject ResolvePrefab(int typeIndex)
+        GameObject ResolveShapePrefab(int shapeIndex)
         {
-            if (cubeTypeRegistry == null)
+            if (shapeRegistry == null)
             {
-                Debug.unityLogger.LogError(TAG, "No CubeTypeRegistry assigned on BuildManager.");
+                Debug.unityLogger.LogError(TAG, "No ShapeRegistry assigned on BuildManager.");
                 return null;
             }
-            CubeTypeDefinition def = cubeTypeRegistry.Get(typeIndex);
+            ShapeDefinition def = shapeRegistry.Get(shapeIndex);
             if (def == null || def.prefab == null)
             {
-                Debug.unityLogger.LogError(TAG, $"CubeTypeDefinition or prefab missing for index {typeIndex}.");
+                Debug.unityLogger.LogError(TAG, $"ShapeDefinition or prefab missing for index {shapeIndex}.");
                 return null;
             }
             return def.prefab;
@@ -307,14 +361,15 @@ namespace CubeFly.Build
                 return;
             }
             Vector3Int cell = preview.CandidateCell;
+            int materialIndex = CurrentMaterialIndex;
 
             // Mass-budget gate: deny placement if the additional cube would
             // push the construct over the limit, surface a transient message.
             float prospectiveCubeMass = 0f;
-            if (cubeTypeRegistry != null)
+            if (materialRegistry != null)
             {
-                CubeTypeDefinition def = cubeTypeRegistry.Get(_currentTypeIndex);
-                if (def != null) prospectiveCubeMass = def.EffectiveMass();
+                MaterialDefinition mdef = materialRegistry.Get(materialIndex);
+                if (mdef != null) prospectiveCubeMass = mdef.mass;
             }
             float prospectiveTotal = ComputeCurrentMass() + prospectiveCubeMass;
             if (prospectiveTotal > massLimit)
@@ -326,10 +381,10 @@ namespace CubeFly.Build
                 return;
             }
 
-            if (!GameData.TryAdd(cell, _currentTypeIndex, _currentRotation)) return;
-            SpawnPlacedCube(cell, _currentTypeIndex, _currentRotation);
+            if (!GameData.TryAdd(cell, _currentShapeIndex, materialIndex, _currentRotation)) return;
+            SpawnPlacedCube(cell, _currentShapeIndex, materialIndex, _currentRotation);
             Debug.unityLogger.Log(TAG,
-                $"Cube placed at {cell} (type {_currentTypeIndex}, rot {_currentRotation.eulerAngles}). " +
+                $"Cube placed at {cell} (shape {_currentShapeIndex}, material {materialIndex}, rot {_currentRotation.eulerAngles}). " +
                 $"Total mass: {ComputeCurrentMass():F1}/{massLimit:F0}.");
             ConstructChanged?.Invoke();
         }

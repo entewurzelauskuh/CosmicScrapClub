@@ -6,7 +6,10 @@ namespace CubeFly.Fly
 {
     public class FlyController : MonoBehaviour
     {
-        [SerializeField] CubeTypeRegistry cubeTypeRegistry;
+        [Header("Registries (decoupled shape × material)")]
+        [SerializeField] ShapeRegistry shapeRegistry;
+        [SerializeField] MaterialRegistry materialRegistry;
+
         [SerializeField] GameObject alphaCubePrefab;
         [SerializeField] Transform construct;
 
@@ -78,7 +81,7 @@ namespace CubeFly.Fly
                 CubeStats stats = alphaCubePrefab.GetComponent<CubeStats>();
                 if (stats != null && !Mathf.Approximately(stats.mass, 0f)) alphaMass = stats.mass;
             }
-            return alphaMass + GameData.SumPlacedMasses(cubeTypeRegistry);
+            return alphaMass + GameData.SumPlacedMasses(materialRegistry);
         }
 
         // Linear lerp from (mass=baseMassThreshold → multiplier=1.0) to
@@ -102,30 +105,34 @@ namespace CubeFly.Fly
                 alpha.transform.localRotation = Quaternion.identity;
             }
 
-            if (cubeTypeRegistry == null)
+            if (shapeRegistry == null)
             {
-                Debug.unityLogger.LogError(TAG, "No CubeTypeRegistry assigned on FlyController; placed cubes won't be rebuilt.");
+                Debug.unityLogger.LogError(TAG, "No ShapeRegistry assigned on FlyController; placed cubes won't be rebuilt.");
                 return;
             }
 
             for (int i = 0; i < GameData.PlacedCubes.Count; i++)
             {
                 Placement p = GameData.PlacedCubes[i];
-                CubeTypeDefinition def = cubeTypeRegistry.Get(p.TypeIndex);
-                if (def == null || def.prefab == null)
+                ShapeDefinition shape = shapeRegistry.Get(p.ShapeIndex);
+                if (shape == null || shape.prefab == null)
                 {
-                    Debug.unityLogger.LogWarning(TAG, $"Skipping {p.Cell}: no prefab for type index {p.TypeIndex}.");
+                    Debug.unityLogger.LogWarning(TAG, $"Skipping {p.Cell}: no prefab for shape index {p.ShapeIndex}.");
                     continue;
                 }
-                GameObject go = Instantiate(def.prefab, construct);
+                GameObject go = Instantiate(shape.prefab, construct);
                 go.transform.localPosition = new Vector3(p.Cell.x, p.Cell.y, p.Cell.z);
                 // Apply the orientation chosen at build-time so each cube
                 // keeps its placed pose relative to the construct.
                 go.transform.localRotation = p.Rotation;
-                // Seed any zero-valued CubeStats fields from the type
-                // defaults so the construct in fly mode carries the same
-                // baselines that the build scene would have applied.
-                def.ApplyDefaultsTo(go.GetComponent<CubeStats>());
+                // Apply the chosen material's renderer + stats. Mirrors
+                // the build-scene spawn pipeline so the construct's
+                // baselines are identical across the scene transition.
+                if (materialRegistry != null)
+                {
+                    MaterialDefinition mdef = materialRegistry.Get(p.MaterialIndex);
+                    mdef?.ApplyTo(go);
+                }
             }
         }
 

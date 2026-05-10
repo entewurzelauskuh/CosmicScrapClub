@@ -1,4 +1,4 @@
-# Cube Fly
+# Cube Fly, also known as Cosmic Scrap Club
 
 A small Unity 6.3 LTS / URP demonstrator. Build a cube ship in the
 hangar, then fly it.

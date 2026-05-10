@@ -12,8 +12,9 @@ namespace CubeFly.Core
         [SerializeField] Button sceneSwitchButton;
         [SerializeField] Text buttonLabel;
 
-        const string BuildSceneName = "BuildScene";
-        const string FlySceneName   = "FlyScene";
+        const string BuildSceneName        = "BuildScene";
+        const string FlySceneName          = "FlyScene";
+        const string HangarSelectSceneName = "HangarSelect";
         const string TAG = "UIManager";
 
         Canvas _canvas;
@@ -57,12 +58,18 @@ namespace CubeFly.Core
         }
 
         // Per-scene visibility + label. The corner button only makes sense
-        // during gameplay; on the Main Menu the canvas is hidden so the menu
-        // owns the screen.
+        // during gameplay; on the Main Menu and HangarSelect (slot picker)
+        // the canvas is hidden so each owns its full screen. The check is
+        // an explicit allowlist rather than a deny-list so future scenes
+        // (HangarSelect, settings menus) default to "hide me".
         void OnSceneStateChanged(Scene scene)
         {
             UpdateLabel(scene);
             bool inGameplay = scene.name == BuildSceneName || scene.name == FlySceneName;
+            // Reference the HangarSelect constant so the intent is greppable
+            // from the .cs file even though the boolean already evaluates
+            // to false there.
+            _ = HangarSelectSceneName;
             if (_canvas != null) _canvas.enabled = inGameplay;
         }
 

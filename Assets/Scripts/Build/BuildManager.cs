@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using CubeFly.Core;
 using CubeFly.Input;
@@ -32,7 +33,18 @@ namespace CubeFly.Build
         [SerializeField] string massDeniedMessage = "Too much mass!";
         [SerializeField] float massDeniedMessageDuration = 5f;
 
+        [Header("Autosave")]
+        [Tooltip("Debounce window before a ConstructChanged event triggers a save. Bursts of changes (e.g. flood-fill cleanup) collapse into one write.")]
+        [SerializeField] float autosaveDebounceSeconds = 0.25f;
+        [Tooltip("Slot label written into the save metadata. Display only — slot identity is the file name.")]
+        [SerializeField] string autosaveSlotName = string.Empty;
+
         readonly Dictionary<Vector3Int, GameObject> _spawned = new();
+
+        // Autosave state — single coroutine restarted on each
+        // ConstructChanged so a burst of edits collapses into one
+        // write at the end of the debounce window.
+        Coroutine _autosaveRoutine;
 
         // Per-shape last-armed material. Key = shape index, value =
         // material index. Switching shape via the toolbar re-arms its
@@ -202,7 +214,20 @@ namespace CubeFly.Build
 
         void OnEnable() => _input.Build.Enable();
         void OnDisable() => _input.Build.Disable();
-        void OnDestroy() => _input?.Dispose();
+        void OnDestroy()
+        {
+            _input?.Dispose();
+            ConstructChanged -= ScheduleAutosave;
+            // If a save was pending, write it now so the slot file
+            // ends the session current. The scene tear-down path has
+            // already invoked ConstructChanged for any final edits.
+            if (_autosaveRoutine != null && GameData.ActiveSlot >= 0)
+            {
+                StopCoroutine(_autosaveRoutine);
+                _autosaveRoutine = null;
+                FlushSaveNow();
+            }
+        }
 
         void Start()
         {
@@ -225,13 +250,20 @@ namespace CubeFly.Build
 
             _toolbar = FindAnyObjectByType<BuildToolbarController>();
 
-            // Surface the initial state so listeners can render the
-            // toolbar's selected state and stat labels without waiting
-            // for the first placement.
+            // Subscribe AFTER the initial ConstructChanged below so the
+            // first reinstantiation doesn't kick off an autosave that
+            // just re-writes what we loaded.
             CurrentShapeChanged?.Invoke(_currentShapeIndex);
             CurrentMaterialChanged?.Invoke(_currentShapeIndex, CurrentMaterialIndex);
             CurrentToolChanged?.Invoke(_currentTool);
             ConstructChanged?.Invoke();
+
+            ConstructChanged += ScheduleAutosave;
+            if (GameData.ActiveSlot < 0)
+            {
+                Debug.unityLogger.LogWarning(TAG,
+                    "ActiveSlot is unset — autosave disabled. Enter BuildScene via HangarSelect to enable saving.");
+            }
         }
 
         // Sums a CubeStats field across the alpha cube + all spawned placed
@@ -509,6 +541,37 @@ namespace CubeFly.Build
             }
 
             Debug.unityLogger.Log(TAG, $"Flood-fill removed {removed} dangling cube(s).");
+        }
+
+        // ---------- Autosave ----------
+
+        // Restart-on-each-call debounce: every ConstructChanged kicks
+        // off a fresh wait, so a burst of edits collapses into a single
+        // write at the end of the window. No-op when no slot is armed.
+        void ScheduleAutosave()
+        {
+            if (GameData.ActiveSlot < 0) return;
+            if (shapeRegistry == null || materialRegistry == null) return;
+            if (_autosaveRoutine != null) StopCoroutine(_autosaveRoutine);
+            _autosaveRoutine = StartCoroutine(AutosaveAfterDelay());
+        }
+
+        IEnumerator AutosaveAfterDelay()
+        {
+            yield return new WaitForSeconds(autosaveDebounceSeconds);
+            FlushSaveNow();
+            _autosaveRoutine = null;
+        }
+
+        void FlushSaveNow()
+        {
+            int slot = GameData.ActiveSlot;
+            if (slot < 0) return;
+            string slotName = string.IsNullOrEmpty(autosaveSlotName)
+                ? $"Slot {slot + 1}"
+                : autosaveSlotName;
+            ConstructSave save = GameData.ToSave(slotName, shapeRegistry, materialRegistry);
+            SaveManager.Save(slot, save);
         }
     }
 }

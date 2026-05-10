@@ -60,16 +60,19 @@ namespace CubeFly.Core
             new Vector3Int( 0, 0,-1),
         };
 
-        public static bool TryAdd(Vector3Int cell, int shapeIndex, int materialIndex, Quaternion rotation)
+        public static bool TryAdd(Vector3Int cell, int shapeIndex, int materialIndex,
+            Quaternion rotation, ShapeRegistry shapeRegistry)
         {
             if (cell == Vector3Int.zero)
             {
                 Debug.unityLogger.LogWarning(TAG, "TryAdd rejected: cannot place at origin (0,0,0)");
                 return false;
             }
-            // Adjacency / occupancy checks are skipped during LoadFromSave —
-            // we trust the persisted construct as authoritative. Origin
-            // remains rejected because that cell is the alpha cube's slot.
+            // Validation is skipped during LoadFromSave — the persisted
+            // construct is treated as authoritative. Origin remains
+            // rejected because that cell is the alpha cube's slot, and
+            // duplicate cells within a single save are still rejected
+            // to avoid overwriting earlier placements silently.
             if (!_loading)
             {
                 if (IsOccupied(cell))
@@ -77,16 +80,15 @@ namespace CubeFly.Core
                     Debug.unityLogger.LogWarning(TAG, $"TryAdd rejected (occupied): {cell}");
                     return false;
                 }
-                if (!IsAdjacentToExisting(cell))
+                if (!IsValidAttachment(cell, shapeIndex, rotation, shapeRegistry))
                 {
-                    Debug.unityLogger.LogWarning(TAG, $"TryAdd rejected (not adjacent): {cell}");
+                    Debug.unityLogger.LogWarning(TAG,
+                        $"TryAdd rejected (no valid attachment face): {cell} shape={shapeIndex} rot={rotation.eulerAngles}");
                     return false;
                 }
             }
             else if (IsOccupied(cell))
             {
-                // Duplicate cell within a single save is still nonsense —
-                // log and skip rather than overwrite.
                 Debug.unityLogger.LogWarning(TAG, $"LoadFromSave: duplicate cell {cell} skipped.");
                 return false;
             }
@@ -119,13 +121,46 @@ namespace CubeFly.Core
         public static Placement GetPlacementAt(Vector3Int cell)
             => _byCell.TryGetValue(cell, out Placement p) ? p : default;
 
-        public static bool IsAdjacentToExisting(Vector3Int cell)
+        // Symmetric face-validity check. A placement at `cell` with
+        // (shape, rotation) is valid when, for at least one of the six
+        // cell-face neighbours, BOTH:
+        //   • the new piece has a real surface on the face pointing at
+        //     that neighbour (in its rotation), AND
+        //   • the neighbour piece has a real surface on the face pointing
+        //     back at us (in its rotation).
+        //
+        // The alpha cube at the origin counts as a cube — all six faces
+        // valid. Empty cells are skipped. The check reduces to the old
+        // "any face-adjacent cell is occupied" rule for all-cube
+        // constructs, since cubes have all six faces valid.
+        public static bool IsValidAttachment(Vector3Int cell, int newShapeIndex,
+            Quaternion newRotation, ShapeRegistry shapeRegistry)
         {
+            if (shapeRegistry == null) return false;
+            ShapeDefinition newShape = shapeRegistry.Get(newShapeIndex);
+            if (newShape == null) return false;
+
             for (int i = 0; i < Neighbors.Length; i++)
             {
-                Vector3Int neighbor = cell + Neighbors[i];
-                if (neighbor == Vector3Int.zero) return true;
-                if (IsOccupied(neighbor)) return true;
+                Vector3Int dir = Neighbors[i];
+                Vector3Int neighborCell = cell + dir;
+
+                bool isAlpha = neighborCell == Vector3Int.zero;
+                if (!isAlpha && !IsOccupied(neighborCell)) continue;
+
+                // 1. New piece's face toward the neighbour must be valid.
+                if (!newShape.IsWorldFaceValid(dir, newRotation)) continue;
+
+                // 2. Neighbour's face toward us must be valid. The alpha
+                //    cube is a cube → all six trivially valid.
+                if (isAlpha) return true;
+
+                Placement neighborPlacement = GetPlacementAt(neighborCell);
+                ShapeDefinition neighborShape = shapeRegistry.Get(neighborPlacement.ShapeIndex);
+                if (neighborShape == null) continue;
+                if (!neighborShape.IsWorldFaceValid(-dir, neighborPlacement.Rotation)) continue;
+
+                return true;
             }
             return false;
         }
@@ -228,7 +263,7 @@ namespace CubeFly.Core
                         skipped++;
                         continue;
                     }
-                    if (TryAdd(r.cell, shapeIndex, materialIndex, Quaternion.Euler(r.rotEuler)))
+                    if (TryAdd(r.cell, shapeIndex, materialIndex, Quaternion.Euler(r.rotEuler), shapeRegistry))
                         loaded++;
                     else
                         skipped++;

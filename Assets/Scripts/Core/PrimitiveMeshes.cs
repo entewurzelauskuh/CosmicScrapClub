@@ -14,7 +14,9 @@ namespace CubeFly.Core
         // back-top edge, so the ramp faces forward-and-up. Designed to
         // fully occupy one grid cell — same footprint as the cube
         // primitive, so adjacency / face-detection raycasts and the
-        // construct's BoxCollider remain correct.
+        // construct's BoxCollider remain correct. Triangle windings
+        // produce outward-facing normals so single-sided rendering
+        // (Unity's default back-face culling) shows every face.
         public static Mesh TriangularPrism
         {
             get
@@ -50,18 +52,24 @@ namespace CubeFly.Core
                 BBR, TBR, FBR,
             };
 
+            // Triangle winding: each face is wound so the right-hand-rule
+            // cross product of (v1→v2) × (v1→v3) points OUTWARD. In Unity
+            // (left-handed coords) that corresponds to clockwise screen-
+            // space winding when viewed from outside — Unity's front-face
+            // convention. RecalculateNormals derives correct outward
+            // normals from this winding.
             int[] tris =
             {
-                // Bottom (CCW from below — normal -Y)
-                0, 3, 2,  0, 2, 1,
-                // Back (CCW from -Z — normal -Z)
+                // Bottom (normal -Y) — verts 0..3 = BBL, BBR, FBR, FBL
+                0, 1, 2,  0, 2, 3,
+                // Back (normal -Z) — verts 4..7 = BBL, BBR, TBR, TBL
                 4, 7, 6,  4, 6, 5,
-                // Slope (CCW from outside — normal points +Z+Y)
-                8, 11, 10,  8, 10, 9,
-                // Left triangle (CCW from -X)
-                12, 14, 13,
-                // Right triangle (CCW from +X)
-                15, 17, 16,
+                // Slope (normal +Y+Z) — verts 8..11 = FBL, FBR, TBR, TBL
+                8, 9, 10,  8, 10, 11,
+                // Left triangle (normal -X) — verts 12..14 = BBL, FBL, TBL
+                12, 13, 14,
+                // Right triangle (normal +X) — verts 15..17 = BBR, TBR, FBR
+                15, 16, 17,
             };
 
             Mesh m = new Mesh { name = "TriangularPrism" };

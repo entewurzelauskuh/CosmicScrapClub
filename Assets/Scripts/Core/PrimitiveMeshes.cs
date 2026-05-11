@@ -9,6 +9,7 @@ namespace CubeFly.Core
     {
         static Mesh _triangularPrism;
         static Mesh _squarePyramid;
+        static Mesh _hollowCylinder;
 
         // 1×1×1 right-triangular prism centred at the origin. The
         // hypotenuse (slope) runs from the front-bottom edge to the
@@ -137,6 +138,100 @@ namespace CubeFly.Core
             };
 
             Mesh m = new Mesh { name = "SquarePyramid" };
+            m.vertices = verts;
+            m.triangles = tris;
+            m.RecalculateNormals();
+            m.RecalculateBounds();
+            return m;
+        }
+
+        // 1×1×1 hollow cylinder centred at the origin. Axis along +Y;
+        // outer radius 0.5 (fills the cell horizontally), inner radius
+        // 0.25, height 1 (fills the cell vertically). The bottom
+        // annulus at -Y is the only valid attachment face per
+        // ShapeWeaponCylinder. The walls share vertices between
+        // adjacent segments so RecalculateNormals produces smooth
+        // radial normals (no visible polygonal facets); the top and
+        // bottom annuli use a duplicate vertex ring so they keep
+        // crisp ±Y normals at the wall-annulus seam.
+        public static Mesh HollowCylinder
+        {
+            get
+            {
+                if (_hollowCylinder == null) _hollowCylinder = BuildHollowCylinder();
+                return _hollowCylinder;
+            }
+        }
+
+        static Mesh BuildHollowCylinder()
+        {
+            const int N = 32;          // segments around the circumference
+            const float h = 0.5f;      // half-height (fills the unit cell)
+            const float outerR = 0.5f; // matches cube half-width
+            const float innerR = 0.25f;
+
+            // Vertex layout (8 × N total):
+            //   [0 .. N-1]        outer wall top ring          (smooth, normal radially outward)
+            //   [N .. 2N-1]       outer wall bottom ring       (smooth)
+            //   [2N .. 3N-1]      inner wall top ring          (smooth, normal radially inward)
+            //   [3N .. 4N-1]      inner wall bottom ring       (smooth)
+            //   [4N .. 5N-1]      top annulus outer ring       (flat +Y)
+            //   [5N .. 6N-1]      top annulus inner ring       (flat +Y)
+            //   [6N .. 7N-1]      bottom annulus outer ring    (flat -Y)
+            //   [7N .. 8N-1]      bottom annulus inner ring    (flat -Y)
+            Vector3[] verts = new Vector3[8 * N];
+
+            for (int i = 0; i < N; i++)
+            {
+                float theta = i * (2f * Mathf.PI / N);
+                float c = Mathf.Cos(theta);
+                float s = Mathf.Sin(theta);
+
+                Vector3 outerTop = new Vector3(outerR * c,  h, outerR * s);
+                Vector3 outerBot = new Vector3(outerR * c, -h, outerR * s);
+                Vector3 innerTop = new Vector3(innerR * c,  h, innerR * s);
+                Vector3 innerBot = new Vector3(innerR * c, -h, innerR * s);
+
+                verts[i]            = outerTop;
+                verts[N + i]        = outerBot;
+                verts[2 * N + i]    = innerTop;
+                verts[3 * N + i]    = innerBot;
+                verts[4 * N + i]    = outerTop;   // top annulus outer copy
+                verts[5 * N + i]    = innerTop;   // top annulus inner copy
+                verts[6 * N + i]    = outerBot;   // bottom annulus outer copy
+                verts[7 * N + i]    = innerBot;   // bottom annulus inner copy
+            }
+
+            // 4 quads per segment × 2 triangles × 3 indices = 24 indices/segment.
+            int[] tris = new int[24 * N];
+            int t = 0;
+            for (int i = 0; i < N; i++)
+            {
+                int j = (i + 1) % N;
+
+                // Outer wall — normal radially outward.
+                // Quad (a, b, c, d) = (outerTop[i], outerTop[j], outerBot[j], outerBot[i])
+                // Winding chosen so (b-a) × (c-a) points outward (verified at θ=0).
+                tris[t++] = i;          tris[t++] = j;          tris[t++] = N + j;
+                tris[t++] = i;          tris[t++] = N + j;      tris[t++] = N + i;
+
+                // Inner wall — normal radially INWARD. Reverse winding
+                // relative to outer wall so the cross product points
+                // toward the axis instead of away.
+                tris[t++] = 2 * N + i;  tris[t++] = 3 * N + i;  tris[t++] = 3 * N + j;
+                tris[t++] = 2 * N + i;  tris[t++] = 3 * N + j;  tris[t++] = 2 * N + j;
+
+                // Top annulus — normal +Y.
+                tris[t++] = 4 * N + i;  tris[t++] = 5 * N + i;  tris[t++] = 5 * N + j;
+                tris[t++] = 4 * N + i;  tris[t++] = 5 * N + j;  tris[t++] = 4 * N + j;
+
+                // Bottom annulus — normal -Y. Reverse winding so the
+                // cross product points down instead of up.
+                tris[t++] = 6 * N + i;  tris[t++] = 6 * N + j;  tris[t++] = 7 * N + j;
+                tris[t++] = 6 * N + i;  tris[t++] = 7 * N + j;  tris[t++] = 7 * N + i;
+            }
+
+            Mesh m = new Mesh { name = "HollowCylinder" };
             m.vertices = verts;
             m.triangles = tris;
             m.RecalculateNormals();

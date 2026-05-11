@@ -76,7 +76,11 @@ namespace CubeFly.Input
             // camera snaps back to the default behind-the-construct pose.
             InputAction lookHeld = _flyMap.AddAction("LookHeld", InputActionType.Button, "<Mouse>/rightButton");
 
-            Fly = new FlyActions(_flyMap, thrust, pitch, yaw, roll, look, lookHeld);
+            // Fire: LMB. Held-down semantics — FlyShootingController polls
+            // IsPressed() each frame; per-weapon reload throttles the rate.
+            InputAction fire = _flyMap.AddAction("Fire", InputActionType.Button, "<Mouse>/leftButton");
+
+            Fly = new FlyActions(_flyMap, thrust, pitch, yaw, roll, look, lookHeld, fire);
         }
 
         public void Dispose()
@@ -114,10 +118,12 @@ namespace CubeFly.Input
             public InputAction Roll     { get; }
             public InputAction Look     { get; }
             public InputAction LookHeld { get; }
+            public InputAction Fire     { get; }
 
             public FlyActions(InputActionMap map,
                 InputAction thrust, InputAction pitch, InputAction yaw,
-                InputAction roll, InputAction look, InputAction lookHeld)
+                InputAction roll, InputAction look, InputAction lookHeld,
+                InputAction fire)
             {
                 _map     = map;
                 Thrust   = thrust;
@@ -126,6 +132,7 @@ namespace CubeFly.Input
                 Roll     = roll;
                 Look     = look;
                 LookHeld = lookHeld;
+                Fire     = fire;
             }
 
             public void Enable() => _map.Enable();

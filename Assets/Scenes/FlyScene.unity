@@ -997,7 +997,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   flyController: {fileID: 300002}
   aimRange: 100
-  scrollPerSelectionTick: 1
+  scrollDeadzone: 0.05
 --- !u!1 &700000
 GameObject:
   m_ObjectHideFlags: 0

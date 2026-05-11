@@ -24,8 +24,16 @@ namespace CubeFly.Fly
         [SerializeField] FlyController flyController;
         [Tooltip("Same value the FlyCrosshair UI uses. The on-screen reticle and the fire dispatch must agree, so keep these in sync.")]
         [SerializeField] float aimRange = 100f;
-        [Tooltip("Scroll-wheel accumulator drained per selection change. Higher = less sensitive. 1.0 works for wheel notches; trackpads send smaller deltas that build up over time.")]
-        [SerializeField] float scrollPerSelectionTick = 1f;
+        [Tooltip("Magnitude threshold for treating a scroll-wheel delta as an active 'scroll event'. Each non-zero event (in either direction) cycles selection by one step regardless of magnitude, so a Windows wheel notch arriving as ±120 raw units and a trackpad swipe arriving as small fractional values both behave the same — one notch / one swipe = one cycle.")]
+        [SerializeField] float scrollDeadzone = 0.05f;
+
+        // Cached so HandleSelectionInputs() doesn't allocate a fresh
+        // array every Update — keeps the hot path GC-free.
+        static readonly Key[] DigitKeys =
+        {
+            Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5,
+            Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9,
+        };
 
         public event Action TypesChanged;
         public event Action<int> SelectedChanged;
@@ -40,7 +48,11 @@ namespace CubeFly.Fly
             (_selectedTypeIndex >= 0 && _selectedTypeIndex < _types.Count) ? _types[_selectedTypeIndex] : null;
 
         CubeFlyInputActions _input;
-        float _scrollAccumulator;
+        // Tracks the sign of the previous frame's scroll-event state.
+        // Used by edge detection: we only fire a cycle when this
+        // changes from 0 → non-zero, so one wheel notch / one trackpad
+        // swipe yields one cycle even though it may span many frames.
+        int _lastScrollSign;
 
         const string TAG = "FlyShooting";
 
@@ -104,12 +116,10 @@ namespace CubeFly.Fly
             Keyboard kb = Keyboard.current;
             if (kb != null)
             {
-                Key[] digits = { Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4,
-                                 Key.Digit5, Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9 };
-                int max = Mathf.Min(digits.Length, _types.Count);
+                int max = Mathf.Min(DigitKeys.Length, _types.Count);
                 for (int i = 0; i < max; i++)
                 {
-                    if (kb[digits[i]].wasPressedThisFrame)
+                    if (kb[DigitKeys[i]].wasPressedThisFrame)
                     {
                         SetSelected(i);
                         break;
@@ -120,17 +130,20 @@ namespace CubeFly.Fly
             Mouse mouse = Mouse.current;
             if (mouse != null)
             {
-                _scrollAccumulator += mouse.scroll.ReadValue().y;
-                while (_scrollAccumulator >= scrollPerSelectionTick)
-                {
-                    CycleSelected(+1);
-                    _scrollAccumulator -= scrollPerSelectionTick;
-                }
-                while (_scrollAccumulator <= -scrollPerSelectionTick)
-                {
-                    CycleSelected(-1);
-                    _scrollAccumulator += scrollPerSelectionTick;
-                }
+                // Edge detection rather than an accumulator: classify
+                // the current scroll delta into {-1, 0, +1} and only
+                // cycle on transitions from 0 → ±1. A single wheel
+                // notch (which arrives as a brief ±120 spike on
+                // Windows or ±1 on macOS depending on Input System
+                // version) collapses to one cycle. A continuous
+                // trackpad swipe also produces one cycle until the
+                // user pauses — fine for a 2-3-weapon roster.
+                float scrollY = mouse.scroll.ReadValue().y;
+                int sign = Mathf.Abs(scrollY) > scrollDeadzone
+                    ? (scrollY > 0f ? 1 : -1)
+                    : 0;
+                if (sign != 0 && sign != _lastScrollSign) CycleSelected(sign);
+                _lastScrollSign = sign;
             }
         }
 

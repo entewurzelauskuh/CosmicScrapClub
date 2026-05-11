@@ -1,6 +1,6 @@
 # Weapon Shooting System — Implementation Spec
 
-Status: **planning — implementation not started**.
+Status: **implemented in PR #6 ([entewurzelauskuh/CosmicScrapClub#6](https://github.com/entewurzelauskuh/CosmicScrapClub/pull/6))**. v1 surface (crosshair + projectiles + selection toolbar) is live; v2 damage / hit-detection is the next planned PR.
 
 This document tracks the work package for the construct's weapon
 firing system. It covers:
@@ -62,8 +62,6 @@ spec is purely about *what happens when the player presses fire*.
 - Visual effects (muzzle flash, tracer, explosion).
 - Destructible / despawning cubes when HP reaches 0.
 - Multiplayer / synchronisation.
-- Click-on-toolbar-to-select (UX-only follow-up; selection is via
-  scroll wheel / digits in v1).
 
 The v1 ship is a *visible* weapon system: projectiles spawn, fly
 the correct paths, and disappear at range. Damage and feedback are
@@ -615,14 +613,16 @@ unload).
 `OnSelectedChanged(int)` updates the highlight on each button
 (only the new selected index gets `SelectedTypeColor`).
 
-### 5.4 Click-to-select (optional)
+### 5.4 Click-to-select
 
-For v1, clicking a button does NOT select (selection is via scroll
-or digits only — keeps the user's spec literal). Clickable buttons
-can be added trivially as a follow-up by wiring `btn.onClick →
-shootingController.SetSelected(i)`. I'll include the wiring but
-keep the click target disabled — flip a `[SerializeField]
-bool clickToSelect` to enable.
+Toolbar buttons are clickable in addition to the scroll-wheel /
+digit-key selection. Each button's `btn.onClick` is wired
+unconditionally to `shootingController.SetSelected(i)`. This goes
+slightly beyond the original ask (which only listed scroll + digits)
+but keeping the click target enabled is free, makes the toolbar feel
+like a normal UI surface, and matches the expectation a mouse-primary
+player has when they see a clickable-looking button. No
+`clickToSelect` toggle — it's just on.
 
 ### 5.5 Empty / no-weapons construct
 
@@ -779,7 +779,5 @@ All previously open items are now answered. Remaining items track
 post-v1 work:
 
 - **v2 damage / hit detection** — separate spec.
-- **Toolbar button click-to-select** — wiring stubbed (off by
-  default), enable when desired.
 - **Per-weapon-type crosshair color** (e.g. red when Cylinder
   armed) — possible polish in v2.

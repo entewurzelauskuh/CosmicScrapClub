@@ -86,9 +86,12 @@ namespace CubeFly.Fly
             _canvas = UIStyle.BuildScreenSpaceCanvas("FlyCrosshairCanvas", sortingOrder: 110);
             RectTransform canvasRoot = (RectTransform)_canvas.transform;
 
-            // Root rect — anchored to top-left so its `position` (in
-            // pixels) equals the screen position we feed it from
-            // LateUpdate via `_root.position = screenPos`.
+            // Root rect — pivot at center so the "+" reticle is
+            // visually symmetric around the projected aim point. On
+            // a ScreenSpaceOverlay canvas, RectTransform.position
+            // accepts a pixel-space screen position regardless of
+            // anchor, so LateUpdate's `_root.position = screenPos`
+            // works correctly with these center-pivot anchors.
             GameObject rootGO = new GameObject("CrosshairRoot",
                 typeof(RectTransform));
             int uiLayer = LayerMask.NameToLayer("UI");

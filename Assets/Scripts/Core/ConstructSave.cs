@@ -71,13 +71,30 @@ namespace CubeFly.Core
             => new SaveSlotInfo(slot, true, $"Slot {slot + 1}", 0, 0f, 0f, default);
 
         public static SaveSlotInfo From(int slot, ConstructSave save)
-            => new SaveSlotInfo(
+        {
+            return new SaveSlotInfo(
                 slot,
                 false,
                 string.IsNullOrEmpty(save.slotName) ? $"Slot {slot + 1}" : save.slotName,
                 save.placements != null ? save.placements.Length : 0,
                 save.totalMass,
                 save.totalHealthPoints,
-                new DateTime(save.modifiedUtcTicks, DateTimeKind.Utc));
+                SafeDateTimeFromTicks(save.modifiedUtcTicks));
+        }
+
+        // DateTime's constructor throws ArgumentOutOfRangeException for
+        // ticks outside [DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks].
+        // A corrupt save file with a junk integer in modifiedUtcTicks
+        // would crash the hangar picker on load — clamp to the valid
+        // range first and fall back to `default` when the value is out
+        // of range. Belt-and-braces try/catch covers any platform
+        // weirdness around boundary values.
+        static DateTime SafeDateTimeFromTicks(long ticks)
+        {
+            if (ticks < DateTime.MinValue.Ticks || ticks > DateTime.MaxValue.Ticks)
+                return default;
+            try { return new DateTime(ticks, DateTimeKind.Utc); }
+            catch (ArgumentOutOfRangeException) { return default; }
+        }
     }
 }

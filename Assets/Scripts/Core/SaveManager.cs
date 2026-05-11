@@ -122,10 +122,21 @@ namespace CubeFly.Core
             {
                 string json = JsonUtility.ToJson(save, prettyPrint: true);
                 File.WriteAllText(tempPath, json);
-                // File.Replace requires the destination to exist on
-                // some platforms, so prefer a Move-after-Delete.
-                if (File.Exists(finalPath)) File.Delete(finalPath);
-                File.Move(tempPath, finalPath);
+
+                // Atomic replace: File.Replace overwrites destination
+                // with source as a single rename on Windows and most
+                // POSIX filesystems (no window where the destination
+                // is missing). It requires the destination to exist,
+                // so the first-time-save path falls back to Move.
+                if (File.Exists(finalPath))
+                {
+                    File.Replace(tempPath, finalPath, destinationBackupFileName: null);
+                }
+                else
+                {
+                    File.Move(tempPath, finalPath);
+                }
+
                 Debug.unityLogger.Log(TAG,
                     $"Slot {slot}: saved {save.placements?.Length ?? 0} placement(s) to '{finalPath}'.");
                 return true;
@@ -133,7 +144,9 @@ namespace CubeFly.Core
             catch (Exception ex)
             {
                 Debug.unityLogger.LogError(TAG, $"Slot {slot}: save failed ({ex.GetType().Name}: {ex.Message}).");
-                // Best-effort cleanup of the temp file.
+                // Best-effort cleanup of the temp file. The original
+                // finalPath (if it existed) is untouched because we
+                // never Delete'd it before the replace attempt.
                 try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* ignore */ }
                 return false;
             }

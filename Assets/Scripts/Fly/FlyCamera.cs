@@ -85,9 +85,17 @@ namespace CubeFly.Fly
             else
             {
                 if (_cursorLocked) ReleaseCursor();
-                // Snap back to neutral so the camera returns to behind the
-                // construct. Frame-rate-independent exponential approach.
-                float k = 1f - Mathf.Exp(-snapBackSpeed * Time.deltaTime);
+                // Snap back to neutral so the camera returns to behind
+                // the construct. Frame-rate-independent exponential
+                // approach. Use unscaledDeltaTime while paused so the
+                // offsets actually relax during the pause overlay —
+                // Time.deltaTime is 0 when timeScale=0, which would
+                // leave the offsets frozen and re-snap only after un-
+                // pausing. The LateUpdate camera-body Lerps still use
+                // Time.deltaTime so the body stays put during pause
+                // and slerps in once the offsets have relaxed.
+                float dt = paused ? Time.unscaledDeltaTime : Time.deltaTime;
+                float k = 1f - Mathf.Exp(-snapBackSpeed * dt);
                 _yawOffset   = Mathf.Lerp(_yawOffset, 0f, k);
                 _pitchOffset = Mathf.Lerp(_pitchOffset, 0f, k);
             }

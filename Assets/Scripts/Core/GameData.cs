@@ -80,6 +80,22 @@ namespace CubeFly.Core
                     Debug.unityLogger.LogWarning(TAG, $"TryAdd rejected (occupied): {cell}");
                     return false;
                 }
+                // Distinguish registry / lookup failures from genuine
+                // face-validity failures so the diagnostic identifies
+                // the real reason. Otherwise a misconfigured scene
+                // shows up as "no valid attachment face" indefinitely.
+                if (shapeRegistry == null)
+                {
+                    Debug.unityLogger.LogWarning(TAG,
+                        $"TryAdd rejected (no ShapeRegistry): {cell} shape={shapeIndex}");
+                    return false;
+                }
+                if (shapeRegistry.Get(shapeIndex) == null)
+                {
+                    Debug.unityLogger.LogWarning(TAG,
+                        $"TryAdd rejected (unknown shape index {shapeIndex}): {cell}");
+                    return false;
+                }
                 if (!IsValidAttachment(cell, shapeIndex, rotation, shapeRegistry))
                 {
                     Debug.unityLogger.LogWarning(TAG,

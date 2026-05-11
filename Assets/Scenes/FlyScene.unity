@@ -205,6 +205,7 @@ GameObject:
   m_Component:
   - component: {fileID: 300001}
   - component: {fileID: 300002}
+  - component: {fileID: 300003}
   m_Layer: 0
   m_Name: FlyController
   m_TagString: Untagged
@@ -243,6 +244,7 @@ MonoBehaviour:
   materialRegistry: {fileID: 11400000, guid: 2b2a4f1c8e3a4d6db5f1eecf4a0a2c15, type: 2}
   alphaCubePrefab: {fileID: 7100000, guid: c2c2c2c2000000010000000000000001, type: 3}
   construct: {fileID: 200001}
+  shootingController: {fileID: 300003}
   accelerationRate: 9
   maxSpeed: 37.5
   drag: 2
@@ -981,6 +983,94 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
+--- !u!114 &300003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 300000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b1d2e3f4a6c8d9e0f1a2b3c4d5e6f71, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  flyController: {fileID: 300002}
+  aimRange: 100
+  scrollDeadzone: 0.05
+--- !u!1 &700000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 700001}
+  - component: {fileID: 700002}
+  - component: {fileID: 700003}
+  m_Layer: 0
+  m_Name: FlyHUD
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &700001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &700002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b1d2e3f4a6c8d9e0f1a2b3c4d5e6f70, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  flyController: {fileID: 300002}
+  flyCamera: {fileID: 0}
+  aimRange: 100
+  crosshairColor: {r: 1, g: 1, b: 1, a: 1}
+  centerDotSize: {x: 4, y: 4}
+  armSize: {x: 2, y: 12}
+  armGap: 2
+--- !u!114 &700003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b1d2e3f4a6c8d9e0f1a2b3c4d5e6f72, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  shootingController: {fileID: 300003}
+  buttonSize: {x: 160, y: 60}
+  spacing: 16
+  bottomMargin: 30
+  fontSize: 22
+  reloadBarSize: {x: 140, y: 6}
+  reloadBarGap: 6
+  reloadBarBackground: {r: 0, g: 0, b: 0, a: 0.6}
+  swatchSize: {x: 18, y: 18}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
@@ -993,6 +1083,7 @@ SceneRoots:
   - {fileID: 400001}
   - {fileID: 500001}
   - {fileID: 610549296}
+  - {fileID: 700001}
   - {fileID: 366369077}
   - {fileID: 557593845}
   - {fileID: 200026927}

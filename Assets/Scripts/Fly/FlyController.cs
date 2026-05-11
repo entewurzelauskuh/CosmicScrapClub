@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CubeFly.Core;
 using CubeFly.Input;
 using UnityEngine;
@@ -12,6 +13,18 @@ namespace CubeFly.Fly
 
         [SerializeField] GameObject alphaCubePrefab;
         [SerializeField] Transform construct;
+
+        [Header("Shooting wiring")]
+        [Tooltip("Auto-wired in Start if left null. Receives the list of WeaponBehavior instances we spawn during BuildConstruct.")]
+        [SerializeField] FlyShootingController shootingController;
+
+        // Public so FlyCrosshair and FlyShootingController can read the
+        // construct's transform without a private-field hack.
+        public Transform Construct => construct;
+
+        // Collected during BuildConstruct, handed off to FlyShootingController
+        // so it can group weapons by ShapeDefinition for selection + dispatch.
+        readonly List<WeaponBehavior> _spawnedWeapons = new();
 
         // Bumped 50% over the originals (6 / 25 / 45 / 45 / 60). The actual
         // values applied per FixedUpdate are scaled by `_massMultiplier`,
@@ -63,7 +76,7 @@ namespace CubeFly.Fly
         {
             BuildConstruct();
             int total = GameData.PlacedCubes.Count + 1; // +1 for the alpha cube
-            Debug.unityLogger.Log(TAG, $"FlyScene ready. Construct rebuilt: {total} cube(s) (including alpha).");
+            Debug.unityLogger.Log(TAG, $"FlyScene ready. Construct rebuilt: {total} cube(s) (including alpha). Weapons: {_spawnedWeapons.Count}.");
             Debug.unityLogger.Log(TAG, $"Construct initial position: {construct.position}");
 
             float totalMass = ComputeTotalMass();
@@ -71,6 +84,12 @@ namespace CubeFly.Fly
             Debug.unityLogger.Log(TAG,
                 $"Total mass: {totalMass:F1}. Acceleration multiplier: {_massMultiplier:F3} " +
                 $"({(1f - _massMultiplier) * 100f:F0}% slow).");
+
+            // Hand the weapon list to the shooting controller so it can
+            // group by ShapeDefinition for selection + dispatch.
+            if (shootingController == null) shootingController = FindAnyObjectByType<FlyShootingController>();
+            if (shootingController != null) shootingController.RegisterWeapons(_spawnedWeapons);
+            else Debug.unityLogger.LogWarning(TAG, "No FlyShootingController in scene; weapons won't fire.");
         }
 
         float ComputeTotalMass()
@@ -131,6 +150,19 @@ namespace CubeFly.Fly
                 // weaponMaterial.
                 MaterialDefinition mdef = shape.ResolveMaterial(p.MaterialIndex, materialRegistry);
                 mdef?.ApplyTo(go);
+
+                // Collect any WeaponBehavior on this placement — wire
+                // it to the construct (so weapons can compare their
+                // local rotation against construct.forward) and to
+                // the source ShapeDefinition (so the toolbar can group
+                // and label by shape).
+                WeaponBehavior weapon = go.GetComponent<WeaponBehavior>();
+                if (weapon != null)
+                {
+                    weapon.Construct = construct;
+                    weapon.Shape = shape;
+                    _spawnedWeapons.Add(weapon);
+                }
             }
         }
 

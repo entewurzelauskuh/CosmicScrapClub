@@ -19,8 +19,12 @@ namespace CubeFly.Build
     // material flyout pinned above that button. Hovering a shape button
     // for >hoverPeekDelay seconds fades the flyout in at peekAlpha so the
     // player can compare materials without committing a click. Clicking
-    // a material commits and closes the flyout. Clicking outside the
-    // flyout, pressing Escape, or pressing M closes it.
+    // a material commits and closes the flyout. Escape closes any open
+    // flyout. M toggles the relevant flyout for the active shape's
+    // category (material flyout for armour, weapons flyout for weapons)
+    // — opening one if none is open and closing it if it's already
+    // open and pinned. Switching shape or tool also closes any open
+    // flyout. Out-of-bounds click-to-dismiss is not implemented.
     //
     // The bottom-left stat block ("Mass: X / 100", "HP: Y") is unchanged.
     // The "Selected" line now reads "Selected: <Shape> · Material <X>".
@@ -77,6 +81,19 @@ namespace CubeFly.Build
         Button[] _shapeButtons;
         Image[] _shapeBackgrounds;
         Image[] _shapeSwatches;
+        // Slot-ordered list of ShapeRegistry indices for armour shapes
+        // only (i.e. the on-screen toolbar slot order). Digit shortcut
+        // [i] maps to _armourShapeIndices[i], independent of where the
+        // shape sits in the registry — important when weapons aren't
+        // all at the end of ShapeRegistry.
+        int[] _armourShapeIndices;
+
+        // Cached so Update() doesn't allocate a fresh Key[] every frame.
+        static readonly Key[] DigitKeys =
+        {
+            Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5,
+            Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9,
+        };
         Button _deleteButton;
         Image _deleteBackground;
         Text _massLabel;
@@ -151,37 +168,40 @@ namespace CubeFly.Build
 
         void Update()
         {
-            // Keyboard shortcuts. 1..9 → SetCurrentShape, Shift+1..4 →
-            // SetCurrentMaterial for the active shape, M → toggle
-            // flyout for the active shape, Esc → close flyout.
             Keyboard kb = Keyboard.current;
             if (kb == null) return;
             // Pause menu owns all keyboard input while open. PauseMenu
             // runs at DefaultExecutionOrder(-1000), so by the time we
             // reach here it has already toggled itself and set
-            // EscConsumedThisFrame for any pending ESC.
+            // EscConsumedThisFrame for any pending ESC. The full
+            // keyboard-shortcut listing is below, next to the code
+            // that implements it (single source of truth).
             if (PauseMenu.Instance != null && PauseMenu.Instance.IsOpen) return;
 
-            // Digits 1..9 select shape (without modifier). With Shift
-            // held, the same digits select material for the active
-            // shape. Letter keys are avoided to keep R/T (rotation)
-            // and any future Build-map bindings free of conflicts.
+            // Keyboard shortcuts:
+            //   • Digits 1..9 (no modifier) → arm armour shape by
+            //     toolbar slot order (the on-screen order, not the
+            //     ShapeRegistry index). Weapons are reachable only
+            //     through the Weapons flyout.
+            //   • Shift+Digit1..9 → set the active armour shape's
+            //     material by registry index.
+            // Letter keys are avoided to keep R/T (rotation) and any
+            // future Build-map bindings free of conflicts.
             bool shift = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
-            Key[] digitKeys = { Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5,
-                                Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9 };
 
-            if (!shift && _shapeButtons != null)
+            if (!shift && _armourShapeIndices != null)
             {
-                // Digits arm armour shapes by toolbar slot order.
-                // Weapons are reachable only through the Weapons
-                // button + flyout, so they're skipped here.
-                int max = Mathf.Min(_shapeButtons.Length, digitKeys.Length);
+                // Map digit i → _armourShapeIndices[i]. This sidesteps
+                // the case where weapons aren't all at the end of the
+                // registry: digit keys correspond exactly to the
+                // visible armour buttons, in the same left-to-right
+                // order.
+                int max = Mathf.Min(_armourShapeIndices.Length, DigitKeys.Length);
                 for (int i = 0; i < max; i++)
                 {
-                    if (_shapeButtons[i] == null) continue; // weapon — skip
-                    if (kb[digitKeys[i]].wasPressedThisFrame)
+                    if (kb[DigitKeys[i]].wasPressedThisFrame)
                     {
-                        buildManager.SetCurrentShape(i);
+                        buildManager.SetCurrentShape(_armourShapeIndices[i]);
                         break;
                     }
                 }
@@ -197,10 +217,10 @@ namespace CubeFly.Build
                 if (!weaponActive)
                 {
                     int matCount = buildManager.Materials != null ? buildManager.Materials.Count : 0;
-                    int matMax = Mathf.Min(digitKeys.Length, matCount);
+                    int matMax = Mathf.Min(DigitKeys.Length, matCount);
                     for (int i = 0; i < matMax; i++)
                     {
-                        if (kb[digitKeys[i]].wasPressedThisFrame)
+                        if (kb[DigitKeys[i]].wasPressedThisFrame)
                         {
                             buildManager.SetCurrentMaterial(i);
                             if (_flyout != null && _flyout.activeSelf) RefreshFlyoutEntryHighlights();
@@ -302,6 +322,7 @@ namespace CubeFly.Build
                 else              armourIndices.Add(i);
             }
             _weaponShapeIndices = weaponIndices.ToArray();
+            _armourShapeIndices = armourIndices.ToArray();
             if (_weaponShapeIndices.Length > 0) _lastArmedWeaponIndex = _weaponShapeIndices[0];
 
             bool hasWeapons = _weaponShapeIndices.Length > 0;
@@ -445,7 +466,8 @@ namespace CubeFly.Build
             if (_peekRoutine != null) { StopCoroutine(_peekRoutine); _peekRoutine = null; }
             // If the flyout was just peeking (not pinned), close it. A
             // pinned flyout (opened by click) stays open until the user
-            // clicks outside / presses Escape / picks a material.
+            // presses Escape / M, picks a material, or switches shape
+            // or tool. No out-of-bounds-click dismissal.
             if (_flyout != null && _flyout.activeSelf && _flyoutOwnerShape == shapeIndex && !_flyoutPinned)
             {
                 // But — don't close if the cursor moved INTO the flyout
@@ -457,9 +479,13 @@ namespace CubeFly.Build
         IEnumerator PeekAfterDelay(int shapeIndex)
         {
             yield return new WaitForSeconds(hoverPeekDelay);
-            // Only peek if the flyout isn't already pinned for this shape.
-            if (_flyout != null && _flyout.activeSelf && _flyoutOwnerShape == shapeIndex && _flyoutPinned)
-                yield break;
+            // Don't peek-open if ANY flyout is already pinned —
+            // peek-opening another would call OpenFlyoutForShape with
+            // pin: false, which would silently unpin the user's
+            // deliberate pinned selection just because they hovered
+            // a different button.
+            if (_flyout != null && _flyout.activeSelf && _flyoutPinned) yield break;
+            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf && _weaponsFlyoutPinned) yield break;
             OpenFlyoutForShape(shapeIndex, pin: false);
             _peekRoutine = null;
         }
@@ -497,8 +523,10 @@ namespace CubeFly.Build
                 label.alignment = TextAnchor.MiddleLeft;
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
-                // Stack bottom-up so the topmost entry is the one closest
-                // to the shape button below.
+                // Stack bottom-up: entry 0 sits at y=0 (closest to the
+                // shape button below the flyout); each subsequent
+                // entry stacks above it. Pivot at (0.5, 0) makes y
+                // the distance from the flyout root's bottom edge.
                 float y = i * (flyoutEntrySize.y + flyoutEntrySpacing);
                 brt.anchoredPosition = new Vector2(0f, y);
 
@@ -535,6 +563,11 @@ namespace CubeFly.Build
             if (_shapeButtons[shapeIndex] == null) return;
             ShapeDefinition def = buildManager.Shapes.Get(shapeIndex);
             if (def == null || def.IsWeapon) return;
+
+            // Mutual exclusion with the weapons flyout — opening one
+            // must close the other so they never visually overlap.
+            // OpenWeaponsFlyout has the symmetric call.
+            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf) HideWeaponsFlyout();
 
             // Capture "is this the same shape as the one currently
             // pinned?" BEFORE overwriting _flyoutOwnerShape, otherwise
@@ -662,8 +695,10 @@ namespace CubeFly.Build
         IEnumerator WeaponsPeekAfterDelay()
         {
             yield return new WaitForSeconds(hoverPeekDelay);
-            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf && _weaponsFlyoutPinned)
-                yield break;
+            // Don't peek-open if ANY flyout is already pinned —
+            // would unpin the user's selection.
+            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf && _weaponsFlyoutPinned) yield break;
+            if (_flyout != null && _flyout.activeSelf && _flyoutPinned) yield break;
             OpenWeaponsFlyout(pin: false);
             _weaponsPeekRoutine = null;
         }

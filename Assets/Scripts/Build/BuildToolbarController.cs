@@ -19,10 +19,12 @@ namespace CubeFly.Build
     // material flyout pinned above that button. Hovering a shape button
     // for >hoverPeekDelay seconds fades the flyout in at peekAlpha so the
     // player can compare materials without committing a click. Clicking
-    // a material commits and closes the flyout. Pressing Escape or M
-    // also closes any open flyout. (Out-of-bounds click-to-dismiss is
-    // not implemented — the player either picks a material, presses
-    // Esc/M, or switches shape/tool.)
+    // a material commits and closes the flyout. Escape closes any open
+    // flyout. M toggles the relevant flyout for the active shape's
+    // category (material flyout for armour, weapons flyout for weapons)
+    // — opening one if none is open and closing it if it's already
+    // open and pinned. Switching shape or tool also closes any open
+    // flyout. Out-of-bounds click-to-dismiss is not implemented.
     //
     // The bottom-left stat block ("Mass: X / 100", "HP: Y") is unchanged.
     // The "Selected" line now reads "Selected: <Shape> · Material <X>".
@@ -166,15 +168,14 @@ namespace CubeFly.Build
 
         void Update()
         {
-            // Keyboard shortcuts. 1..9 → SetCurrentShape, Shift+1..4 →
-            // SetCurrentMaterial for the active shape, M → toggle
-            // flyout for the active shape, Esc → close flyout.
             Keyboard kb = Keyboard.current;
             if (kb == null) return;
             // Pause menu owns all keyboard input while open. PauseMenu
             // runs at DefaultExecutionOrder(-1000), so by the time we
             // reach here it has already toggled itself and set
-            // EscConsumedThisFrame for any pending ESC.
+            // EscConsumedThisFrame for any pending ESC. The full
+            // keyboard-shortcut listing is below, next to the code
+            // that implements it (single source of truth).
             if (PauseMenu.Instance != null && PauseMenu.Instance.IsOpen) return;
 
             // Keyboard shortcuts:
@@ -465,7 +466,8 @@ namespace CubeFly.Build
             if (_peekRoutine != null) { StopCoroutine(_peekRoutine); _peekRoutine = null; }
             // If the flyout was just peeking (not pinned), close it. A
             // pinned flyout (opened by click) stays open until the user
-            // clicks outside / presses Escape / picks a material.
+            // presses Escape / M, picks a material, or switches shape
+            // or tool. No out-of-bounds-click dismissal.
             if (_flyout != null && _flyout.activeSelf && _flyoutOwnerShape == shapeIndex && !_flyoutPinned)
             {
                 // But — don't close if the cursor moved INTO the flyout

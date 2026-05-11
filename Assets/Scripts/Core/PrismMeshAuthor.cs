@@ -7,7 +7,8 @@ namespace CubeFly.Core
     // — but ONLY when the slot is currently empty. If the prefab has
     // an authored / imported mesh wired in (e.g. the imported
     // Slope.obj), this component becomes a no-op and never overwrites
-    // it. Mirror of PyramidMeshAuthor / CylinderMeshAuthor.
+    // it. Same null-guard pattern as PyramidMeshAuthor (and any
+    // future per-shape runtime-mesh helpers).
     [RequireComponent(typeof(MeshFilter))]
     public class PrismMeshAuthor : MonoBehaviour
     {

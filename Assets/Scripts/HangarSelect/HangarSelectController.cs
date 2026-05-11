@@ -53,6 +53,11 @@ namespace CubeFly.HangarSelect
 
         readonly List<SlotCard> _cards = new List<SlotCard>(SaveManager.SlotCount);
 
+        // Cached so Update() doesn't allocate a fresh array every
+        // frame. Three digits cover SaveManager.SlotCount = 3; bump
+        // if SlotCount ever grows.
+        static readonly Key[] DigitKeys = { Key.Digit1, Key.Digit2, Key.Digit3 };
+
         void Awake()
         {
             UIStyle.EnsureEventSystem();
@@ -69,11 +74,10 @@ namespace CubeFly.HangarSelect
             Keyboard kb = Keyboard.current;
             if (kb == null) return;
 
-            Key[] digitKeys = { Key.Digit1, Key.Digit2, Key.Digit3 };
-            int max = Mathf.Min(_cards.Count, digitKeys.Length);
+            int max = Mathf.Min(_cards.Count, DigitKeys.Length);
             for (int i = 0; i < max; i++)
             {
-                if (kb[digitKeys[i]].wasPressedThisFrame)
+                if (kb[DigitKeys[i]].wasPressedThisFrame)
                 {
                     ActivateSlot(i);
                     break;

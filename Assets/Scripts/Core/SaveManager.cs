@@ -122,10 +122,39 @@ namespace CubeFly.Core
             {
                 string json = JsonUtility.ToJson(save, prettyPrint: true);
                 File.WriteAllText(tempPath, json);
-                // File.Replace requires the destination to exist on
-                // some platforms, so prefer a Move-after-Delete.
-                if (File.Exists(finalPath)) File.Delete(finalPath);
-                File.Move(tempPath, finalPath);
+
+                // Atomic replace: File.Replace overwrites destination
+                // with source as a single rename on Windows and most
+                // POSIX filesystems (no window where the destination
+                // is missing). It requires the destination to exist,
+                // so the first-time-save path falls back to Move.
+                //
+                // File.Replace can throw PlatformNotSupportedException
+                // on some Unity runtimes (e.g. sandboxed mobile FSes,
+                // certain WebGL contexts) or IOException if the
+                // destination is mid-rotation. Fall back to a
+                // rename-existing-to-bak pattern in those cases so we
+                // never end up with neither the old NOR the new save.
+                if (File.Exists(finalPath))
+                {
+                    try
+                    {
+                        File.Replace(tempPath, finalPath, destinationBackupFileName: null);
+                    }
+                    catch (Exception replaceEx) when (replaceEx is PlatformNotSupportedException
+                                                   || replaceEx is IOException
+                                                   || replaceEx is UnauthorizedAccessException)
+                    {
+                        Debug.unityLogger.LogWarning(TAG,
+                            $"Slot {slot}: File.Replace failed ({replaceEx.GetType().Name}); using rename-to-bak fallback.");
+                        AtomicReplaceFallback(tempPath, finalPath);
+                    }
+                }
+                else
+                {
+                    File.Move(tempPath, finalPath);
+                }
+
                 Debug.unityLogger.Log(TAG,
                     $"Slot {slot}: saved {save.placements?.Length ?? 0} placement(s) to '{finalPath}'.");
                 return true;
@@ -133,7 +162,9 @@ namespace CubeFly.Core
             catch (Exception ex)
             {
                 Debug.unityLogger.LogError(TAG, $"Slot {slot}: save failed ({ex.GetType().Name}: {ex.Message}).");
-                // Best-effort cleanup of the temp file.
+                // Best-effort cleanup of the temp file. The original
+                // finalPath (if it existed) is untouched because we
+                // never Delete'd it before the replace attempt.
                 try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* ignore */ }
                 return false;
             }
@@ -156,6 +187,53 @@ namespace CubeFly.Core
             {
                 Debug.unityLogger.LogError(TAG, $"Slot {slot}: delete failed ({ex.GetType().Name}: {ex.Message}).");
                 return false;
+            }
+        }
+
+        // Used when File.Replace isn't supported on the host
+        // filesystem. Three phases:
+        //   1. Move existing finalPath aside to <finalPath>.bak
+        //   2. Move tempPath to finalPath
+        //   3. Delete the .bak
+        // If phase 2 throws, we restore from .bak in the catch so
+        // the previous save is preserved. The window where neither
+        // file is in the canonical slot path is shorter than the
+        // original Delete+Move approach, and we always retain the
+        // .bak as a recovery target until phase 3 completes.
+        static void AtomicReplaceFallback(string tempPath, string finalPath)
+        {
+            string bakPath = finalPath + ".bak";
+            // Drop any stale bak from a prior failed save.
+            if (File.Exists(bakPath))
+            {
+                try { File.Delete(bakPath); }
+                catch (Exception ex)
+                {
+                    Debug.unityLogger.LogWarning(TAG, $"Couldn't delete stale '{bakPath}': {ex.Message}");
+                }
+            }
+
+            File.Move(finalPath, bakPath);
+            try
+            {
+                File.Move(tempPath, finalPath);
+                // Promote complete. Drop the bak.
+                try { File.Delete(bakPath); } catch { /* not fatal */ }
+            }
+            catch
+            {
+                // Restore: best-effort move .bak back to final so the
+                // previous save isn't lost.
+                if (!File.Exists(finalPath) && File.Exists(bakPath))
+                {
+                    try { File.Move(bakPath, finalPath); }
+                    catch (Exception restoreEx)
+                    {
+                        Debug.unityLogger.LogError(TAG,
+                            $"Restore from bak failed: {restoreEx.Message}. Manual recovery: {bakPath}");
+                    }
+                }
+                throw;
             }
         }
 

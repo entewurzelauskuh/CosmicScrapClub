@@ -188,6 +188,11 @@ namespace CubeFly.Core
         // placement's material via ShapeDefinition.ResolveMaterial so
         // weapon shapes pull from their coupled weaponMaterial and
         // armour shapes pull from MaterialRegistry by index.
+        // Placements whose shape or material lookup fails (registry
+        // null, shape not in registry, weapon with missing
+        // weaponMaterial) are silently skipped — this can under-count
+        // total mass if the registries are misconfigured. Returns 0
+        // when `shapes` is null.
         public static float SumPlacedMasses(ShapeRegistry shapes, MaterialRegistry materials)
         {
             if (shapes == null) return 0f;

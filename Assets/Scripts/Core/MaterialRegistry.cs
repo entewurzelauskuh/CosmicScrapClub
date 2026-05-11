@@ -2,8 +2,13 @@ using UnityEngine;
 
 namespace CubeFly.Core
 {
-    // Single shared list of MaterialDefinitions. Indexed parallel to
-    // ShapeRegistry — placements record (shapeIndex, materialIndex).
+    // Single shared list of MaterialDefinitions for armour shapes.
+    // Independent axis from ShapeRegistry — a placement records
+    // (shapeIndex, materialIndex) where shapeIndex picks geometry
+    // and materialIndex picks colour + stats. No requirement that
+    // the two arrays be the same length or in any related order.
+    // Weapon shapes bypass this registry entirely via
+    // ShapeDefinition.weaponMaterial.
     [CreateAssetMenu(fileName = "MaterialRegistry", menuName = "CubeFly/Material Registry")]
     public class MaterialRegistry : ScriptableObject
     {

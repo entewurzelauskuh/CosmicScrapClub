@@ -170,8 +170,6 @@ Assets/
                   PrimitiveMeshes, PrismMeshAuthor, PyramidMeshAuthor,
                   UIManager, UIStyle, UIBootstrap, SceneSwitcher,
                   FileLogHandler, LogBootstrapper
-                  (CubeTypeDefinition + CubeTypeRegistry remain on disk but
-                  are no longer referenced — see full_architecture.md)
   Scripts/Build/  BuildManager, CubePreview, BuildCamera, BuildToolbarController,
                   BuildIndicatorController, PlacedCubeData
   Scripts/Fly/    FlyController, FlyCamera, FlyCrosshair,

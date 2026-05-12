@@ -145,7 +145,6 @@ defensive fallback to "all layers minus Ignore Raycast and PreviewCube".
 │   ├── Materials/
 │   │   ├── Defs/                     MaterialRegistry + per-material SOs (+ coupled weapon mats).
 │   │   └── *.mat                     URP/Lit material variants used by prefabs / SOs.
-│   ├── CubeTypes/                    LEGACY — orphan SOs from pre-shape-decoupling.
 │   ├── Prefabs/
 │   │   ├── AlphaCube / PlacedCube[A–D] / PlacedPrism / PlacedPyramid / PlacedCylinder
 │   │   ├── PreviewCube / AlphaCubeIndicator
@@ -196,8 +195,6 @@ Registered in `ProjectSettings/EditorBuildSettings.asset` at indices
 | `Scripts/Core/SceneSwitcher.cs` | static class | Single `Toggle()` method that flips BuildScene ↔ FlyScene. Wired by `UIManager`'s corner button. Not used by the MainMenu → HangarSelect → BuildScene path. |
 | `Scripts/Core/FileLogHandler.cs` | `ILogHandler` | Append-only file logger. Wraps the default Unity log handler so messages still hit the Editor console. |
 | `Scripts/Core/LogBootstrapper.cs` | static initialiser | `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`. Swaps `Debug.unityLogger.logHandler` for a `FileLogHandler` writing to `Logs/runtime-<timestamp>.log`. |
-| `Scripts/Core/CubeTypeDefinition.cs` *(legacy)* | `ScriptableObject` | Pre-shape-decoupling cube-type SO. **Referenced by no scripts on the active path.** Retained on disk for now; slated for cleanup. |
-| `Scripts/Core/CubeTypeRegistry.cs` *(legacy)* | `ScriptableObject` | Companion to the above. Also orphan. |
 
 ---
 
@@ -316,18 +313,6 @@ uses `displayName` instead of the index, so reordering doesn't invalidate existi
 | `MaterialA.asset` / `B.asset` / `C.asset` / `D.asset` | Armour materials. Each pairs a URP/Lit `Material` with HP / AV / mass placeholder stats. `ApplyTo(placed)` writes both the renderer material and the stats into the spawned cube. |
 | `PyramidWeaponMatDef.asset` | Coupled weapon material referenced by `ShapeWeaponPyramid.weaponMaterial`. Not in `MaterialRegistry`. |
 | `CylinderWeaponMatDef.asset` | Coupled weapon material referenced by `ShapeWeaponCylinder.weaponMaterial`. Not in `MaterialRegistry`. |
-
----
-
-## Legacy assets (`Assets/CubeTypes/`)
-
-The `CubeTypeA/B/C/D.asset`, `CubeTypePrism.asset`, and
-`CubeTypeRegistry.asset` files in this folder predate the shape /
-material decoupling. They are referenced by **zero scripts** on the
-active path — the only consumers were the original `CubeTypeDefinition`
-/ `CubeTypeRegistry` classes, which still compile but are likewise
-referenced by zero scripts. Retained on disk for now to avoid noise in
-the docs PR; planned for a follow-up cleanup.
 
 ---
 

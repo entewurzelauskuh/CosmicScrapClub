@@ -547,8 +547,3 @@ unmodified script.
   or `FlyScene` is supported. `PauseMenu` is even simpler — it
   bootstraps from a `RuntimeInitializeOnLoadMethod`, so it's alive
   before any scene loads.
-- **Legacy `CubeTypeDefinition` / `CubeTypeRegistry`.** These
-  ScriptableObject types and the `Assets/CubeTypes/` folder of assets
-  date from the pre-shape-decoupling era. They remain on disk but are
-  referenced by zero scripts; the active model is
-  `ShapeDefinition` × `MaterialDefinition`. Slated for cleanup.

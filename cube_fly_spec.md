@@ -336,8 +336,8 @@ Build-scene UI overlays (built at runtime by `BuildToolbarController`):
 
 - **Bottom-centre toolbar** — one button per shape, with a coloured corner swatch showing each shape's currently-armed material. Plus a **Delete** button.
   - Selecting an **armour** shape opens (or re-arms) its material flyout; hovering a shape button peeks the flyout open until pinned, clicking pins it. `M` toggles. Esc closes.
-  - Selecting a **weapon** shape suppresses the material flyout — weapon shapes have only their coupled `weaponMaterial`.
-  - Digits `1` / `2` / `3` / `4` arm material A / B / C / D directly while an armour shape is active.
+  - Selecting a **weapon** shape suppresses the per-shape material flyout (weapon shapes have only their coupled `weaponMaterial`). `M` then toggles the **weapons flyout** — a single flyout that lists every weapon shape and lets the player pin it like the armour flyout.
+  - Digits `1`–`9` (no modifier) arm an **armour shape** by toolbar slot order; `Shift`+digit `1`–`9` arms the active armour shape's **material** by registry index. Weapons aren't reachable from the digit row — use the weapons flyout instead.
 - **Top-left** — `Rotate: R/T` hint label.
 - **Top-centre** — fading red floating message slot (used for "Too much mass!").
 - **Bottom-left** — two stat readouts:
@@ -407,8 +407,10 @@ Single hand-rolled wrapper at `Assets/Input/CubeFlyInputActions.cs`
 | `RotateZ` | `R`             | Rotates the next placement 90° around Z.                                         |
 | `RotateX` | `T`             | Rotates the next placement 90° around X.                                         |
 
-ESC, `M`, and digits `1`–`4` are polled by `BuildToolbarController` /
-`PauseMenu` outside the action map.
+ESC, `M`, digits `1`–`9`, and `Shift` modifier state are polled by
+`BuildToolbarController` / `PauseMenu` outside the action map (digits
+arm armour shapes by slot order; Shift+digit arms the active armour
+shape's material by registry index).
 
 **Fly map**
 

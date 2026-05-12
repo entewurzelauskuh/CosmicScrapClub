@@ -106,12 +106,13 @@ through the slot picker.
 
 | Input | Action |
 |-------|--------|
-| LMB | In **Place** tool: place a cube at the preview cell. In **Delete** tool: remove the cube under the cursor. |
+| LMB | In **Place** tool: place the currently selected shape at the preview cell. In **Delete** tool: remove the cube under the cursor. |
 | `R` | Rotate the next placement 90° around Z. |
 | `T` | Rotate the next placement 90° around X. |
 | Toolbar (bottom) | Click a shape button to select it (auto-switches to Place). Hover a shape button (armour shape) to peek its material flyout; click a swatch to arm that (shape, material). Click **Delete** to switch to the delete tool. |
-| `M` | Toggle the relevant flyout for the active shape's category (armour: material flyout; weapon: no-op). |
-| Digits `1` / `2` / `3` / `4` | When the active shape is armour, arm material A / B / C / D directly. |
+| `M` | Toggle the relevant flyout for the active shape's category — armour: per-shape material flyout; weapon: weapons flyout. |
+| Digits `1`–`9` (no modifier) | Arm an **armour shape** by toolbar slot order (the on-screen left-to-right order, not the registry index). Weapons are reached through the weapons flyout. |
+| `Shift`+Digit `1`–`9` | While an armour shape is active, set its **material** by registry index. |
 | Right-mouse drag | Orbit the build camera. |
 | Mouse wheel | Zoom the build camera. |
 | `Esc` | Open the pause overlay. |

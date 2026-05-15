@@ -7,7 +7,10 @@ namespace CubeFly.Fly
     public class FlyCamera : MonoBehaviour
     {
         [SerializeField] Transform construct;
+        [Tooltip("Baseline exponential follow rate when the construct isn't rotating. The actual rate scales up with construct.angularVelocity.magnitude — see angularFollowBoost.")]
         [SerializeField] float followSpeed = 5f;
+        [Tooltip("Extra follow rate added per rad/s of construct angular velocity. With a fixed followSpeed the camera lags behind during sharp turns; this boost keeps the camera glued during fast rotation. 8 means a light ship rotating at the 3 rad/s cap effectively follows at ~29 — fast enough to track without snapping.")]
+        [SerializeField] float angularFollowBoost = 8f;
         [SerializeField] float lookHeightOffset = 0.5f;
         [SerializeField] float baseDistance = 5f;
         [SerializeField] float minDistance = 5f;
@@ -26,6 +29,13 @@ namespace CubeFly.Fly
         float _yawOffset;
         float _pitchOffset;
         bool _cursorLocked;
+
+        // Cached at Start. The Rigidbody-driven construct's angular
+        // velocity is the source we tap to make camera follow speed
+        // adaptive. Null-tolerant: if the construct doesn't have a
+        // Rigidbody (e.g. some future test setup), the boost just
+        // stays at zero and the camera falls back to base followSpeed.
+        Rigidbody _constructRb;
 
         CubeFlyInputActions _input;
 
@@ -56,6 +66,7 @@ namespace CubeFly.Fly
                 transform.position = construct.TransformPoint(_baseOffset);
                 Vector3 lookTarget = construct.position + construct.up * lookHeightOffset;
                 transform.rotation = Quaternion.LookRotation(lookTarget - transform.position, construct.up);
+                _constructRb = construct.GetComponent<Rigidbody>();
             }
 
             Debug.unityLogger.Log(TAG,
@@ -105,20 +116,30 @@ namespace CubeFly.Fly
         {
             if (construct == null) return;
 
+            // Adaptive follow speed: the camera's target sweeps through
+            // world space as the construct rotates — at angular speed ω
+            // and offset distance r, the target moves at roughly ω·r u/s.
+            // A fixed followSpeed Lerp can't keep up at high ω. Boost the
+            // effective rate by angularFollowBoost × ω so the camera
+            // stays glued during sharp turns; falls back to the base
+            // followSpeed when the ship is rotating slowly or not at all.
+            float angularSpeed = _constructRb != null ? _constructRb.angularVelocity.magnitude : 0f;
+            float adaptiveFollow = followSpeed + angularSpeed * angularFollowBoost;
+
             // Free-look: rotate the local offset by the accumulated mouse
             // angles, then sample in the construct's local frame so the
             // baseline pose follows pitch/yaw/roll of the ship.
             Quaternion orbit = Quaternion.Euler(_pitchOffset, _yawOffset, 0f);
             Vector3 rotatedLocalOffset = orbit * _baseOffset;
             Vector3 desired = construct.TransformPoint(rotatedLocalOffset);
-            transform.position = Vector3.Lerp(transform.position, desired, followSpeed * Time.deltaTime);
+            transform.position = Vector3.Lerp(transform.position, desired, adaptiveFollow * Time.deltaTime);
 
             // Look at a point above the construct in its OWN frame, and use
             // the construct's up vector — this rolls the camera with the ship
             // so the static-stuck feel holds during banking.
             Vector3 lookTarget = construct.position + construct.up * lookHeightOffset;
             Quaternion targetRot = Quaternion.LookRotation(lookTarget - transform.position, construct.up);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, followSpeed * Time.deltaTime);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, adaptiveFollow * Time.deltaTime);
         }
 
         void LockCursor()

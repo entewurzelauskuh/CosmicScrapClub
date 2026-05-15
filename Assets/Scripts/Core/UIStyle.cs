@@ -133,6 +133,165 @@ namespace CubeFly.Core
             return (button, text);
         }
 
+        // Builds a legacy uGUI Dropdown as a child of `parent`, with the
+        // full template hierarchy the control needs (Label + Template →
+        // Viewport → Content → Item → Background/Checkmark/Label). The
+        // project has no dropdown prefabs and builds all UI in code, so
+        // this mirrors what `GameObject > UI > Dropdown` would create.
+        //
+        // The caller sets `.options`, `.value`, and `.onValueChanged`.
+        // No scrollbar — intended for short option lists; the template
+        // is sized for ~4 visible rows and clamps beyond that.
+        public static Dropdown BuildDropdown(Transform parent, Vector2 size, int fontSize = 22)
+        {
+            int uiLayer = LayerMask.NameToLayer("UI");
+
+            // --- Root (Image + Dropdown) ---
+            GameObject rootGO = new GameObject("Dropdown",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Dropdown));
+            rootGO.transform.SetParent(parent, false);
+            if (uiLayer >= 0) rootGO.layer = uiLayer;
+            ((RectTransform)rootGO.transform).sizeDelta = size;
+            Image rootImage = rootGO.GetComponent<Image>();
+            rootImage.color = BackgroundIdle;
+
+            Dropdown dropdown = rootGO.GetComponent<Dropdown>();
+            ColorBlock cb = dropdown.colors;
+            cb.normalColor = TintNormal;
+            cb.highlightedColor = TintHighlight;
+            cb.pressedColor = TintPressed;
+            cb.selectedColor = TintHighlight;
+            cb.disabledColor = TintDisabled;
+            dropdown.colors = cb;
+            dropdown.targetGraphic = rootImage;
+
+            // --- Caption label (shows the current selection) ---
+            Text captionText = MakeText(rootGO.transform, "Label", fontSize, uiLayer);
+            RectTransform capRT = (RectTransform)captionText.transform;
+            capRT.anchorMin = Vector2.zero;
+            capRT.anchorMax = Vector2.one;
+            capRT.offsetMin = new Vector2(10f, 2f);
+            capRT.offsetMax = new Vector2(-10f, -2f);
+
+            // --- Template (inactive; the control clones it when opened) ---
+            GameObject templateGO = new GameObject("Template",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(ScrollRect));
+            templateGO.transform.SetParent(rootGO.transform, false);
+            if (uiLayer >= 0) templateGO.layer = uiLayer;
+            RectTransform templateRT = (RectTransform)templateGO.transform;
+            templateRT.anchorMin = new Vector2(0f, 0f);
+            templateRT.anchorMax = new Vector2(1f, 0f);
+            templateRT.pivot = new Vector2(0.5f, 1f);
+            templateRT.anchoredPosition = new Vector2(0f, 2f);
+            templateRT.sizeDelta = new Vector2(0f, size.y * 4f);
+            templateGO.GetComponent<Image>().color = BackgroundIdle;
+
+            // --- Viewport (masked) ---
+            GameObject viewportGO = new GameObject("Viewport",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Mask));
+            viewportGO.transform.SetParent(templateGO.transform, false);
+            if (uiLayer >= 0) viewportGO.layer = uiLayer;
+            RectTransform viewportRT = (RectTransform)viewportGO.transform;
+            viewportRT.anchorMin = Vector2.zero;
+            viewportRT.anchorMax = Vector2.one;
+            viewportRT.offsetMin = Vector2.zero;
+            viewportRT.offsetMax = Vector2.zero;
+            viewportRT.pivot = new Vector2(0f, 1f);
+            viewportGO.GetComponent<Mask>().showMaskGraphic = false;
+
+            // --- Content ---
+            GameObject contentGO = new GameObject("Content", typeof(RectTransform));
+            contentGO.transform.SetParent(viewportGO.transform, false);
+            if (uiLayer >= 0) contentGO.layer = uiLayer;
+            RectTransform contentRT = (RectTransform)contentGO.transform;
+            contentRT.anchorMin = new Vector2(0f, 1f);
+            contentRT.anchorMax = new Vector2(1f, 1f);
+            contentRT.pivot = new Vector2(0.5f, 1f);
+            contentRT.sizeDelta = new Vector2(0f, size.y);
+
+            // --- Item (the row template the Dropdown clones per option) ---
+            GameObject itemGO = new GameObject("Item", typeof(RectTransform), typeof(Toggle));
+            itemGO.transform.SetParent(contentGO.transform, false);
+            if (uiLayer >= 0) itemGO.layer = uiLayer;
+            RectTransform itemRT = (RectTransform)itemGO.transform;
+            itemRT.anchorMin = new Vector2(0f, 0.5f);
+            itemRT.anchorMax = new Vector2(1f, 0.5f);
+            itemRT.sizeDelta = new Vector2(0f, size.y);
+
+            GameObject itemBgGO = new GameObject("Item Background",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            itemBgGO.transform.SetParent(itemGO.transform, false);
+            if (uiLayer >= 0) itemBgGO.layer = uiLayer;
+            StretchFill((RectTransform)itemBgGO.transform);
+            itemBgGO.GetComponent<Image>().color = BackgroundIdle;
+
+            GameObject itemCheckGO = new GameObject("Item Checkmark",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            itemCheckGO.transform.SetParent(itemGO.transform, false);
+            if (uiLayer >= 0) itemCheckGO.layer = uiLayer;
+            RectTransform checkRT = (RectTransform)itemCheckGO.transform;
+            checkRT.anchorMin = new Vector2(0f, 0.5f);
+            checkRT.anchorMax = new Vector2(0f, 0.5f);
+            checkRT.sizeDelta = new Vector2(14f, 14f);
+            checkRT.anchoredPosition = new Vector2(12f, 0f);
+            itemCheckGO.GetComponent<Image>().color = TintHighlight;
+
+            Text itemText = MakeText(itemGO.transform, "Item Label", fontSize, uiLayer);
+            RectTransform itemTextRT = (RectTransform)itemText.transform;
+            itemTextRT.anchorMin = Vector2.zero;
+            itemTextRT.anchorMax = Vector2.one;
+            itemTextRT.offsetMin = new Vector2(26f, 1f);
+            itemTextRT.offsetMax = new Vector2(-10f, -1f);
+
+            Toggle itemToggle = itemGO.GetComponent<Toggle>();
+            itemToggle.targetGraphic = itemBgGO.GetComponent<Image>();
+            itemToggle.graphic = itemCheckGO.GetComponent<Image>();
+            itemToggle.isOn = true;
+
+            ScrollRect scroll = templateGO.GetComponent<ScrollRect>();
+            scroll.content = contentRT;
+            scroll.viewport = viewportRT;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 20f;
+
+            // Inactive until the Dropdown opens it.
+            templateGO.SetActive(false);
+
+            dropdown.template = templateRT;
+            dropdown.captionText = captionText;
+            dropdown.itemText = itemText;
+
+            return dropdown;
+        }
+
+        // Internal helper for BuildDropdown — a bare Text on a fresh
+        // GameObject with the builtin font and the shared label colour.
+        static Text MakeText(Transform parent, string name, int fontSize, int uiLayer)
+        {
+            GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer));
+            go.transform.SetParent(parent, false);
+            if (uiLayer >= 0) go.layer = uiLayer;
+            Text t = go.AddComponent<Text>();
+            t.font = BuiltinFont;
+            t.fontSize = fontSize;
+            t.color = LabelColor;
+            t.alignment = TextAnchor.MiddleLeft;
+            t.raycastTarget = false;
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            t.verticalOverflow = VerticalWrapMode.Truncate;
+            return t;
+        }
+
+        static void StretchFill(RectTransform rt)
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+
         public static Text BuildLabel(
             Transform parent, string text, int fontSize, FontStyle style = FontStyle.Normal)
         {

@@ -21,7 +21,12 @@ namespace CubeFly.HangarSelect
         [SerializeField] MaterialRegistry materialRegistry;
 
         [Header("Card sizing")]
-        [SerializeField] Vector2 cardSize = new Vector2(420f, 300f);
+        // Height bumped from 300 → 360 to fit the four-line body (the
+        // ship-class row was added on top of cubes/mass, HP, and the
+        // last-edited line). The extra height lands between the body
+        // and the Continue button, which are anchored to the card's
+        // top and bottom respectively.
+        [SerializeField] Vector2 cardSize = new Vector2(420f, 360f);
         [SerializeField] float cardSpacing = 40f;
         [SerializeField] float cardYOffset = 0f;
 
@@ -150,12 +155,14 @@ namespace CubeFly.HangarSelect
             titleRT.anchoredPosition = new Vector2(0f, -16f);
             card.TitleLabel = title;
 
-            // Body label — multi-line stats / empty hint.
+            // Body label — multi-line stats / empty hint. Height 170
+            // holds the four-line filled-slot body (class / cubes·mass /
+            // HP / last-edited) with clearance above the Continue button.
             Text body = UIStyle.BuildLabel(rt, string.Empty, fontSize: 22);
             body.alignment = TextAnchor.UpperCenter;
             RectTransform bodyRT = (RectTransform)body.transform;
             bodyRT.anchorMin = bodyRT.anchorMax = bodyRT.pivot = new Vector2(0.5f, 1f);
-            bodyRT.sizeDelta = new Vector2(cardSize.x - 32f, 130f);
+            bodyRT.sizeDelta = new Vector2(cardSize.x - 32f, 170f);
             bodyRT.anchoredPosition = new Vector2(0f, -78f);
             card.BodyLabel = body;
 
@@ -231,6 +238,7 @@ namespace CubeFly.HangarSelect
                     ? "Last edited unknown"
                     : $"Last edited {FormatRelative(info.ModifiedUtc)}";
                 card.BodyLabel.text =
+                    $"{ShipClasses.DisplayName(info.ShipClass)}\n" +
                     $"{info.CubeCount} cube{(info.CubeCount == 1 ? string.Empty : "s")}  ·  Mass {info.TotalMass:F1}\n" +
                     $"HP {info.TotalHealthPoints:F0}\n" +
                     $"{when}";

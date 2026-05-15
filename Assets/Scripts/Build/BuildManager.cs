@@ -29,7 +29,7 @@ namespace CubeFly.Build
         [SerializeField] float maxRayDistance = 100f;
 
         [Header("Mass budget")]
-        [SerializeField] float massLimit = 100f;
+        [Tooltip("The mass cap is the active ship class's MassCap — see the MassLimit property. No serialized cap here.")]
         [SerializeField] string massDeniedMessage = "Too much mass!";
         [SerializeField] float massDeniedMessageDuration = 5f;
 
@@ -80,7 +80,9 @@ namespace CubeFly.Build
         public int CurrentMaterialIndex => GetMaterialForShape(_currentShapeIndex);
         public Quaternion CurrentRotation => _currentRotation;
         public BuildTool CurrentTool => _currentTool;
-        public float MassLimit => massLimit;
+
+        // The mass cap is the active ship class's MassCap.
+        public float MassLimit => ShipClasses.StatsFor(GameData.ActiveShipClass).MassCap;
 
         // Looks up the material that is currently armed for a given
         // shape — first checks the per-shape memory dict, falls back
@@ -218,6 +220,7 @@ namespace CubeFly.Build
         {
             _input?.Dispose();
             ConstructChanged -= ScheduleAutosave;
+            ConstructChanged -= UpdateFlyButtonGate;
             // If a save was pending, write it now so the slot file
             // ends the session current. The scene tear-down path has
             // already invoked ConstructChanged for any final edits.
@@ -244,15 +247,21 @@ namespace CubeFly.Build
                 cubeRoot = root.transform;
             }
             EnsureAlphaCube();
+            ApplyShipClassToAlpha();
             int restored = GameData.PlacedCubes.Count;
             ReinstantiateExistingCubes();
             Debug.unityLogger.Log(TAG, $"BuildScene ready. Restored {restored} cubes from GameData.");
 
             _toolbar = FindAnyObjectByType<BuildToolbarController>();
 
-            // Subscribe AFTER the initial ConstructChanged below so the
-            // first reinstantiation doesn't kick off an autosave that
-            // just re-writes what we loaded.
+            // Subscribe the Fly-button gate BEFORE the initial
+            // ConstructChanged so a loaded over-budget construct (e.g.
+            // a slot whose class was switched to a lower cap) disables
+            // the Fly! button immediately on entry. Autosave is
+            // subscribed AFTER, so the first reinstantiation doesn't
+            // kick off a save that just re-writes what we loaded.
+            ConstructChanged += UpdateFlyButtonGate;
+
             CurrentShapeChanged?.Invoke(_currentShapeIndex);
             CurrentMaterialChanged?.Invoke(_currentShapeIndex, CurrentMaterialIndex);
             CurrentToolChanged?.Invoke(_currentTool);
@@ -295,6 +304,48 @@ namespace CubeFly.Build
             GameObject existing = GameObject.FindGameObjectWithTag("AlphaCube");
             if (existing != null) { _alphaCubeInstance = existing; return; }
             _alphaCubeInstance = Instantiate(alphaCubePrefab, Vector3.zero, Quaternion.identity);
+        }
+
+        // Apply the active ship class's alpha-cube HP to the live alpha
+        // instance. Called once after EnsureAlphaCube and again whenever
+        // the BuildScene ship-class dropdown changes the class.
+        void ApplyShipClassToAlpha()
+        {
+            if (_alphaCubeInstance == null) return;
+            CubeStats stats = _alphaCubeInstance.GetComponent<CubeStats>();
+            if (stats == null) return;
+            stats.healthPoints = ShipClasses.StatsFor(GameData.ActiveShipClass).AlphaHealthPoints;
+        }
+
+        // Public entry point for the ship-class dropdown
+        // (BuildShipClassController). Re-applies the alpha HP and fires
+        // ConstructChanged so the Mass / HP readout refreshes, the
+        // Fly-button gate re-evaluates, and the change is autosaved
+        // through the normal debounce path.
+        public void OnShipClassChanged()
+        {
+            ApplyShipClassToAlpha();
+            Debug.unityLogger.Log(TAG,
+                $"Ship class is now {GameData.ActiveShipClass}. Mass cap {MassLimit:F0}, " +
+                $"alpha HP {ShipClasses.StatsFor(GameData.ActiveShipClass).AlphaHealthPoints:F0}.");
+            ConstructChanged?.Invoke();
+        }
+
+        // Disable the persistent "Fly!" corner button while the
+        // construct's total mass exceeds the active ship class's cap.
+        // The only way to go over budget is switching to a lower-cap
+        // class (placement is already cap-gated by TryPlace) — an
+        // over-budget construct can't be flown until the player removes
+        // enough cubes. Subscribed to ConstructChanged, so it
+        // re-evaluates on every placement, removal, and class change.
+        void UpdateFlyButtonGate()
+        {
+            bool overBudget = ComputeCurrentMass() > MassLimit;
+            if (UIManager.Instance != null)
+                UIManager.Instance.SetSceneSwitchInteractable(!overBudget);
+            if (overBudget)
+                Debug.unityLogger.Log(TAG,
+                    $"Over mass budget ({ComputeCurrentMass():F1} / {MassLimit:F0}) — Fly! button disabled.");
         }
 
         // Poll in Update rather than subscribing to InputAction.performed.
@@ -422,6 +473,7 @@ namespace CubeFly.Build
                 if (mdef != null) prospectiveCubeMass = mdef.mass;
             }
             float prospectiveTotal = ComputeCurrentMass() + prospectiveCubeMass;
+            float massLimit = MassLimit;
             if (prospectiveTotal > massLimit)
             {
                 Debug.unityLogger.LogWarning(TAG,

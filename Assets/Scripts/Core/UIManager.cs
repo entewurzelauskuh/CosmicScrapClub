@@ -71,6 +71,24 @@ namespace CubeFly.Core
             // to false there.
             _ = HangarSelectSceneName;
             if (_canvas != null) _canvas.enabled = inGameplay;
+
+            // Reset the corner button to interactable on every scene
+            // change. The FlyScene "Hangar" button is always clickable;
+            // the BuildScene "Fly!" button starts clickable and gets
+            // gated by BuildManager if the construct is over its mass
+            // budget. sceneLoaded fires before BuildManager.Start, so
+            // BuildManager re-evaluates the gate right after this reset.
+            if (sceneSwitchButton != null) sceneSwitchButton.interactable = true;
+        }
+
+        // Enable / disable the corner scene-switch button. BuildManager
+        // calls this to gate the "Fly!" button while the construct
+        // exceeds the active ship class's mass cap — the player can go
+        // over budget by switching to a lower-cap class, and shouldn't
+        // be able to fly an over-budget construct.
+        public void SetSceneSwitchInteractable(bool interactable)
+        {
+            if (sceneSwitchButton != null) sceneSwitchButton.interactable = interactable;
         }
 
         void UpdateLabel(Scene scene)

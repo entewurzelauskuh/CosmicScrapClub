@@ -83,6 +83,10 @@ namespace CubeFly.Fly
         [Tooltip("Applied to the Rigidbody at Start. Angular drag — substantial, so rotation decays back to rest when input is released. We explicitly DO NOT want endless space-physics spin.")]
         [SerializeField] float angularDrag = 3f;
 
+        [Header("Minimum responsiveness floor")]
+        [Tooltip("Above this mass, applied thrust force and torque are scaled UP by mass/maxResponsivenessMass so a very heavy build (e.g. a maxed Tank) doesn't become an unflyable brick. Below it, mass fights flight normally. Effectively: anything heavier than this flies/turns as if it were this mass.")]
+        [SerializeField] float maxResponsivenessMass = 100f;
+
         CubeFlyInputActions _input;
 
         // Per-frame input snapshots, sampled in Update, applied in FixedUpdate.
@@ -97,10 +101,20 @@ namespace CubeFly.Fly
         // FixedUpdate after this refactor.
         Rigidbody _rb;
 
-        // Cached at Start from `Mathf.Pow(rb.mass, rotationMassCompensation)`.
-        // Recomputing each FixedUpdate would burn a Pow call for no
-        // reason — mass is fixed for the lifetime of a Fly session.
-        float _torqueMassFactor = 1f;
+        // Per-session flight factors, all cached in ResolveRigidbody —
+        // mass and ship class are fixed for the lifetime of a Fly
+        // session, so recomputing them each FixedUpdate would just burn
+        // Pow calls.
+        //
+        // _linearForceFactor — multiplies thrustForce. Folds in the
+        //   ship-class movement multiplier and the responsiveness-floor
+        //   over-cap ratio.
+        // _torqueFactor — multiplies the pitch/yaw/roll torques. Folds
+        //   in the class multiplier, the inertia-tensor mass
+        //   compensation (mass^rotationMassCompensation), and the same
+        //   over-cap ratio.
+        float _linearForceFactor = 1f;
+        float _torqueFactor = 1f;
 
         const string TAG = "FlyController";
 
@@ -166,11 +180,32 @@ namespace CubeFly.Fly
             // Mass below 1 makes the inertia tensor effectively zero
             // and produces wildly unstable rotation. Floor at 1.
             _rb.mass = Mathf.Max(1f, totalMass);
-            _torqueMassFactor = Mathf.Pow(_rb.mass, rotationMassCompensation);
+
+            // --- Flight factors ---
+            // Ship class movement multiplier (Tank slower, Scout faster).
+            float movementMultiplier = ShipClasses.StatsFor(GameData.ActiveShipClass).MovementMultiplier;
+
+            // Responsiveness floor: above maxResponsivenessMass, scale
+            // applied force/torque UP by mass/cap so accel and turn
+            // rate flatten instead of dropping toward zero. Below the
+            // cap, overCap == 1 and mass fights flight normally.
+            float overCap = Mathf.Max(1f, _rb.mass / Mathf.Max(1f, maxResponsivenessMass));
+            float effectiveMass = Mathf.Min(_rb.mass, maxResponsivenessMass);
+
+            _linearForceFactor = movementMultiplier * overCap;
+            // effectiveMass^comp is the inertia compensation (heavy ships
+            // need more torque); overCap is the floor; movementMultiplier
+            // is the class lever. See the field comments + the rotation
+            // block in FixedUpdate.
+            _torqueFactor = movementMultiplier
+                          * Mathf.Pow(effectiveMass, rotationMassCompensation)
+                          * overCap;
+
             Debug.unityLogger.Log(TAG,
                 $"Rigidbody armed. Total mass: {totalMass:F1} (rb.mass: {_rb.mass:F1}). " +
-                $"thrustForce={thrustForce:F1} → expected light accel: {thrustForce / _rb.mass:F2} m/s². " +
-                $"torqueMassFactor={_torqueMassFactor:F2} (compensation exp={rotationMassCompensation:F2}). " +
+                $"Ship class {GameData.ActiveShipClass} → movement ×{movementMultiplier:F2}. " +
+                $"linearForceFactor={_linearForceFactor:F2}, torqueFactor={_torqueFactor:F2} " +
+                $"(overCap ×{overCap:F2}, compensation exp={rotationMassCompensation:F2}). " +
                 $"linearDrag={linearDrag:F1}, angularDrag={angularDrag:F1}.");
         }
 
@@ -196,6 +231,11 @@ namespace CubeFly.Fly
                 GameObject alpha = Instantiate(alphaCubePrefab, construct);
                 alpha.transform.localPosition = Vector3.zero;
                 alpha.transform.localRotation = Quaternion.identity;
+                // Apply the ship class's alpha HP — Tank tougher, Scout
+                // more fragile. Overrides the prefab's CubeStats default.
+                CubeStats alphaStats = alpha.GetComponent<CubeStats>();
+                if (alphaStats != null)
+                    alphaStats.healthPoints = ShipClasses.StatsFor(GameData.ActiveShipClass).AlphaHealthPoints;
             }
 
             if (shapeRegistry == null)
@@ -276,7 +316,7 @@ namespace CubeFly.Fly
                 Vector3 worldThrust = construct.right   * _thrustInput.x +
                                       construct.up      * _thrustInput.y +
                                       construct.forward * _thrustInput.z;
-                _rb.AddForce(worldThrust * thrustForce, ForceMode.Force);
+                _rb.AddForce(worldThrust * (thrustForce * _linearForceFactor), ForceMode.Force);
             }
 
             // Hard speed cap. linearVelocity is the Unity 6 name; pre-6
@@ -286,25 +326,24 @@ namespace CubeFly.Fly
             if (v.sqrMagnitude > maxSpeed * maxSpeed)
                 _rb.linearVelocity = v.normalized * maxSpeed;
 
-            // Rotation: torque is scaled by `_torqueMassFactor` =
-            // mass^rotationMassCompensation. This partially fights the
-            // inertia-tensor mass dependence so heavy ships don't crawl
-            // and light ships don't spin wildly — the spread between
-            // them stays meaningful but bounded. See the field tooltip.
+            // Rotation: torque is scaled by `_torqueFactor`, which folds
+            // in the ship-class movement multiplier, the inertia-tensor
+            // mass compensation (mass^rotationMassCompensation), and the
+            // responsiveness-floor over-cap ratio. See ResolveRigidbody.
 
             // Pitch: local X. Up arrow → nose up → torque around local -X.
             if (_pitchInput != 0f)
-                _rb.AddRelativeTorque(Vector3.right * (-_pitchInput * pitchTorque * _torqueMassFactor), ForceMode.Force);
+                _rb.AddRelativeTorque(Vector3.right * (-_pitchInput * pitchTorque * _torqueFactor), ForceMode.Force);
 
             // Yaw: world Y. Right arrow → yaw right → positive world-Y torque.
             // World-space yaw avoids roll coupling when the ship is pitched.
             if (_yawInput != 0f)
-                _rb.AddTorque(Vector3.up * (_yawInput * yawTorque * _torqueMassFactor), ForceMode.Force);
+                _rb.AddTorque(Vector3.up * (_yawInput * yawTorque * _torqueFactor), ForceMode.Force);
 
             // Roll: local Z. Q (input = -1, anti-clockwise from pilot POV) →
             // positive local-Z torque; E reverses.
             if (_rollInput != 0f)
-                _rb.AddRelativeTorque(Vector3.forward * (-_rollInput * rollTorque * _torqueMassFactor), ForceMode.Force);
+                _rb.AddRelativeTorque(Vector3.forward * (-_rollInput * rollTorque * _torqueFactor), ForceMode.Force);
         }
     }
 }

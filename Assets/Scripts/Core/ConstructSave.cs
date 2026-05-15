@@ -7,22 +7,30 @@ namespace CubeFly.Core
     // Unity's JsonUtility — every member must be a [Serializable]
     // primitive / Unity type, and dictionaries are not supported.
     //
-    // Schema rules (v1):
-    //   • shape and material are stored by NAME, not by registry index,
-    //     so reordering ShapeRegistry / MaterialRegistry doesn't break
-    //     existing saves.
+    // Schema rules:
+    //   • shape, material, and shipClass are stored by NAME, not by
+    //     enum / registry index, so reordering an enum or a registry
+    //     doesn't silently re-map existing saves.
     //   • totalMass / totalHealthPoints are denormalised — derived from
     //     `placements` but cached so the slot-picker UI can show them
     //     without instantiating GameObjects. Treat the placement list
     //     as authoritative on load and recompute these.
-    //   • Unknown JSON fields are tolerated by JsonUtility (ignored).
-    //   • A version > knownVersion is treated as "save from a newer
+    //   • Unknown JSON fields are tolerated by JsonUtility (ignored),
+    //     and MISSING fields keep their C# default. A v1 save (written
+    //     before ship classes existed) has no `shipClass` key — it
+    //     loads with shipClass == "" which ShipClasses.Parse maps to
+    //     Allrounder. So the v1→v2 bump needs no migration code.
+    //   • A version > CurrentVersion is treated as "save from a newer
     //     build" and refused.
+    //
+    // Version history:
+    //   v1 — initial: placements + denormalised totals.
+    //   v2 — added `shipClass`.
 
     [Serializable]
     public class ConstructSave
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
 
         public int version = CurrentVersion;
         public string slotName = string.Empty;
@@ -30,6 +38,8 @@ namespace CubeFly.Core
         public long modifiedUtcTicks;
         public float totalMass;
         public float totalHealthPoints;
+        // ShipClass by name (see ShipClasses.Parse). Empty on a v1 save.
+        public string shipClass = string.Empty;
 
         public PlacementRecord[] placements = Array.Empty<PlacementRecord>();
     }
@@ -53,10 +63,11 @@ namespace CubeFly.Core
         public readonly int CubeCount;
         public readonly float TotalMass;
         public readonly float TotalHealthPoints;
+        public readonly ShipClass ShipClass;
         public readonly DateTime ModifiedUtc;
 
         public SaveSlotInfo(int slot, bool isEmpty, string name, int cubeCount,
-            float totalMass, float totalHealthPoints, DateTime modifiedUtc)
+            float totalMass, float totalHealthPoints, ShipClass shipClass, DateTime modifiedUtc)
         {
             Slot = slot;
             IsEmpty = isEmpty;
@@ -64,11 +75,12 @@ namespace CubeFly.Core
             CubeCount = cubeCount;
             TotalMass = totalMass;
             TotalHealthPoints = totalHealthPoints;
+            ShipClass = shipClass;
             ModifiedUtc = modifiedUtc;
         }
 
         public static SaveSlotInfo Empty(int slot)
-            => new SaveSlotInfo(slot, true, $"Slot {slot + 1}", 0, 0f, 0f, default);
+            => new SaveSlotInfo(slot, true, $"Slot {slot + 1}", 0, 0f, 0f, ShipClass.Allrounder, default);
 
         public static SaveSlotInfo From(int slot, ConstructSave save)
         {
@@ -79,6 +91,7 @@ namespace CubeFly.Core
                 save.placements != null ? save.placements.Length : 0,
                 save.totalMass,
                 save.totalHealthPoints,
+                ShipClasses.Parse(save.shipClass),
                 SafeDateTimeFromTicks(save.modifiedUtcTicks));
         }
 

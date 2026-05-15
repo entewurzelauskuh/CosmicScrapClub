@@ -44,6 +44,12 @@ namespace CubeFly.Core
         // developer presses Play directly on BuildScene).
         public static int ActiveSlot { get; private set; } = -1;
 
+        // The construct's ship class — picked via the BuildScene
+        // dropdown, persisted per save slot. Drives alpha-cube HP, the
+        // build mass cap, and the Fly-mode movement multiplier (see
+        // ShipClasses). Defaults to Allrounder for a fresh construct.
+        public static ShipClass ActiveShipClass { get; private set; } = ShipClass.Allrounder;
+
         // True while LoadFromSave is replaying a serialised construct.
         // The flag is consumed by TryAdd to bypass adjacency / occupancy
         // validation on load, so saves are treated as authoritative
@@ -196,7 +202,21 @@ namespace CubeFly.Core
         {
             _placedCubes.Clear();
             _byCell.Clear();
+            // A fresh construct starts as Allrounder. HangarSelect calls
+            // Clear() for an empty slot, so a new build always begins
+            // here regardless of the previous slot's class.
+            ActiveShipClass = ShipClass.Allrounder;
             Debug.unityLogger.Log(TAG, "GameData cleared.");
+        }
+
+        // Set the construct's ship class. Called by the BuildScene
+        // dropdown and by LoadFromSave. The caller is responsible for
+        // any downstream re-application (alpha HP, mass-cap readout) —
+        // GameData just holds the value.
+        public static void SetShipClass(ShipClass shipClass)
+        {
+            ActiveShipClass = shipClass;
+            Debug.unityLogger.Log(TAG, $"Ship class set to {shipClass}.");
         }
 
         // Sum of all placed cubes' masses. Does NOT include the alpha
@@ -270,6 +290,10 @@ namespace CubeFly.Core
                 return;
             }
 
+            // Restore the ship class. A v1 save has no shipClass field,
+            // so save.shipClass is "" → Parse falls back to Allrounder.
+            ActiveShipClass = ShipClasses.Parse(save.shipClass);
+
             _loading = true;
             try
             {
@@ -334,6 +358,7 @@ namespace CubeFly.Core
             {
                 version = ConstructSave.CurrentVersion,
                 slotName = slotName ?? string.Empty,
+                shipClass = ShipClasses.DisplayName(ActiveShipClass),
                 placements = new PlacementRecord[_placedCubes.Count],
             };
 

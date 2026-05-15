@@ -216,9 +216,10 @@ MonoBehaviour:
   buildCamera: {fileID: 300002}
   cubeRoot: {fileID: 250001}
   maxRayDistance: 100
-  massLimit: 100
   massDeniedMessage: Too much mass!
   massDeniedMessageDuration: 5
+  autosaveDebounceSeconds: 0.25
+  autosaveSlotName: 
 --- !u!114 &200003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -562,6 +563,7 @@ GameObject:
   m_Component:
   - component: {fileID: 500001}
   - component: {fileID: 500002}
+  - component: {fileID: 500003}
   m_Layer: 0
   m_Name: BuildToolbar
   m_TagString: Untagged
@@ -611,6 +613,7 @@ MonoBehaviour:
   floatingColor: {r: 1, g: 0.45, b: 0.45, a: 1}
   deleteButtonLabel: Delete
   deleteSelectedColor: {r: 0.85, g: 0.25, b: 0.25, a: 0.95}
+  weaponsButtonLabel: Weapons
   statFontSize: 20
   massLabelAnchoredPosition: {x: 20, y: 60}
   hpLabelAnchoredPosition: {x: 20, y: 28}
@@ -618,6 +621,28 @@ MonoBehaviour:
   selectedStatsAnchoredPosition: {x: 200, y: 28}
   selectedStatsSize: {x: 460, y: 60}
   deleteToolLabelText: "Delete tool \u2014 click a cube to remove"
+  flyoutEntrySize: {x: 220, y: 56}
+  flyoutEntrySpacing: 6
+  flyoutBottomGap: 10
+  hoverPeekDelay: 0.3
+  peekAlpha: 0.6
+  swatchSize: {x: 18, y: 18}
+--- !u!114 &500003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 500000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8517d286ae5ec4445abb6ab28dbb5aaa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Build.BuildShipClassController
+  buildManager: {fileID: 0}
+  anchoredPosition: {x: 20, y: -20}
+  dropdownSize: {x: 200, y: 36}
+  fontSize: 20
 --- !u!1 &600000
 GameObject:
   m_ObjectHideFlags: 0

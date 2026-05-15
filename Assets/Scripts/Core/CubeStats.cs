@@ -30,7 +30,7 @@ namespace CubeFly.Core
         //
         // Used by projectile-type damage (bullets, rockets, future energy
         // weapons). Kinetic impact damage (crashes) bypasses armour via
-        // TakeRawDamage below — a steel plate stops a bullet, not a 35 m/s
+        // TakeRawDamage below — a steel plate stops a bullet, not a 35 u/s
         // collision into a wall.
         public float TakeDamage(float incoming)
         {

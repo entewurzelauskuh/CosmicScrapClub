@@ -27,6 +27,13 @@ namespace CubeFly.Fly
     // every frame. To re-arm, the sweep must miss for one frame.
     // Mirrors `OnCollisionEnter` semantics without using Unity's
     // physics events.
+    //
+    // Execution order forced AFTER FlyController (which has the
+    // default 0). Without this, Unity gives no FixedUpdate ordering
+    // guarantee between same-priority scripts — the sweep could
+    // sample positions before movement is applied each tick, costing
+    // us a frame of impact-speed accuracy.
+    [DefaultExecutionOrder(100)]
     public class FlyCrashDetector : MonoBehaviour
     {
         [SerializeField] FlyController flyController;
@@ -57,6 +64,11 @@ namespace CubeFly.Fly
 
         void Start()
         {
+            // Same-GameObject lookup is the realistic case (this
+            // component is attached to FlyController's GO in the
+            // shipped scene). Try that first; fall back to a scene
+            // scan only if the convention is ever broken.
+            if (flyController == null) flyController = GetComponent<FlyController>();
             if (flyController == null) flyController = FindAnyObjectByType<FlyController>();
             if (flyController == null)
             {

@@ -1,4 +1,3 @@
-using CubeFly.Core;
 using UnityEngine;
 
 namespace CubeFly.Fly

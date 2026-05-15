@@ -77,8 +77,10 @@ namespace CubeFly.Fly
         // happen for the layers we mask against, but is defensive.
         public static void ApplyAndLog(RaycastHit hit, float damage, string projectileTag)
         {
-            CubeStats stats = hit.collider.GetComponent<CubeStats>();
-            if (stats == null) stats = hit.collider.GetComponentInParent<CubeStats>();
+            // GetComponentInParent searches the current GameObject AND walks
+            // up through parents, so a single call covers both the
+            // collider-on-root and collider-on-child layouts.
+            CubeStats stats = hit.collider.GetComponentInParent<CubeStats>();
             if (stats == null)
             {
                 Debug.unityLogger.LogWarning(projectileTag,

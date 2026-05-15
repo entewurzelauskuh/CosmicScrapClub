@@ -37,7 +37,9 @@ on MainMenu and HangarSelect.
 A pause overlay (`PauseMenu`) self-bootstraps before the first scene
 loads. ESC opens / closes the overlay in BuildScene and FlyScene only.
 While open, `Time.timeScale = 0` freezes physics; on-overlay buttons
-`Menu` and `Back to Desktop` jump to MainMenu or quit the app.
+`Menu` and `Back to Desktop` jump to MainMenu or quit the app. A
+sibling overlay (`GameOverMenu`) ends the run when the alpha cube is
+destroyed — see *End-of-Run*.
 
 ---
 
@@ -291,17 +293,16 @@ cube is included in the total. Prospective mass uses
 their coupled `weaponMaterial`, not from the (irrelevant)
 `MaterialRegistry` index.
 
-**Slowdown.** `FlyController` computes a single multiplier on `Start`:
-
-```csharp
-float t = Mathf.Clamp01((totalMass - baseMassThreshold) / (massCap - baseMassThreshold));
-float massMultiplier = Mathf.Lerp(1f, 1f - maxSlowdown, t);
-// defaults: baseMassThreshold = 10, massCap = 100, maxSlowdown = 0.9
-```
-
-That multiplier scales **acceleration** *and* **rotation rates** — but
-not `maxSpeed` or `drag`. A 10-mass ship feels nimble; a 100-mass ship
-takes ~10× longer to accelerate and turn.
+**Slowdown.** Since the Rigidbody refactor, mass affects flight feel
+through real physics rather than a hand-authored multiplier.
+`FlyController.Start` sets the construct `Rigidbody.mass` to the summed
+cube masses; from then on `F = ma` makes heavier ships accelerate
+slower and `τ = Iα` (the inertia tensor Unity derives from the
+compound collider) makes them turn slower. A `rotationMassCompensation`
+exponent scales applied torque by `mass^p` so heavy ships stay
+turnable, and a `maxAngularSpeed` cap keeps light ships from spinning
+out. A 10-mass ship feels nimble; a 100-mass ship is sluggish in both
+acceleration and turn — no special-case code, just physics.
 
 ---
 
@@ -309,7 +310,7 @@ takes ~10× longer to accelerate and turn.
 
 Three damage sources are wired today: bullets from `PyramidWeapon`,
 rockets from `CylinderWeapon`, and kinetic crashes from
-`FlyCrashDetector`. All three route through a single
+`FlyCrashHandler`. All three route through a single
 `CubeFly.Fly.CubeDamage.ApplyAndLog` pipeline that handles the damage
 math, logging, and (on fatal hits) the death animation and cleanup.
 
@@ -327,11 +328,12 @@ math, logging, and (on fatal hits) the death animation and cleanup.
 
 ### Crash damage
 
-- `FlyCrashDetector` is a sibling component on the `FlyController` GameObject with `[DefaultExecutionOrder(100)]` so it runs after the flight integration each `FixedUpdate`. For each cube child of `CubeConstruct`, it sweeps the cube's `BoxCollider` from its previous-frame world position to its current one via `Physics.BoxCastNonAlloc`.
-- **Layer mask**: `Default + PlacedCube + AlphaCube`. Self-construct hits filtered identically to projectiles.
-- **Damage formula**: `clamp(impactSpeed × 0.3, 1, 10)` where `impactSpeed = step / Time.fixedDeltaTime`. Below 3 u/s, no damage at all (landing gently doesn't punish). At `FlyController`'s `maxSpeed` of 37.5 u/s the formula caps at 10. Routes through `CubeDamage.ApplyAndLog` with `ignoreArmour: true`.
-- **Entry-only** model: a per-cube `_inContact` boolean fires damage on the first frame of contact only. Sliding / scraping along a surface registers ONE damage event, not one per frame. To re-arm, the sweep must miss for one frame. Mirrors `OnCollisionEnter` semantics without using Unity's physics events (the construct is transform-driven, so OnCollisionEnter wouldn't fire reliably anyway).
-- **Known gap, addressed by the upcoming *Rigidbody-driven construct* roadmap item**: the construct still **phases through** colliders at the physics layer. Crashes register damage but don't physically stop the ship. Bouncing comes for free once the Rigidbody refactor lands, and the bespoke sweep here gets replaced with `OnCollisionEnter` + `ContactPoint.thisCollider` so damage charges to the specific cube that actually touched the wall.
+- `FlyCrashHandler` is a component on `CubeConstruct` (the construct's `Rigidbody` owner). Unity's `OnCollisionEnter` fires here for the construct's compound collider whenever it strikes external geometry. Internal cube-to-cube contacts within the same rigid body don't generate collision events, so no self-hit filter is needed.
+- **Impact speed** is the normal component of `collision.relativeVelocity` — `Abs(Dot(relativeVelocity, contactNormal))`. A high-speed glancing blow has a small normal component and does little damage; a head-on hit dumps the full speed.
+- **Damage formula**: `clamp(normalImpactSpeed × 0.3, 1, 10)`. Below 3 u/s, no damage at all (landing gently doesn't punish). At `FlyController`'s `maxSpeed` of 37.5 u/s the formula caps at 10. Routes through `CubeDamage.ApplyAndLog` with `ignoreArmour: true`.
+- **Both sides take damage**: the construct's contact-point cube (`ContactPoint.thisCollider`) AND the other collider if it carries `CubeStats`. So crashing into a `WorldTargetCube` damages both the ship and the target.
+- **Entry-only** by nature: `OnCollisionEnter` fires once per contact, so sliding / scraping along a surface registers one damage event, not one per frame.
+- Crash damage is **kinetic** — `ignoreArmour: true` — so armour doesn't mitigate it (a steel plate stops a bullet, not a wall).
 
 ### Cube death
 
@@ -339,7 +341,7 @@ math, logging, and (on fatal hits) the death animation and cleanup.
   1. Removes the cube's `GameData` entry (only relevant for player-construct cubes carrying `PlacedCubeData`) so the mass budget and Hangar re-entry stay consistent.
   2. Lazily `AddComponent`s a `CubeFly.Core.CubeDeath` and calls `BeginDeath(outwardOrigin)`.
 - `CubeDeath` detaches the cube from its parent, disables all colliders, and runs a 2-second drift along a direction biased 70% outward from `outwardOrigin` (the construct center for player cubes; random with upward bias for free-standing world cubes). Then `Destroy`s the GameObject.
-- The alpha cube takes damage but **doesn't run the death animation** — `CubeDeath.BeginDeath` returns silently on alpha-tagged cubes. End-of-run (a future roadmap item) handles the actual game-over condition; until then the alpha just sits at HP 0 visually.
+- The alpha cube takes damage but **doesn't run the death animation** — `CubeDeath.BeginDeath` returns silently on alpha-tagged cubes. Instead, when the alpha reaches 0 HP, `CubeDamage.ApplyAndLog` calls `GameOverMenu.TriggerGameOver`: a "Construct Destroyed" overlay shows, `Time.timeScale` freezes, and the single button returns the player to the main menu. See the **End-of-run** section below.
 
 ### Disconnected sub-pieces
 
@@ -414,28 +416,28 @@ Autosave (see *Save / Load*) flushes 0.25 s after the last
 
 Scene contents:
 
-- `CubeConstruct` empty GameObject — the construct's pivot. Starts at `(0, 10, 0)`.
-- `FlyController` rebuilds the construct on `Start`, instantiating one `alphaCubePrefab` at the origin plus one shape-prefab per `Placement` in `GameData`. `MaterialDefinition.ApplyTo` is invoked per placement. Any spawned `WeaponBehavior` is collected for the shooting controller. `FlyController` lives on a GameObject that also hosts `FlyShootingController` and `FlyCrashDetector` as siblings (single GameObject, three components).
+- `CubeConstruct` GameObject — the construct's pivot, at `(0, 10, 0)`. Carries a non-kinematic `Rigidbody` (the flight body) and the `FlyCrashHandler` component.
+- `FlyController` rebuilds the construct on `Start`, instantiating one `alphaCubePrefab` at the origin plus one shape-prefab per `Placement` in `GameData`. `MaterialDefinition.ApplyTo` is invoked per placement. Any spawned `WeaponBehavior` is collected for the shooting controller. `FlyController` shares its GameObject with `FlyShootingController`.
 - `Main Camera` with `FlyCamera`.
 - `FlyShootingController` — owns the per-frame fire / weapon-selection dispatch.
-- `FlyCrashDetector` — per-cube swept `BoxCast` each `FixedUpdate`. See **Combat** below.
-- `FlyWeaponToolbarController` — bottom-of-screen weapon toolbar with reload bars.
-- `FlyCrosshair` — screen-space reticle that projects `construct.forward * 100` so on-screen reticle and actual aim agree.
+- `FlyCrashHandler` — `OnCollisionEnter`-based crash damage on the construct's Rigidbody. See **Combat** above.
+- `FlyHUD` GameObject — hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom weapon toolbar with reload bars), `FlySpeedIndicator` (bottom-left `Speed: NN.N u/s`), and `FlyHpIndicator` (bottom-left `HP: current / initial`).
 - One `Ground` prefab instance at the origin (200×200 flat plane) and 20 `WorldTargetCube` prefab instances scattered in front of the spawn position — the basic flat-plain practice arena. Targets are tuned fragile (HP 30, AV 0) so the demo is actually destructible.
 - Directional Light.
 - `UIBootstrap` (idempotent — no-ops if `UIManager` is already alive).
 
 Flight model:
 
-- No `Rigidbody`. The construct's transform is moved directly each `FixedUpdate`.
-- 6-axis **thrust** in the construct's local frame.
-- **Pitch** rotates around local X. **Yaw** rotates around **world** Y (avoids roll coupling when pitched). **Roll** rotates around local Z.
-- Velocity is per-axis accumulated, magnitude-clamped to `maxSpeed`, then decayed each step by `Mathf.Exp(-drag * dt)`.
+- The construct is a non-kinematic `Rigidbody` (`useGravity = false`, `ContinuousDynamic` collision detection). Cube `BoxCollider`s form a compound collider — physics handles bouncing off the ground and world cubes.
+- 6-axis **thrust** applied via `Rigidbody.AddForce` in the construct's local frame; linear velocity is hard-clamped to `maxSpeed`.
+- **Pitch** / **roll** apply `AddRelativeTorque` (local axes); **Yaw** applies world-axis `AddTorque` (avoids roll coupling when pitched). Angular velocity is capped by `maxAngularSpeed`.
+- Mass affects flight through real physics: `F = ma` for translation, `τ = Iα` for rotation. Applied torque is scaled by `mass^rotationMassCompensation` so heavy ships stay turnable. `Rigidbody.linearDamping` / `angularDamping` provide decay — `angularDamping` is substantial so rotation comes to rest rather than drifting forever.
 
 Camera:
 
 - Local-frame ship-stuck follow with a one-shot dynamic offset computed from `GameData.GetConstructBounds()` (bigger ships → camera further back, clamped 5–50 units).
 - RMB enables free-look (mouse delta orbits the offset around the construct). On release, the camera snap-blends back to the default behind-and-above pose.
+- Follow speed is **adaptive** — it scales with the construct's angular velocity (`followSpeed + angularVelocity.magnitude × angularFollowBoost`) so the camera keeps up during sharp turns instead of lagging behind.
 - When `PauseMenu.IsOpen`, the camera treats RMB as released — cursor is freed, mouse delta is ignored, and the offset relaxes to neutral. The body follow is naturally frozen by `Time.timeScale = 0`.
 
 Shooting (see `weapon_shooting_spec.md` for the full design):
@@ -575,6 +577,22 @@ unmodified script.
 
 ---
 
+## End-of-Run
+
+`GameOverMenu` is a second `DontDestroyOnLoad` singleton, structured
+exactly like `PauseMenu` — spawned by a
+`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` hook, no scene
+wiring required.
+
+- **Trigger.** When the alpha cube (the construct's anchor) reaches 0 HP, `CubeDamage.ApplyAndLog` calls `GameOverMenu.TriggerGameOver()`. The alpha never runs the `CubeDeath` drift animation — losing the run is the alpha's "death".
+- **Idempotent.** `TriggerGameOver` no-ops if the overlay is already open, so repeated fatal hits on a 0-HP alpha don't re-trigger anything.
+- While open, `Time.timeScale = 0` freezes the scene (any cubes mid-`CubeDeath` drift pause in place).
+- Overlay layout: a dark-red full-screen dim panel + "Construct Destroyed" title + a single button. The panel sits at sortingOrder 400 — above `PauseMenu`'s 300 — so it wins if both are ever active.
+- The one button — **Return to main menu** — restores `timeScale = 1` and loads `MainMenu`. There is no Resume and no Try Again; the run is over.
+- **Soft "respawn from last save."** The in-flight HP loss only mutates `GameData` in memory; the disk save is never touched during Fly. Returning to MainMenu → Hangar → *Continue* on the same slot reloads the original construct from disk.
+
+---
+
 ## Implementation Notes & Constraints
 
 - **No third-party runtime assets.** Shape geometry uses Unity's
@@ -585,15 +603,17 @@ unmodified script.
   components attach the appropriate mesh on Awake **only when the slot
   is empty**, so a manually-imported `.obj` mesh wired into the prefab
   takes precedence and is never overwritten.
-- **No physics simulation** for the construct in Fly mode — the
-  transform is moved directly. Projectiles also move kinematically and
-  do not interact with the construct in v1 (hit detection is in scope
-  for the next pass).
+- **The construct is a Rigidbody** in Fly mode — physics handles
+  collision response (bouncing off the ground and world cubes).
+  Projectiles, however, still move kinematically: they have no
+  Rigidbody / Collider and do their own swept raycasts for hit
+  detection.
 - **TextMeshPro is not used.** The shipped UI is built in code with
   legacy `UnityEngine.UI.Text` + `Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")`. This avoids requiring users to import
   *TMP Essentials* before the UI renders.
-- **Drag uses `Mathf.Exp(-drag * dt)`** (frame-rate-independent
-  exponential decay).
+- **Construct flight is Rigidbody-driven** — a non-kinematic
+  `Rigidbody` on `CubeConstruct`, driven by `AddForce` / `AddTorque`.
+  `Rigidbody.linearDamping` / `angularDamping` handle decay.
 - **Input polling pattern.** Input callbacks (`performed`) cannot
   reliably check `EventSystem.current.IsPointerOverGameObject()` — the
   build manager and fly shooting controller poll

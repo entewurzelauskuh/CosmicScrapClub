@@ -52,7 +52,19 @@ namespace CubeFly.Fly
             }
 
             if (stats.healthPoints > 0f) return applied;
-            if (stats.CompareTag("AlphaCube")) return applied;
+
+            // Fatal hit on the alpha cube → end-of-run. The alpha
+            // doesn't run CubeDeath's drift animation (it's the
+            // construct's anchor; spinning it off would look wrong);
+            // instead, the GameOverMenu overlay shows and the player
+            // is sent back to the main menu. TriggerGameOver is
+            // idempotent — repeat calls while the overlay is already
+            // up no-op.
+            if (stats.CompareTag("AlphaCube"))
+            {
+                GameOverMenu.Instance?.TriggerGameOver();
+                return applied;
+            }
 
             // Player-construct cubes carry a PlacedCubeData whose cell
             // identifies their slot in GameData. Removing here keeps

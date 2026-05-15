@@ -6,7 +6,7 @@ A living planning doc. What works today, what we're building next, and where the
 
 ## Vision
 
-Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, and (soon) reactors / shields / thrusters, then fly it. You can already place shapes, save / load three constructs, shoot bullets and rockets in flight, register hits, blow cubes off enemies, and take damage when you crash into things. The next chunk of work closes out the combat-damage loop (alpha death = end of run), upgrades the construct to a real physics object (no more phasing through the ground), gives ships meaningfully different classes, and lays in the power / shield / energy-weapon foundation.
+Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, and (soon) reactors / shields / thrusters, then fly it. You can already place shapes, save / load three constructs, fly a physics-driven construct that bounces off the world, shoot bullets and rockets, register hits, blow cubes off targets, take kinetic damage when you crash, and lose the run when your anchor cube dies. The next chunk of work gives ships meaningfully different classes and lays in the power / shield / energy-weapon foundation.
 
 It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DOTS), pure C# everywhere, and the docs are kept honest so you can read [`full_architecture.md`](full_architecture.md) and immediately know which file does what. If you've been wanting to mess around in a Unity codebase that's neither toy-sized nor incomprehensible, this might be the project for you.
 
@@ -14,28 +14,24 @@ It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DO
 
 ## Where we are today
 
-Read [`cube_fly_spec.md`](cube_fly_spec.md) for the canonical product spec and [`full_architecture.md`](full_architecture.md) for the file-by-file implementation map. In a sentence: four scenes (`MainMenu → HangarSelect → BuildScene ⇄ FlyScene`), three save slots, ESC pause overlay, a decoupled Shape × Material build system (Cube / Slope / Pyramid weapon / Cylinder weapon × four armour materials), per-cube HP / Armour / Mass placeholder stats, symmetric face-validity placement rules, mass-driven flight feel, 6-axis flight with pitch/yaw/roll + RMB free-look, a screen-space crosshair, two functioning weapons (bullets + rockets) selected from a toolbar with digit keys and mouse-wheel cycling, a basic 200×200 world map seeded with 20 target dummies, projectile hit registration with armour-aware damage, an outward-drift cube destruction animation, and kinetic crash damage that bypasses armour.
+Read [`cube_fly_spec.md`](cube_fly_spec.md) for the canonical product spec and [`full_architecture.md`](full_architecture.md) for the file-by-file implementation map. In a sentence: four scenes (`MainMenu → HangarSelect → BuildScene ⇄ FlyScene`), three save slots, ESC pause overlay, a decoupled Shape × Material build system (Cube / Slope / Pyramid weapon / Cylinder weapon × four armour materials), per-cube HP / Armour / Mass stats, symmetric face-validity placement rules, Rigidbody-driven 6-axis flight with real bouncing off the world and an adaptive third-person camera, a screen-space crosshair, two functioning weapons (bullets + rockets) selected from a toolbar with digit keys and mouse-wheel cycling, Speed + HP HUD readouts, a basic 200×200 world map seeded with 20 target dummies, projectile hit registration with armour-aware damage, an outward-drift cube destruction animation, kinetic crash damage on collision, and an end-of-run condition when the alpha cube dies.
 
 ### Shipped since the last roadmap pass
 
 - Projectile hit registration — swept raycasts on `Bullet` and `Rocket`, self-construct filtering, armour-aware damage via `CubeStats.TakeDamage`.
 - Basic world map — 200×200 ground plane plus 20 hand-placed rusty-orange `WorldTargetCube` dummies in `FlyScene`.
 - Cube destruction & death animation — at-zero-HP cubes detach, disable colliders, drift outward at ~2 u/s for 2 s, then despawn.
-- Crash damage — per-cube swept `BoxCast` each `FixedUpdate`, entry-only damage gating, armour-bypass kinetic damage via `CubeStats.TakeRawDamage`. Player ship cubes can now actually die.
+- Crash damage — kinetic, armour-bypassing damage on collision via `CubeStats.TakeRawDamage`. Player ship cubes can now actually die.
+- End-of-run condition — alpha cube at 0 HP shows a "Construct Destroyed" overlay and returns to the main menu. Closes the Combat & Damage Model section.
+- Rigidbody-driven construct — the construct is now a non-kinematic `Rigidbody` compound body. Physics-based flight (`AddForce` / `AddTorque`), real bouncing off the ground and world cubes, `OnCollisionEnter`-based crash damage charged to the contact-point cube. Adaptive third-person camera. Speed + HP HUD readouts.
 
 ---
 
 ## Up Next
 
-In running order. We finish closing out the combat-damage loop, then do the Rigidbody refactor as a foundation upgrade, then layer everything else on top.
-
-### Combat & Damage Model (one item left)
-
-- **End-of-run condition** — when the alpha cube reaches 0 HP, the run ends. The cockpit role is already filled by the alpha cube — no new "critical part" concept needed. The actual end-of-run handling (respawn? back to hangar? score screen?) is TBD; we'll figure it out when we get there. Until this lands, the alpha takes damage but doesn't die (the existing `CubeDeath` defensively skips it).
+In running order. The combat-damage loop and the Rigidbody foundation are done; from here it's ship variety, then the Power & Energy block, then the energy weapon.
 
 ### Flight & Movement
-
-- **🆕 Rigidbody-driven construct** — replace the current transform-based flight with the canonical Unity pattern: one `Rigidbody` on the construct root, individual `Collider`s on each cube (no per-cube Rigidbody). `FlyController` rewrites to apply forces (`AddRelativeForce` for thrust, `AddRelativeTorque` for pitch / roll, world torque for yaw) instead of writing `transform.position` / `Rotate` directly. `CollisionDetectionMode.Continuous` to prevent tunneling at top speed; `PhysicMaterial`s on Ground + WorldTargetCubes for friction and bounciness. This is the foundation for "actually bouncing off things" (no more phasing through the ground), unlocks proper inertia for ship classes, and **lets crash damage use `OnCollisionEnter` / `ContactPoint.thisCollider` to charge damage to the specific cube that actually touched the wall** — instead of every cube on the construct registering a swept-cast hit. Expect to re-tune all flight parameters (force magnitudes ≠ acceleration rates, drag uses `Rigidbody.drag`, mass-driven responsiveness comes naturally from `Rigidbody.mass`).
 
 - **Ship classes** — pick one when you create a new slot in HangarSelect. Three classes to start:
   - **Allrounder** — the current defaults.
@@ -44,7 +40,7 @@ In running order. We finish closing out the combat-damage loop, then do the Rigi
 
   Stored as part of the save slot metadata so the chosen class survives Hangar ↔ Fly transitions and reloads.
 
-- **Minimum responsiveness floor** — once Tank class lifts the mass cap above 100, the current `maxSlowdown = 0.9` formula caps at 10% responsiveness; a max-out tank build would hit 4% responsiveness at mass 250 (a brick). Add an explicit `Mathf.Max(massMultiplier, MIN_RESPONSIVENESS)` floor. The Rigidbody refactor changes what "responsiveness" means structurally (it falls out of `Rigidbody.mass` rather than a manual multiplier), but the same floor concept applies — heavy ship should still be controllable.
+- **Minimum responsiveness floor** — post-Rigidbody, "responsiveness" is now `thrustForce / rb.mass` for linear and `torque · mass^rotationMassCompensation / inertiaTensor` for rotation. Once Tank class lifts the mass cap well above 100, a max-out tank build could become a near-immovable brick. Need an explicit floor — likely an effective-mass cap in the force calculation, or a minimum-acceleration guarantee — so the heaviest possible build still flies. The `maxAngularSpeed` cap added in the Rigidbody refactor already covers the *upper* bound on light ships; this is the matching *lower* bound for heavy ones.
 
 - **Thruster cube** — a non-weapon subsystem. **Boosts acceleration in the direction opposite its placement face** (the convention matches the cylinder weapon: the placement face is what attaches to the construct, the opposite face is the "boost face"). So placing a thruster on the back of the ship with the placement face pointing forward gives you a *frontal* boost. Stacks per-direction: more thrusters facing the same way = faster acceleration toward that direction. Doesn't change `maxSpeed`, only how quickly the ship reaches it. Post-Rigidbody refactor, this just adds force in the boost direction.
 

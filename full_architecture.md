@@ -41,9 +41,10 @@ document is the implementation map.
 │        │ │  metadata; routes │ │ • CubePreview (composite) │ │   Controller          │
 │        │ │  with ActiveSlot  │ │ • BuildCamera             │ │ • FlyWeaponToolbar-   │
 │        │ │  armed)           │ │ • BuildIndicator-         │ │   Controller          │
-│        │ │                   │ │     Controller            │ │ • FlyCrashDetector    │
-│        │ │                   │ │ • BuildToolbarController  │ │ • CubeConstruct GO    │
-│        │ │                   │ │ • UIBootstrap             │ │ • Weapon instances:   │
+│        │ │                   │ │     Controller            │ │ • CubeConstruct GO    │
+│        │ │                   │ │ • BuildToolbarController  │ │   (Rigidbody +        │
+│        │ │                   │ │ • UIBootstrap             │ │    FlyCrashHandler)   │
+│        │ │                   │ │                           │ │ • Weapon instances:   │
 │        │ │                   │ │                           │ │   PyramidWeapon /     │
 │        │ │                   │ │                           │ │   CylinderWeapon      │
 │        │ │                   │ │                           │ │ • Projectile spawns:  │
@@ -110,9 +111,12 @@ disables autosave (Play-from-scene during dev).
 `Yaw` / `Roll` / `Look` / `LookHeld` / `Fire`). ESC, `M`, digit keys,
 and mouse-scroll are polled directly outside the action map.
 
-**Physics.** No `Rigidbody`. `Transform` is moved directly each
-`FixedUpdate` for arcade flight feel. Projectiles also move
-kinematically (no Rigidbody / Collider in v1).
+**Physics.** The construct is a non-kinematic `Rigidbody` on
+`CubeConstruct` with the cube `BoxCollider`s forming a compound
+collider. `FlyController` drives it with `AddForce` / `AddTorque`;
+Unity handles collision response (bouncing off the ground and world
+cubes). Projectiles, by contrast, still move kinematically with no
+Rigidbody / Collider — they do their own swept raycasts.
 
 **Raycasts.** Custom layers `PlacedCube` (6), `AlphaCube` (7),
 `PreviewCube` (8). Build raycasts use `LayerMask.GetMask("PlacedCube",
@@ -149,6 +153,7 @@ defensive fallback to "all layers minus Ignore Raycast and PreviewCube".
 │   ├── Materials/
 │   │   ├── Defs/                     MaterialRegistry + per-material SOs (+ coupled weapon mats).
 │   │   └── *.mat                     URP/Lit material variants used by prefabs / SOs.
+│   ├── PhysicMaterials/              PhysicsMaterial assets — bounce / friction for collisions.
 │   ├── Prefabs/
 │   │   ├── AlphaCube / PlacedCube[A–D] / PlacedPrism / PlacedPyramid / PlacedCylinder
 │   │   ├── PreviewCube / AlphaCubeIndicator
@@ -171,7 +176,7 @@ defensive fallback to "all layers minus Ignore Raycast and PreviewCube".
 | `Assets/Scenes/MainMenu.unity` | First scene loaded. Hosts `MainMenuController` (builds title + 3 buttons in code), Main Camera, Directional Light. The `UIManager` corner button is hidden here. Clicking **Hangar** loads `HangarSelect` (not `BuildScene` directly). |
 | `Assets/Scenes/HangarSelect.unity` | Save-slot picker. Hosts `HangarSelectController` (builds 3 slot cards + Cancel button in code, reads metadata via `SaveManager.ReadAllSlotMetadata`), Main Camera, Directional Light. The `UIManager` corner button is hidden here. On primary-click, arms `GameData.ActiveSlot`, calls `GameData.Clear()` (empty slot) or `GameData.LoadFromSave(...)` (filled slot), then loads `BuildScene`. ESC cancels back to MainMenu. |
 | `Assets/Scenes/BuildScene.unity` | Hangar. Hosts `BuildManager` (with `CubePreview`, `BuildToolbarController`, `BuildIndicatorController`), `Main Camera` with `BuildCamera`, Directional Light, `UIBootstrap`. AlphaCube and the composite preview are spawned at runtime. Autosaves on `ConstructChanged` (0.25 s debounce). |
-| `Assets/Scenes/FlyScene.unity` | Flight. Hosts `UIBootstrap`, `CubeConstruct` (positioned at `(0, 10, 0)`), `FlyController` (rebuilds the construct from `GameData` on `Start`, collects spawned `WeaponBehavior` instances) plus a `FlyShootingController` and `FlyCrashDetector` siblings on the same GameObject, `FlyWeaponToolbarController`, `FlyCrosshair`, `Main Camera` with `FlyCamera`, Directional Light. Also a `Ground` prefab instance at the origin and 20 `WorldTargetCube` instances as the basic flat-plain practice arena. |
+| `Assets/Scenes/FlyScene.unity` | Flight. Hosts `UIBootstrap`, `CubeConstruct` (positioned at `(0, 10, 0)`; carries a non-kinematic `Rigidbody` + `FlyCrashHandler`), `FlyController` with a `FlyShootingController` sibling, `FlyHUD` (hosting `FlyCrosshair`, `FlyWeaponToolbarController`, `FlySpeedIndicator`, `FlyHpIndicator`), `Main Camera` with `FlyCamera`, Directional Light. Also a `Ground` prefab instance at the origin and 20 `WorldTargetCube` instances as the basic flat-plain practice arena. |
 
 Registered in `ProjectSettings/EditorBuildSettings.asset` at indices
 0 / 1 / 2 / 3 respectively.
@@ -222,14 +227,16 @@ Registered in `ProjectSettings/EditorBuildSettings.asset` at indices
 
 | File | Type | Responsibility |
 |---|---|---|
-| `Scripts/Fly/FlyController.cs` | `MonoBehaviour` | On `Start`, instantiates AlphaCube + every `GameData.PlacedCubes` entry as children of the referenced `construct` Transform. For each placement, resolves the `ShapeDefinition` prefab, applies the chosen `MaterialDefinition` via `ApplyTo`, and — if the spawned root carries a `WeaponBehavior` — wires its `Construct` + `Shape` and collects it for the shooting controller. Computes `_massMultiplier` from total mass: `Lerp(1.0, 0.1, Clamp01((mass - 10) / 90))`. Reads `Fly.Thrust` / `Pitch` / `Yaw` / `Roll` in `Update` (zeroed while `PauseMenu.IsOpen`); applies per-axis throttle accumulation, magnitude clamp to `maxSpeed`, exponential drag (`Mathf.Exp(-drag * dt)`), local-frame translation, local pitch, world-space yaw, local roll — all rate-scaled by `_massMultiplier` — in `FixedUpdate`. Pure transform-based flight (no Rigidbody) — slated for replacement by the *Rigidbody-driven construct* roadmap item. |
-| `Scripts/Fly/FlyCrashDetector.cs` | `MonoBehaviour`, `[DefaultExecutionOrder(100)]` | Crash damage for the player construct. Each `FixedUpdate` (forced to run after `FlyController`), iterates construct cubes and sweeps each one's `BoxCollider` via `Physics.BoxCastNonAlloc` from its previous-frame world position to its current one, against `Default + PlacedCube + AlphaCube` layers with the same self-construct filter as `ProjectileHit`. On the first frame of contact (entry-only: per-cube `_inContact` boolean gates sliding/scraping to one damage event), routes through `CubeDamage.ApplyAndLog` with `ignoreArmour: true` and damage `clamp(impactSpeed * 0.3, 1, 10)` (below 3 u/s, no damage). Allocation-amortising via static `RaycastHit[8]` buffer + insertion sort. To be replaced by `OnCollisionEnter` + `ContactPoint.thisCollider` once the Rigidbody refactor lands. |
+| `Scripts/Fly/FlyController.cs` | `MonoBehaviour` | On `Start`, instantiates AlphaCube + every `GameData.PlacedCubes` entry as children of the referenced `construct` Transform; resolves each placement's `ShapeDefinition` prefab, applies the `MaterialDefinition` via `ApplyTo`, and collects any `WeaponBehavior` for the shooting controller. `ResolveRigidbody` then configures the construct's `Rigidbody` (gravity off, continuous collision detection, `maxAngularVelocity` cap) and sets `rb.mass` from the summed cube masses so Unity computes the inertia tensor from the actual compound collider. Reads `Fly.Thrust` / `Pitch` / `Yaw` / `Roll` in `Update` (zeroed while `PauseMenu.IsOpen`); in `FixedUpdate` applies `AddForce` for thrust (clamped to `maxSpeed`), `AddRelativeTorque` for pitch/roll and world-axis `AddTorque` for yaw. Torque is scaled by `mass^rotationMassCompensation` so heavy ships aren't unturnable. Mass affects flight naturally via F=ma and τ=Iα — no manual multiplier. |
+| `Scripts/Fly/FlyCrashHandler.cs` | `MonoBehaviour`, `[RequireComponent(typeof(Rigidbody))]` | Crash damage for the player construct. Lives on `CubeConstruct` (the Rigidbody owner) so `OnCollisionEnter` fires here for the compound collider; internal cube-to-cube contacts within the same body don't generate events, so no self-hit filter is needed. Impact speed is the normal component of `collision.relativeVelocity` (glancing blows do little, head-on hits do full). Damage is `clamp(normalImpactSpeed * 0.3, 1, 10)` above 3 u/s, routed through `CubeDamage.ApplyAndLog` with `ignoreArmour: true`. Applies to BOTH sides of the collision — the construct's contact cube AND the other collider if it carries `CubeStats` (so world target cubes take crash damage too). Replaced the pre-Rigidbody swept-BoxCast `FlyCrashDetector`. |
 | `Scripts/Fly/CubeDamage.cs` | static class | Shared damage-application pipeline routed to by every damage source in Fly mode. Takes a `CubeStats`, the incoming damage, an outward-bias origin (for the death-drift direction), the source's log tag, and an `ignoreArmour` bool. Calls `TakeDamage` or `TakeRawDamage` as appropriate, logs the hit with source-specific wording (`AV NN` vs `armour bypassed`), and on fatal hits handles the alpha-skip + `GameData.Remove` (for player-construct cubes carrying `PlacedCubeData`) + `AddComponent<CubeDeath>` + `BeginDeath` wiring in one place. |
 | `Scripts/Fly/ProjectileHit.cs` | static class | Shared hit-detection helper for `Bullet` and `Rocket`. `TrySweep` runs `Physics.RaycastNonAlloc` against a static 8-element buffer (insertion-sorted by distance) with self-construct filtering. `ApplyAndLog` resolves the hit collider's `CubeStats` (via `GetComponentInParent`), computes the death-drift origin from the parent transform, and delegates to `CubeDamage.ApplyAndLog`. |
-| `Scripts/Fly/FlyCamera.cs` | `MonoBehaviour` | One-shot dynamic offset on `Start` from `GameData.GetConstructBounds()` (clamped 5–50 units). `LateUpdate` ship-stuck follow with RMB free-look gate (`Fly.LookHeld`) and snap-back blend on release. While `PauseMenu.IsOpen`, behaves as if RMB were released — frees the cursor (so menu buttons are reachable) and lets the orbit offset relax to neutral. The body follow is naturally frozen by `Time.timeScale = 0`. |
+| `Scripts/Fly/FlyCamera.cs` | `MonoBehaviour` | One-shot dynamic offset on `Start` from `GameData.GetConstructBounds()` (clamped 5–50 units). `LateUpdate` ship-stuck follow with RMB free-look gate (`Fly.LookHeld`) and snap-back blend on release. Follow speed is **adaptive**: `followSpeed + construct.angularVelocity.magnitude * angularFollowBoost`, so the camera stays glued during fast turns instead of lagging behind. While `PauseMenu.IsOpen`, behaves as if RMB were released — frees the cursor (so menu buttons are reachable) and lets the orbit offset relax to neutral. The body follow is naturally frozen by `Time.timeScale = 0`. |
 | `Scripts/Fly/FlyCrosshair.cs` | `MonoBehaviour`, `[DefaultExecutionOrder(100)]` | Screen-space reticle (centre dot + four arms) that projects `construct.position + construct.forward * aimRange` to screen space each LateUpdate. Runs after `FlyCamera`'s LateUpdate so the camera transform is final by the time the projection happens. The same value is what `FlyShootingController` passes as the aim target so on-screen reticle and actual aim agree. Hidden when the projected point is behind the camera. Skipped while `PauseMenu.IsOpen` (last computed position holds). |
 | `Scripts/Fly/FlyShootingController.cs` | `MonoBehaviour` | Owns the list of weapons grouped by `ShapeDefinition` (`WeaponTypeGroup` instances), the currently-selected type index, and all shoot-related input polling: Fire (LMB via `Fly.Fire`), digits 1–9 (direct select), mouse wheel (cycle, edge-detected). Each frame Fire is held, calls `TryFire(crosshairWorldTarget)` on every weapon of the selected type. Fires `TypesChanged` and `SelectedChanged` events for the toolbar UI. Skipped while `PauseMenu.IsOpen` or pointer is over UI. |
 | `Scripts/Fly/FlyWeaponToolbarController.cs` | `MonoBehaviour` | Bottom-of-screen weapon toolbar UI built in code: one button per distinct weapon type with a corner swatch (matching the weapon's `weaponMaterial.SwatchColor`) and a thin reload bar above. Subscribes to `TypesChanged` (rebuild) and `SelectedChanged` (highlight); per-frame updates each reload bar's `fillAmount` from `WeaponTypeGroup.ReadyFraction`. Hidden entirely when the construct has no weapons. |
+| `Scripts/Fly/FlySpeedIndicator.cs` | `MonoBehaviour` | Bottom-left HUD label, `Speed: NN.N u/s`, read each `Update` from the construct's `Rigidbody.linearVelocity.magnitude`. Builds its own screen-space-overlay canvas via `UIStyle`. |
+| `Scripts/Fly/FlyHpIndicator.cs` | `MonoBehaviour`, `[DefaultExecutionOrder(100)]` | Bottom-left HUD label above the speed readout, `HP: current / initial`. Sums `CubeStats.healthPoints` across the construct's cube children each `Update`; the initial total is snapshotted at `Start` (execution order forced after `FlyController.Start` so the cubes exist). Cubes that have died and detached fall out of the sum naturally. |
 | `Scripts/Fly/WeaponBehavior.cs` | abstract `MonoBehaviour` | Base for any weapon-cube. Owns the reload cooldown (ticking down in `Update` regardless of selection) and `TryFire(crosshairWorldTarget)` public entry point. Subclasses implement `protected abstract void Fire(Vector3 target)`. Construct and Shape references are wired by `FlyController.BuildConstruct` after instantiation. |
 | `Scripts/Fly/PyramidWeapon.cs` | `WeaponBehavior` subclass | Machine-gun-style. Spawn position = pyramid's apex (`transform.TransformPoint((0, 0.5, 0))`). Aim rule: if the tip direction (`transform.up`) aligns with `Construct.forward` (dot > 0.7 = cos 45°), fire at the shared crosshair world target; otherwise fire along the tip direction. 90°-stepped placements give an exact ±1 / 0 dot, so the threshold cleanly bins "frontal" vs "off-axis". `Bullet.Launch` is called with `(origin, direction, Construct, damage)` so the bullet can run self-hit prevention and snapshot the weapon's damage value. |
 | `Scripts/Fly/CylinderWeapon.cs` | `WeaponBehavior` subclass | Rocket-launcher style. Spawn position = cylinder centre (`transform.position`). Launch direction = barrel open-end (`transform.up` after rotation, since `ShapeWeaponCylinder.faceNegY` is the only valid attachment face). `Rocket.Launch` is called with `(spawnPos, launchDir, exitPos, crosshairTarget, Construct, damage)` so the rocket can run self-hit prevention in both phases. |
@@ -280,8 +287,8 @@ sequencing, aim agreement, dispatch ordering).
 | `PlacedCylinder.prefab` | Cylinder weapon shape. Empty `MeshFilter.sharedMesh` — `CylinderMeshAuthor` populates it from `PrimitiveMeshes.HollowCylinder` at Awake — + `BoxCollider` (cell-bounds) + `PlacedCubeData` + `CubeStats` + `CylinderWeapon`. Rocket prefab wired into `projectilePrefab`. Layer `PlacedCube`. |
 | `PreviewCube.prefab` | Translucent unit cube only (no collider, no `PlacedCubeData`). Layer `PreviewCube`. `MaterialPropertyBlock`-friendly material: `PreviewCubeMat`. `CubePreview` instantiates it as the *bounds-ghost* half of the composite preview and additionally instantiates the active shape's prefab as the inner mesh. |
 | `AlphaCubeIndicator.prefab` | Small red arrow used by `BuildIndicatorController` to flag the front of the construct. |
-| `Ground.prefab` | Unity Plane primitive scaled `(20, 1, 20)` = 200×200 world units, `MeshCollider`, `GroundMat`. One instance lives in `FlyScene` at the origin so the construct floats 10 units above visible terrain. No `CubeStats` — it's terrain, not a damageable target. |
-| `WorldTargetCube.prefab` | Cube primitive + `BoxCollider` + `CubeStats` (tuned to `healthPoints: 30, armourValue: 0` so the demo is actually destructible), on the `PlacedCube` layer so the existing projectile mask covers it automatically. `WorldTargetCubeMat`. Twenty hand-placed instances populate `FlyScene` as the starting practice range. |
+| `Ground.prefab` | Unity Plane primitive scaled `(20, 1, 20)` = 200×200 world units, `MeshCollider` (with `GroundPhysMat` for bounce/friction), `GroundMat` renderer material. One instance lives in `FlyScene` at the origin so the construct floats 10 units above visible terrain. No `CubeStats` — it's terrain, not a damageable target. |
+| `WorldTargetCube.prefab` | Cube primitive + `BoxCollider` (with `WorldTargetCubePhysMat`) + `CubeStats` (tuned to `healthPoints: 30, armourValue: 0` so the demo is actually destructible), on the `PlacedCube` layer so the existing projectile mask covers it automatically. `WorldTargetCubeMat` renderer material. Twenty hand-placed instances populate `FlyScene` as the starting practice range. |
 | `Projectiles/Bullet.prefab` | `Bullet` script + visual mesh + `BulletMat`. Spawned by `PyramidWeapon.Fire`. |
 | `Projectiles/Rocket.prefab` | `Rocket` script + visual mesh + `RocketMat`. Spawned by `CylinderWeapon.Fire`. |
 
@@ -301,6 +308,17 @@ sequencing, aim agreement, dispatch ordering).
 | `AlphaCubeIndicatorMat.mat` | Opaque | Arrow indicator. |
 | `GroundMat.mat` | Opaque | Dark olive-grey `(0.20, 0.22, 0.18)` ground plane. Neutral so it doesn't compete visually with either ship cubes or world targets. |
 | `WorldTargetCubeMat.mat` | Opaque | Rusty orange `(0.65, 0.35, 0.15)` for the world target dummies — visually distinct from the A/B/C/D armour palette so world cubes read as "scenery" rather than ship parts at a glance. |
+
+### PhysicsMaterials (`Assets/PhysicMaterials/`)
+
+Control bounce + friction for the Rigidbody-driven construct's collisions. Assigned on the relevant collider's `material` slot.
+
+| File | Bounciness | Friction | Used by |
+|---|---|---|---|
+| `GroundPhysMat.physicMaterial` | 0.3 | 0.4 | `Ground.prefab`'s `MeshCollider` — arcade-light recoil when the construct hits the ground. |
+| `WorldTargetCubePhysMat.physicMaterial` | 0.4 | 0.3 | `WorldTargetCube.prefab`'s `BoxCollider` — slightly punchier bounce than the ground. |
+
+Player ship cube prefabs carry no PhysicsMaterial (Unity default — bounciness 0) so the construct doesn't bounce off its own geometry.
 
 ---
 
@@ -392,7 +410,8 @@ survive. FlyScene loads; its `UIBootstrap` sees `UIManager.Instance
 != null` and no-ops. `FlyController.Start` rebuilds the construct
 under the `CubeConstruct` transform, applies each placement's chosen
 `MaterialDefinition`, collects spawned `WeaponBehavior` instances,
-computes `_massMultiplier`, and hands the weapons list to
+configures the construct `Rigidbody` and sets its mass from the
+summed cube masses, and hands the weapons list to
 `FlyShootingController.RegisterWeapons` (which groups by
 `ShapeDefinition` and fires `TypesChanged`). `FlyWeaponToolbarController`
 rebuilds the bottom toolbar from those events. `FlyCamera.Start`
@@ -433,17 +452,23 @@ in-memory state with the disk snapshot, which is the same data.
    user to import *TMP Essentials* before the prefab could resolve.
    This also lets the corner button share visuals with the Main Menu
    buttons (both via `UIStyle.BuildLabeledButton`).
-2. **Drag uses `Mathf.Exp(-drag * dt)`** instead of the textbook
-   `Mathf.Pow(1 - drag, dt)`. The latter produces a negative base for
-   the default `drag = 2.0`. Same frame-rate-independent exponential
-   shape; only the parameterization differs.
-3. **Mass scales `accelerationRate`, `pitchSensitivity`, `yawSensitivity`,
-   and `rollSpeed`** — but not `maxSpeed` or `drag`. A heavy ship reaches
-   the same top speed eventually, just slowly; turn rate is reduced in
-   parallel so a brick handles like a brick.
-4. **Yaw is applied in world space** (`Rotate(Vector3.up, yaw, Space.World)`)
+2. **Construct flight is Rigidbody-driven.** A non-kinematic
+   `Rigidbody` on `CubeConstruct` + cube `BoxCollider`s form a
+   compound body. `FlyController.FixedUpdate` applies `AddForce`
+   (thrust, clamped to `maxSpeed`) and `AddTorque` (pitch/roll local,
+   yaw world). `Rigidbody.linearDamping` / `angularDamping` provide
+   the decay; `angularDamping` is set substantial so rotation comes
+   to rest rather than drifting forever.
+3. **Mass affects flight via real physics**, not a manual multiplier.
+   F=ma makes heavier ships accelerate slower; τ=Iα (the inertia
+   tensor Unity computes from the compound collider) makes them turn
+   slower. Two knobs balance the rotation curve: `rotationMassCompensation`
+   scales applied torque by `mass^p` so heavy ships aren't unturnable,
+   and `maxAngularSpeed` caps angular velocity so light ships (tiny
+   inertia tensor) don't spin out.
+4. **Yaw is applied in world space** (`AddTorque(Vector3.up, …)`)
    to keep "left/right" intuitive when the ship is pitched. Pitch and
-   roll remain local-space.
+   roll use `AddRelativeTorque` (local-space).
 5. **Input UI hit-testing.** `EventSystem.current.IsPointerOverGameObject()`
    does not return correct results from inside `InputAction.performed`
    callbacks. `BuildManager` polls `WasPerformedThisFrame()` in `Update`,

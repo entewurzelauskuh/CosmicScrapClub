@@ -29,11 +29,14 @@ The companion documents are:
 - **Red arrow indicator** that auto-reparents to the frontmost cube so you can tell which way the ship is pointed.
 - **Save / load to 3 slots.** The hangar slot picker shows cube count, mass, HP, and "last edited N ago" per slot. BuildScene autosaves to the armed slot on every construct change (debounced 0.25 s). Atomic on-disk writes via `File.Replace` with a rename-to-bak fallback for runtimes that don't support it.
 - **ESC pause overlay.** Self-bootstrapping DDOL singleton. ESC pauses anywhere in BuildScene / FlyScene; `Menu` returns to Main Menu, `Back to Desktop` quits.
-- **6-axis thrust + pitch / yaw / roll + RMB free-look camera** with snap-back.
+- **Rigidbody-driven flight.** The construct is a non-kinematic `Rigidbody` with the cube colliders forming a compound body. 6-axis thrust via `AddForce`, pitch / yaw / roll via `AddTorque`. Mass affects flight through real physics — heavier ships accelerate and turn slower. The ship physically bounces off the ground and world cubes instead of phasing through them.
+- **Adaptive third-person camera.** RMB free-look with snap-back; the follow speed scales with the construct's angular velocity so the camera stays glued during sharp turns.
+- **HUD readouts.** Bottom-left of the Fly screen shows live `Speed` and `HP` (current / initial).
 - **Shooting (Fly mode).** LMB fires every weapon of the currently selected type. Digits 1–9 and mouse wheel cycle the active type. A screen-space crosshair projects `construct.forward * 100` so the on-screen reticle and the actual aim agree.
 - **Projectile hit registration.** Bullets and rockets do per-frame swept raycasts (not Unity triggers) so they don't tunnel through cubes at high speed. Self-construct hits are filtered. Damage routes through `CubeStats.TakeDamage` with the documented `effective = max(0, raw − armourValue)` formula.
-- **Cube destruction & death animation.** When a cube's HP hits zero it detaches, disables its colliders, drifts outward at ~2 u/s for 2 s, then despawns. Player-construct cubes are removed from `GameData` at the same time so the mass budget and Hangar re-entry stay consistent. The alpha cube is special-cased — it takes damage but doesn't run the animation, awaiting the end-of-run condition.
-- **Crash damage.** Each construct cube does a per-frame swept `BoxCast` against the world; first-frame contact (entry-only, no per-frame piling during scrapes) applies kinetic damage scaled to impact speed. Bypasses armour because armour mitigates penetration, not raw kinetic energy.
+- **Cube destruction & death animation.** When a cube's HP hits zero it detaches, disables its colliders, drifts outward at ~2 u/s for 2 s, then despawns. Player-construct cubes are removed from `GameData` at the same time so the mass budget and Hangar re-entry stay consistent.
+- **Crash damage.** `OnCollisionEnter` on the construct's Rigidbody applies kinetic damage scaled to the normal-component impact speed. Both sides of the collision take damage. Bypasses armour because armour mitigates penetration, not raw kinetic energy.
+- **End-of-run.** When the alpha cube (the construct's anchor) reaches 0 HP, a "Construct Destroyed" overlay shows and the run ends back at the main menu.
 - **Basic world map.** 200×200 ground plane plus 20 rusty-orange target dummies in `FlyScene` so you have something to fly around, crash into, and shoot at.
 - **File logging** to `Logs/runtime-<timestamp>.log` alongside the Editor console.
 
@@ -180,7 +183,8 @@ Assets/
                   BuildIndicatorController, PlacedCubeData
   Scripts/Fly/    FlyController, FlyCamera, FlyCrosshair,
                   FlyShootingController, FlyWeaponToolbarController,
-                  FlyCrashDetector, CubeDamage, ProjectileHit,
+                  FlyCrashHandler, FlySpeedIndicator, FlyHpIndicator,
+                  CubeDamage, ProjectileHit,
                   WeaponBehavior, PyramidWeapon, CylinderWeapon,
                   Bullet, Rocket
   Scripts/HangarSelect/ HangarSelectController
@@ -192,6 +196,7 @@ Assets/
   Materials/      Per-prefab URP/Lit materials (AlphaCube, Placed*, Preview,
                   Bullet, Rocket, weapon-shape, AlphaCubeIndicator,
                   Ground, WorldTargetCube)
+  PhysicMaterials/ GroundPhysMat, WorldTargetCubePhysMat (bounce / friction)
   Prefabs/        AlphaCube, PlacedCube[A–D], PlacedPrism, PlacedPyramid,
                   PlacedCylinder, PreviewCube, AlphaCubeIndicator,
                   Ground, WorldTargetCube

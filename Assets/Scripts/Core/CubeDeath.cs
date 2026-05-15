@@ -37,10 +37,9 @@ namespace CubeFly.Core
         // 0 = pure random, 1 = pure outward. 0.7 looks visibly directional
         // without being so mechanical that every shard travels the same line.
         const float OutwardBias = 0.7f;
+        const string TAG = "CubeDeath";
 
         bool _dying;
-
-        const string TAG = "CubeDeath";
 
         public void BeginDeath(Vector3 outwardOrigin)
         {

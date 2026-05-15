@@ -173,6 +173,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 200001}
+  - component: {fileID: 200003}
+  - component: {fileID: 200002}
   m_Layer: 0
   m_Name: CubeConstruct
   m_TagString: Untagged
@@ -195,6 +197,49 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &200002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a6adccc32264b459a9a539685aa8d288, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.FlyCrashHandler
+  damageScale: 0.3
+  minDamage: 1
+  maxDamage: 10
+  minSpeedForDamage: 3
+--- !u!54 &200003
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200000}
+  serializedVersion: 5
+  m_Mass: 1
+  m_LinearDamping: 0.5
+  m_AngularDamping: 3
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 0
+  m_Interpolate: 1
+  m_Constraints: 0
+  m_CollisionDetection: 2
 --- !u!1 &300000
 GameObject:
   m_ObjectHideFlags: 0
@@ -246,15 +291,15 @@ MonoBehaviour:
   alphaCubePrefab: {fileID: 7100000, guid: c2c2c2c2000000010000000000000001, type: 3}
   construct: {fileID: 200001}
   shootingController: {fileID: 300003}
-  accelerationRate: 9
+  thrustForce: 100
   maxSpeed: 37.5
-  drag: 2
-  pitchSensitivity: 67.5
-  yawSensitivity: 67.5
-  rollSpeed: 90
-  baseMassThreshold: 10
-  massCap: 100
-  maxSlowdown: 0.9
+  pitchTorque: 30
+  yawTorque: 30
+  rollTorque: 30
+  rotationMassCompensation: 0.7
+  maxAngularSpeed: 3
+  linearDrag: 0.5
+  angularDrag: 3
 --- !u!114 &300003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -439,6 +484,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   construct: {fileID: 200001}
   followSpeed: 5
+  angularFollowBoost: 8
   lookHeightOffset: 0.5
   baseDistance: 5
   minDistance: 5
@@ -585,6 +631,8 @@ GameObject:
   - component: {fileID: 700001}
   - component: {fileID: 700002}
   - component: {fileID: 700003}
+  - component: {fileID: 700004}
+  - component: {fileID: 700005}
   m_Layer: 0
   m_Name: FlyHUD
   m_TagString: Untagged
@@ -647,6 +695,38 @@ MonoBehaviour:
   reloadBarGap: 6
   reloadBarBackground: {r: 0, g: 0, b: 0, a: 0.6}
   swatchSize: {x: 18, y: 18}
+--- !u!114 &700004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee508471a2a024fd49f6923a4dd74aba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.FlySpeedIndicator
+  flyController: {fileID: 0}
+  anchoredPosition: {x: 20, y: 20}
+  size: {x: 280, y: 40}
+  fontSize: 22
+--- !u!114 &700005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65d72d5b75bf74faeb6516aadaf2906e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.FlyHpIndicator
+  flyController: {fileID: 0}
+  anchoredPosition: {x: 20, y: 60}
+  size: {x: 280, y: 40}
+  fontSize: 22
 --- !u!1001 &29337581
 PrefabInstance:
   m_ObjectHideFlags: 0

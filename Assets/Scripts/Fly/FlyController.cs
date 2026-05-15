@@ -5,6 +5,39 @@ using UnityEngine;
 
 namespace CubeFly.Fly
 {
+    // Rigidbody-driven construct flight. The construct GameObject
+    // carries a non-kinematic Rigidbody (useGravity=false, continuous
+    // collision detection); each placed cube prefab brings its own
+    // BoxCollider. Together they form a compound rigid body — Unity
+    // moves the parent, the cube colliders all move with it, and
+    // collisions are handled by physics (bouncing off the ground,
+    // recoil from world cubes) plus our FlyCrashHandler for the
+    // damage side.
+    //
+    // Linear motion: AddForce(thrustForce * worldThrustDir, Force)
+    // each FixedUpdate. Mass affects acceleration naturally via F=ma
+    // — heavier ships are sluggish to spin up. linearVelocity is hard-
+    // clamped to maxSpeed so a long burn doesn't overshoot.
+    //
+    // Rotation: AddRelativeTorque for pitch/roll (local axes),
+    // AddTorque(Vector3.up) for yaw (world axis, keeps "left/right"
+    // intuitive when pitched). Mass affects rotation via the inertia
+    // tensor Unity computes from the compound collider — heavier ship
+    // turns slower for the same torque, opening the future "build more
+    // gyros to turn faster" gameplay. Two knobs balance this:
+    //
+    //   • rotationMassCompensation — applied torque is multiplied by
+    //     mass^p so heavy ships don't crawl. p ≈ 0.7 gives a ~2.5×
+    //     spread across a 20× mass range, instead of the ~20× that
+    //     raw F=Iα would produce.
+    //   • maxAngularSpeed — hard cap on angular velocity magnitude
+    //     (Rigidbody.maxAngularVelocity). Light ships have tiny
+    //     inertia tensors and would otherwise spin uncontrollably;
+    //     the cap stops that. Heavy ships never reach the cap.
+    //
+    // Rigidbody.angularDamping is set to a substantial value so
+    // rotation decays to rest when input is released — we explicitly
+    // do NOT want Kerbal-style endless drift.
     public class FlyController : MonoBehaviour
     {
         [Header("Registries (decoupled shape × material)")]
@@ -26,23 +59,29 @@ namespace CubeFly.Fly
         // so it can group weapons by ShapeDefinition for selection + dispatch.
         readonly List<WeaponBehavior> _spawnedWeapons = new();
 
-        // Bumped 50% over the originals (6 / 25 / 45 / 45 / 60). The actual
-        // values applied per FixedUpdate are scaled by `_massMultiplier`,
-        // which trends from 1.0 (alpha alone) to 0.1 at the build mass cap.
-        [SerializeField] float accelerationRate = 9f;
+        [Header("Linear thrust (Rigidbody.AddForce)")]
+        [Tooltip("Force in Newtons applied per FixedUpdate while thrust input is held. Mass affects acceleration: accel = thrustForce / Rigidbody.mass. Starting value tuned for a ~25-mass construct; expect to retune.")]
+        [SerializeField] float thrustForce = 100f;
+        [Tooltip("Hard cap on Rigidbody.linearVelocity magnitude. Independent of mass — heavy ships just take longer to reach it.")]
         [SerializeField] float maxSpeed = 37.5f;
-        [SerializeField] float drag = 2f;
-        [SerializeField] float pitchSensitivity = 67.5f;
-        [SerializeField] float yawSensitivity = 67.5f;
-        [SerializeField] float rollSpeed = 90f;
 
-        [Header("Mass-driven slowdown")]
-        [Tooltip("Mass at or below which there's no slowdown (multiplier = 1.0).")]
-        [SerializeField] float baseMassThreshold = 10f;
-        [Tooltip("Mass at which slowdown caps (multiplier = 1 - maxSlowdown).")]
-        [SerializeField] float massCap = 100f;
-        [Tooltip("Maximum slowdown applied at massCap. 0.9 = 90% slow.")]
-        [SerializeField] float maxSlowdown = 0.9f;
+        [Header("Rotation (Rigidbody.AddTorque)")]
+        [Tooltip("Pitch torque in Newton-metres applied per FixedUpdate while pitch input is held. Multiplied by the mass-compensation factor below before being applied.")]
+        [SerializeField] float pitchTorque = 3f;
+        [Tooltip("Yaw torque (world Y axis — avoids roll coupling when the ship is pitched).")]
+        [SerializeField] float yawTorque = 3f;
+        [Tooltip("Roll torque (local Z axis).")]
+        [SerializeField] float rollTorque = 3f;
+        [Tooltip("Exponent on Rigidbody.mass that scales applied torque, compensating for the inertia tensor's mass dependence. 0 = no compensation (heavy ships crawl, light ships spin), 1 = full compensation (mass-independent rotation), 0.7 = arcade middle ground where heavy ships still feel heavier but the spread is ~2.5× across a 20× mass range instead of ~20×. Future 'build more gyros' cubes add raw torque on top.")]
+        [SerializeField] float rotationMassCompensation = 0.7f;
+        [Tooltip("Hard cap on Rigidbody.angularVelocity magnitude in rad/s, set via Rigidbody.maxAngularVelocity. Unity's default of 7 rad/s (~400°/s) is too high for arcade flight — light ships would spin uncontrollably because their inertia tensor is tiny. 3 rad/s ≈ 172°/s is responsive but controllable; heavier ships' natural terminal angular velocity falls well below this cap so the limit only ever affects light ships.")]
+        [SerializeField] float maxAngularSpeed = 3f;
+
+        [Header("Rigidbody tuning (also editable on the Rigidbody component directly)")]
+        [Tooltip("Applied to the Rigidbody at Start. Linear drag — small value, since maxSpeed clamp does the hard cap.")]
+        [SerializeField] float linearDrag = 0.5f;
+        [Tooltip("Applied to the Rigidbody at Start. Angular drag — substantial, so rotation decays back to rest when input is released. We explicitly DO NOT want endless space-physics spin.")]
+        [SerializeField] float angularDrag = 3f;
 
         CubeFlyInputActions _input;
 
@@ -52,13 +91,16 @@ namespace CubeFly.Fly
         float _yawInput;        // -1 / 0 / +1 (Left / none / Right arrow)
         float _rollInput;       // -1 / 0 / +1 (Q / none / E)
 
-        // Accumulated linear velocity in the construct's local frame.
-        Vector3 _velocity;
+        // Cached at Start. The construct's Rigidbody is the source of
+        // truth for position / rotation / velocity from here on; we
+        // never write to construct.transform directly in Update or
+        // FixedUpdate after this refactor.
+        Rigidbody _rb;
 
-        // Computed once in Start from the rebuilt construct's total mass.
-        // Scales linear acceleration AND rotation rates each FixedUpdate,
-        // making heavier ships feel sluggish in both translation and turn.
-        float _massMultiplier = 1f;
+        // Cached at Start from `Mathf.Pow(rb.mass, rotationMassCompensation)`.
+        // Recomputing each FixedUpdate would burn a Pow call for no
+        // reason — mass is fixed for the lifetime of a Fly session.
+        float _torqueMassFactor = 1f;
 
         const string TAG = "FlyController";
 
@@ -79,11 +121,7 @@ namespace CubeFly.Fly
             Debug.unityLogger.Log(TAG, $"FlyScene ready. Construct rebuilt: {total} cube(s) (including alpha). Weapons: {_spawnedWeapons.Count}.");
             Debug.unityLogger.Log(TAG, $"Construct initial position: {construct.position}");
 
-            float totalMass = ComputeTotalMass();
-            _massMultiplier = ComputeMassMultiplier(totalMass);
-            Debug.unityLogger.Log(TAG,
-                $"Total mass: {totalMass:F1}. Acceleration multiplier: {_massMultiplier:F3} " +
-                $"({(1f - _massMultiplier) * 100f:F0}% slow).");
+            ResolveRigidbody();
 
             // Hand the weapon list to the shooting controller so it can
             // group by ShapeDefinition for selection + dispatch.
@@ -92,25 +130,61 @@ namespace CubeFly.Fly
             else Debug.unityLogger.LogWarning(TAG, "No FlyShootingController in scene; weapons won't fire.");
         }
 
+        // Resolve the Rigidbody on the construct, configure it, and
+        // set mass from the actual placed cubes. Setting rb.mass after
+        // child colliders are attached makes Unity recompute the
+        // inertia tensor from the current compound collider — heavier,
+        // more spread-out constructs naturally feel sluggier in
+        // rotation.
+        //
+        // Caveat: rb.mass is set ONCE here. Cube destruction mid-flight
+        // doesn't update it. Acceptable for v1; future improvement
+        // would re-set mass on CubeDeath / spawn events.
+        void ResolveRigidbody()
+        {
+            if (construct == null)
+            {
+                Debug.unityLogger.LogError(TAG, "No construct Transform assigned — flight disabled.");
+                return;
+            }
+            _rb = construct.GetComponent<Rigidbody>();
+            if (_rb == null)
+            {
+                Debug.unityLogger.LogError(TAG,
+                    "CubeConstruct has no Rigidbody. Add one in the scene (the Rigidbody-driven flight refactor expects it).");
+                return;
+            }
+
+            _rb.useGravity = false;
+            _rb.linearDamping = linearDrag;
+            _rb.angularDamping = angularDrag;
+            _rb.maxAngularVelocity = maxAngularSpeed;
+            _rb.interpolation = RigidbodyInterpolation.Interpolate;
+            _rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+
+            float totalMass = ComputeTotalMass();
+            // Mass below 1 makes the inertia tensor effectively zero
+            // and produces wildly unstable rotation. Floor at 1.
+            _rb.mass = Mathf.Max(1f, totalMass);
+            _torqueMassFactor = Mathf.Pow(_rb.mass, rotationMassCompensation);
+            Debug.unityLogger.Log(TAG,
+                $"Rigidbody armed. Total mass: {totalMass:F1} (rb.mass: {_rb.mass:F1}). " +
+                $"thrustForce={thrustForce:F1} → expected light accel: {thrustForce / _rb.mass:F2} m/s². " +
+                $"torqueMassFactor={_torqueMassFactor:F2} (compensation exp={rotationMassCompensation:F2}). " +
+                $"linearDrag={linearDrag:F1}, angularDrag={angularDrag:F1}.");
+        }
+
         float ComputeTotalMass()
         {
-            float alphaMass = baseMassThreshold;
+            // Sum the alpha cube's mass + every placed cube's resolved
+            // material mass. Mirrors the pre-refactor formula.
+            float alphaMass = 1f;
             if (alphaCubePrefab != null)
             {
                 CubeStats stats = alphaCubePrefab.GetComponent<CubeStats>();
                 if (stats != null && !Mathf.Approximately(stats.mass, 0f)) alphaMass = stats.mass;
             }
             return alphaMass + GameData.SumPlacedMasses(shapeRegistry, materialRegistry);
-        }
-
-        // Linear lerp from (mass=baseMassThreshold → multiplier=1.0) to
-        // (mass=massCap → multiplier=1-maxSlowdown), clamped outside.
-        float ComputeMassMultiplier(float totalMass)
-        {
-            float span = massCap - baseMassThreshold;
-            if (span <= Mathf.Epsilon) return 1f;
-            float t = Mathf.Clamp01((totalMass - baseMassThreshold) / span);
-            return Mathf.Lerp(1f, 1f - maxSlowdown, t);
         }
 
         void BuildConstruct()
@@ -169,10 +243,9 @@ namespace CubeFly.Fly
         void Update()
         {
             // Pause overlay catches gameplay input. Time.timeScale = 0
-            // already freezes FixedUpdate (so the velocity-integration
-            // step is paused); this guard zeroes the per-frame input
-            // sample so the velocity accumulator doesn't keep rising
-            // while the menu is up.
+            // already freezes FixedUpdate (so AddForce/AddTorque don't
+            // run); this guard zeroes the per-frame input sample so the
+            // controller doesn't pile up input across pause boundaries.
             if (PauseMenu.Instance != null && PauseMenu.Instance.IsOpen)
             {
                 _thrustInput = Vector3.zero;
@@ -183,7 +256,7 @@ namespace CubeFly.Fly
             }
 
             // Sample the input every frame; physics-paced application happens
-            // in FixedUpdate to keep the throttle integration stable.
+            // in FixedUpdate.
             _thrustInput = _input.Fly.Thrust.ReadValue<Vector3>();
             _pitchInput  = _input.Fly.Pitch.ReadValue<float>();
             _yawInput    = _input.Fly.Yaw.ReadValue<float>();
@@ -192,33 +265,46 @@ namespace CubeFly.Fly
 
         void FixedUpdate()
         {
-            if (construct == null) return;
-            float dt = Time.fixedDeltaTime;
-            float mult = _massMultiplier;
+            if (_rb == null) return;
 
-            // 3-axis throttle: per-axis accumulation, magnitude clamp,
-            // frame-rate-independent exponential decay. Mass scales the
-            // applied acceleration; maxSpeed and drag are unchanged.
-            _velocity += _thrustInput * (accelerationRate * mult) * dt;
-            _velocity = Vector3.ClampMagnitude(_velocity, maxSpeed);
-            _velocity *= Mathf.Exp(-drag * dt);
+            // Linear thrust — local-frame input rotated into world frame,
+            // then applied as continuous force. ForceMode.Force integrates
+            // over dt internally; multiplying by Time.fixedDeltaTime here
+            // would double-integrate and is a classic Rigidbody bug.
+            if (_thrustInput.sqrMagnitude > 0f)
+            {
+                Vector3 worldThrust = construct.right   * _thrustInput.x +
+                                      construct.up      * _thrustInput.y +
+                                      construct.forward * _thrustInput.z;
+                _rb.AddForce(worldThrust * thrustForce, ForceMode.Force);
+            }
 
-            // Translate in the construct's local frame so thrust always
-            // aligns with the ship's current orientation.
-            Vector3 localTranslation =
-                construct.right   * _velocity.x +
-                construct.up      * _velocity.y +
-                construct.forward * _velocity.z;
-            construct.position += localTranslation * dt;
+            // Hard speed cap. linearVelocity is the Unity 6 name; pre-6
+            // would be `velocity`. We accept whatever drag has already done
+            // and clamp on top so a long burn doesn't blow past maxSpeed.
+            Vector3 v = _rb.linearVelocity;
+            if (v.sqrMagnitude > maxSpeed * maxSpeed)
+                _rb.linearVelocity = v.normalized * maxSpeed;
 
-            // Pitch: Up arrow → nose up → negative local-X rotation.
-            construct.Rotate(Vector3.right * (-_pitchInput * pitchSensitivity * mult * dt), Space.Self);
-            // Yaw: Right arrow → yaw right → positive world-Y rotation
-            // (world-space yaw avoids roll coupling when the ship is pitched).
-            construct.Rotate(Vector3.up * (_yawInput * yawSensitivity * mult * dt), Space.World);
-            // Roll: Q (input = -1, anti-clockwise from pilot POV) → positive
-            // local-Z rotation; E reverses.
-            construct.Rotate(Vector3.forward * (-_rollInput * rollSpeed * mult * dt), Space.Self);
+            // Rotation: torque is scaled by `_torqueMassFactor` =
+            // mass^rotationMassCompensation. This partially fights the
+            // inertia-tensor mass dependence so heavy ships don't crawl
+            // and light ships don't spin wildly — the spread between
+            // them stays meaningful but bounded. See the field tooltip.
+
+            // Pitch: local X. Up arrow → nose up → torque around local -X.
+            if (_pitchInput != 0f)
+                _rb.AddRelativeTorque(Vector3.right * (-_pitchInput * pitchTorque * _torqueMassFactor), ForceMode.Force);
+
+            // Yaw: world Y. Right arrow → yaw right → positive world-Y torque.
+            // World-space yaw avoids roll coupling when the ship is pitched.
+            if (_yawInput != 0f)
+                _rb.AddTorque(Vector3.up * (_yawInput * yawTorque * _torqueMassFactor), ForceMode.Force);
+
+            // Roll: local Z. Q (input = -1, anti-clockwise from pilot POV) →
+            // positive local-Z torque; E reverses.
+            if (_rollInput != 0f)
+                _rb.AddRelativeTorque(Vector3.forward * (-_rollInput * rollTorque * _torqueMassFactor), ForceMode.Force);
         }
     }
 }

@@ -125,6 +125,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a0a0a0a000000000000000000000010e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Core.CubeStats
-  healthPoints: 100
-  armourValue: 10
+  healthPoints: 30
+  armourValue: 0
   mass: 1

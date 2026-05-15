@@ -321,7 +321,7 @@ math, logging, and (on fatal hits) the death animation and cleanup.
 
 ### Hit registration
 
-- `Bullet` and `Rocket` do **per-frame swept raycasts** (not Unity triggers) so they don't tunnel through cubes at speeds above ~60 u/s per 50 Hz tick. The raycast covers from the previous frame's projectile position to the current one.
+- `Bullet` and `Rocket` do **per-frame swept raycasts** in their `Update` (not Unity triggers) so they don't tunnel through cubes. At the default bullet speed of 80 u/s a projectile travels ~1.33 units per 60 fps frame — wider than a 1-unit cube — so trigger-based detection would intermittently miss. The raycast covers from the previous frame's projectile position to the current one.
 - Self-construct hits are filtered: the firing weapon hands its construct `Transform` to the projectile at `Launch`, and any hit whose collider is a descendant of that transform is skipped. Treats Unity's "destroyed object" sentinel as not-self so in-flight projectiles outlive their firing cube.
 - On a non-self hit, the projectile resolves the hit object's `CubeStats` (via `GetComponentInParent`) and routes through `CubeDamage.ApplyAndLog` with `ignoreArmour: false`, then `Destroy`s itself.
 

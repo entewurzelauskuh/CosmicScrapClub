@@ -1,4 +1,3 @@
-using CubeFly.Build;
 using CubeFly.Core;
 using UnityEngine;
 
@@ -73,9 +72,11 @@ namespace CubeFly.Fly
 
         // Resolve the CubeStats on the hit object (or the nearest ancestor
         // that has one — covers prefabs where the collider lives on a
-        // child of the stats root), apply the damage, and log the result.
-        // No-ops when the hit object has no CubeStats — which shouldn't
-        // happen for the layers we mask against, but is defensive.
+        // child of the stats root), then route through the shared
+        // CubeDamage pipeline (which handles logging, post-armour
+        // application, and the maybe-die branch). No-ops when the hit
+        // object has no CubeStats — which shouldn't happen for the
+        // layers we mask against, but is defensive.
         public static void ApplyAndLog(RaycastHit hit, float damage, string projectileTag)
         {
             // GetComponentInParent searches the current GameObject AND walks
@@ -89,36 +90,13 @@ namespace CubeFly.Fly
                 return;
             }
 
-            float hpBefore = stats.healthPoints;
-            float applied = stats.TakeDamage(damage);
-            Debug.unityLogger.Log(projectileTag,
-                $"Hit '{hit.collider.name}' for {applied:F1} damage " +
-                $"(raw {damage:F1}, AV {stats.armourValue:F1}). " +
-                $"HP: {hpBefore:F1} → {stats.healthPoints:F1}.");
-
-            // Fatal hit → kick off the death sequence. Skip the alpha
-            // cube here so end-of-run owns that path; CubeDeath also
-            // self-skips defensively in case a future damage source
-            // forgets the check.
-            if (stats.healthPoints > 0f) return;
-            if (stats.CompareTag("AlphaCube")) return;
-
-            // Player-construct cubes carry a PlacedCubeData whose cell
-            // identifies their slot in GameData. Removing here keeps
-            // the mass budget and Hangar re-entry consistent. World
-            // targets have no PlacedCubeData and skip this branch.
-            PlacedCubeData placed = stats.GetComponent<PlacedCubeData>();
-            if (placed != null) GameData.Remove(placed.cell);
-
-            CubeDeath death = stats.GetComponent<CubeDeath>()
-                           ?? stats.gameObject.AddComponent<CubeDeath>();
-            // Bias drift away from the construct center when the cube
-            // is parented to one. Free-standing world cubes fall back
+            // Bias the death-drift away from the construct center when the
+            // cube is parented to one. Free-standing world cubes fall back
             // to a random direction inside CubeDeath.
             Vector3 outwardOrigin = stats.transform.parent != null
                 ? stats.transform.parent.position
                 : stats.transform.position;
-            death.BeginDeath(outwardOrigin);
+            CubeDamage.ApplyAndLog(stats, damage, outwardOrigin, projectileTag);
         }
     }
 }

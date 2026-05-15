@@ -24,7 +24,7 @@ The companion documents are:
 - **Weapon shapes.** Pyramid (machine gun, fires bullets) and Cylinder (rocket launcher, fires two-phase rockets). Weapon shapes carry their own coupled material; the regular material flyout is suppressed for them.
 - **90°-stepped per-placement rotation.** `R` rotates around Z, `T` around X. Each placement remembers its placed pose.
 - **Delete tool.** Non-allocating red `MaterialPropertyBlock` hover tint plus an automatic flood-fill cleanup of any cube disconnected from the alpha cube.
-- **Mass budget (cap 100).** Every placed cube has `HP / Armour / Mass` placeholder stats sourced from its `MaterialDefinition`. Going over the cap rejects the placement and shows a fading red message; total mass smoothly slows the ship's acceleration **and** rotation rates in flight.
+- **Mass budget (cap 100).** Every placed cube has `HP / Armour / Mass` placeholder stats sourced from its `MaterialDefinition`. Going over the cap rejects the placement and shows a fading red message. In flight, the construct's total mass is the `Rigidbody.mass`, so heavier ships accelerate and turn slower through real physics (`F = ma`, `τ = Iα`).
 - **Live `Mass: X / 100` and `HP: Y`** readouts in the bottom-left of the build UI.
 - **Red arrow indicator** that auto-reparents to the frontmost cube so you can tell which way the ship is pointed.
 - **Save / load to 3 slots.** The hangar slot picker shows cube count, mass, HP, and "last edited N ago" per slot. BuildScene autosaves to the armed slot on every construct change (debounced 0.25 s). Atomic on-disk writes via `File.Replace` with a rename-to-bak fallback for runtimes that don't support it.
@@ -150,9 +150,11 @@ much mass!" message at the top of the screen.
 | `Esc` | Open the pause overlay. |
 | Top-right `Hangar` button | Switch back to BuildScene. |
 
-Heavier ships are sluggish: acceleration and rotation rates scale by
-`Lerp(1.0, 0.1, Clamp01((mass − 10) / 90))`, so total mass 10 = no
-slowdown, total mass 100 = 90% slow.
+Heavier ships are sluggish because the construct is a `Rigidbody`:
+more mass means less acceleration for the same thrust force (`F = ma`)
+and slower rotation for the same torque (`τ = Iα`). A
+`rotationMassCompensation` knob keeps heavy ships turnable and a
+`maxAngularSpeed` cap stops light ones from spinning out.
 
 ### Pause Overlay (BuildScene / FlyScene)
 

@@ -37,7 +37,9 @@ on MainMenu and HangarSelect.
 A pause overlay (`PauseMenu`) self-bootstraps before the first scene
 loads. ESC opens / closes the overlay in BuildScene and FlyScene only.
 While open, `Time.timeScale = 0` freezes physics; on-overlay buttons
-`Menu` and `Back to Desktop` jump to MainMenu or quit the app.
+`Menu` and `Back to Desktop` jump to MainMenu or quit the app. A
+sibling overlay (`GameOverMenu`) ends the run when the alpha cube is
+destroyed — see *End-of-Run*.
 
 ---
 
@@ -339,7 +341,7 @@ math, logging, and (on fatal hits) the death animation and cleanup.
   1. Removes the cube's `GameData` entry (only relevant for player-construct cubes carrying `PlacedCubeData`) so the mass budget and Hangar re-entry stay consistent.
   2. Lazily `AddComponent`s a `CubeFly.Core.CubeDeath` and calls `BeginDeath(outwardOrigin)`.
 - `CubeDeath` detaches the cube from its parent, disables all colliders, and runs a 2-second drift along a direction biased 70% outward from `outwardOrigin` (the construct center for player cubes; random with upward bias for free-standing world cubes). Then `Destroy`s the GameObject.
-- The alpha cube takes damage but **doesn't run the death animation** — `CubeDeath.BeginDeath` returns silently on alpha-tagged cubes. End-of-run (a future roadmap item) handles the actual game-over condition; until then the alpha just sits at HP 0 visually.
+- The alpha cube takes damage but **doesn't run the death animation** — `CubeDeath.BeginDeath` returns silently on alpha-tagged cubes. Instead, when the alpha reaches 0 HP, `CubeDamage.ApplyAndLog` calls `GameOverMenu.TriggerGameOver`: a "Construct Destroyed" overlay shows, `Time.timeScale` freezes, and the single button returns the player to the main menu. See the **End-of-run** section below.
 
 ### Disconnected sub-pieces
 
@@ -572,6 +574,22 @@ unmodified script.
   - **Back to Desktop** — quits the app (or stops Editor play mode).
 - ESC closes the overlay (acts as Resume — no dedicated Resume button).
 - `EscConsumedThisFrame` is a one-frame flag other ESC handlers (BuildToolbarController, HangarSelectController) check to avoid stealing the same key press.
+
+---
+
+## End-of-Run
+
+`GameOverMenu` is a second `DontDestroyOnLoad` singleton, structured
+exactly like `PauseMenu` — spawned by a
+`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` hook, no scene
+wiring required.
+
+- **Trigger.** When the alpha cube (the construct's anchor) reaches 0 HP, `CubeDamage.ApplyAndLog` calls `GameOverMenu.TriggerGameOver()`. The alpha never runs the `CubeDeath` drift animation — losing the run is the alpha's "death".
+- **Idempotent.** `TriggerGameOver` no-ops if the overlay is already open, so repeated fatal hits on a 0-HP alpha don't re-trigger anything.
+- While open, `Time.timeScale = 0` freezes the scene (any cubes mid-`CubeDeath` drift pause in place).
+- Overlay layout: a dark-red full-screen dim panel + "Construct Destroyed" title + a single button. The panel sits at sortingOrder 400 — above `PauseMenu`'s 300 — so it wins if both are ever active.
+- The one button — **Return to main menu** — restores `timeScale = 1` and loads `MainMenu`. There is no Resume and no Try Again; the run is over.
+- **Soft "respawn from last save."** The in-flight HP loss only mutates `GameData` in memory; the disk save is never touched during Fly. Returning to MainMenu → Hangar → *Continue* on the same slot reloads the original construct from disk.
 
 ---
 

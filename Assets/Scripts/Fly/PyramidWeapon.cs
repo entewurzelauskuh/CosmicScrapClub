@@ -47,7 +47,10 @@ namespace CubeFly.Fly
             Bullet bullet = go.GetComponent<Bullet>();
             if (bullet != null)
             {
-                bullet.Launch(tipPos, fireDir);
+                // Pass Construct + damage so the bullet can run self-hit
+                // prevention and apply the weapon's damage value on hit.
+                // The bullet snapshots both at Launch and never re-queries.
+                bullet.Launch(tipPos, fireDir, Construct, damage);
             }
             else
             {

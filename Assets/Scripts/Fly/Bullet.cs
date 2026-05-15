@@ -1,12 +1,25 @@
+using CubeFly.Core;
 using UnityEngine;
 
 namespace CubeFly.Fly
 {
     // Straight-line projectile fired by PyramidWeapon. Spawn via
-    // Instantiate, then call Launch(origin, direction) to arm and
-    // start moving. Despawns after travelling `maxRange` world
-    // units. No Rigidbody / Collider in v1 — hit detection is a
-    // separate concern in the upcoming damage pass.
+    // Instantiate, then call Launch(...) to arm and start moving.
+    // Despawns either when a hit is registered against a non-self
+    // cube or after travelling `maxRange` world units without one.
+    //
+    // Hit detection is a per-frame swept raycast from the previous
+    // position to the next, NOT a Unity trigger/collision. At our
+    // default speed (80 u/s) the projectile moves > 1 unit per
+    // 60 fps frame — wider than a cube — so trigger detection would
+    // intermittently tunnel through targets. The raycast is
+    // deterministic at any speed; the projectile itself doesn't need
+    // a Collider or Rigidbody.
+    //
+    // Self-hit prevention: the firing weapon hands the projectile a
+    // reference to its construct root. Any raycast hit on a child of
+    // that root is skipped — the player's own cubes aren't valid
+    // targets for their own weapons.
     public class Bullet : MonoBehaviour
     {
         [SerializeField] float speed = 80f;
@@ -16,7 +29,15 @@ namespace CubeFly.Fly
         float _traveled;
         bool _armed;
 
-        public void Launch(Vector3 origin, Vector3 direction)
+        // Set at Launch by the firing WeaponBehavior — the projectile
+        // never re-queries these mid-flight.
+        Transform _firingConstruct;
+        float _damage;
+        int _hitLayerMask;
+
+        const string TAG = "Bullet";
+
+        public void Launch(Vector3 origin, Vector3 direction, Transform firingConstruct, float damage)
         {
             transform.position = origin;
             // Orient the visual along travel direction. Even though a
@@ -27,6 +48,23 @@ namespace CubeFly.Fly
 
             _direction = direction.normalized;
             _traveled = 0f;
+            _firingConstruct = firingConstruct;
+            _damage = damage;
+
+            // Limit raycasts to the construct layers — cuts useless
+            // intersections against the preview ghost (PreviewCube) and
+            // future world geometry on unrelated layers. Defensive fallback
+            // mirrors BuildManager / CubePreview: if the named layers can't
+            // be resolved (clean checkout without TagManager.asset imported),
+            // hit everything except Ignore Raycast so the projectile
+            // doesn't silently no-op.
+            _hitLayerMask = LayerMask.GetMask("PlacedCube", "AlphaCube");
+            if (_hitLayerMask == 0)
+            {
+                int ignoreRaycast = 1 << LayerMask.NameToLayer("Ignore Raycast");
+                _hitLayerMask = ~ignoreRaycast;
+            }
+
             _armed = true;
         }
 
@@ -34,8 +72,19 @@ namespace CubeFly.Fly
         {
             if (!_armed) return;
             float dt = Time.deltaTime;
-            transform.position += _direction * (speed * dt);
-            _traveled += speed * dt;
+            float step = speed * dt;
+
+            Vector3 from = transform.position;
+            if (ProjectileHit.TrySweep(from, _direction, step, _hitLayerMask, _firingConstruct,
+                    out RaycastHit hit))
+            {
+                ProjectileHit.ApplyAndLog(hit, _damage, TAG);
+                Destroy(gameObject);
+                return;
+            }
+
+            transform.position = from + _direction * step;
+            _traveled += step;
             if (_traveled >= maxRange) Destroy(gameObject);
         }
     }

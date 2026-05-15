@@ -35,7 +35,11 @@ namespace CubeFly.Fly
             Rocket rocket = go.GetComponent<Rocket>();
             if (rocket != null)
             {
-                rocket.Launch(spawnPos, launchDir, exitPos, crosshairWorldTarget);
+                // Pass Construct + damage so the rocket can run self-hit
+                // prevention (in both exit and seek phases) and apply the
+                // weapon's damage value on hit. Snapshotted at Launch.
+                rocket.Launch(spawnPos, launchDir, exitPos, crosshairWorldTarget,
+                    Construct, damage);
             }
             else
             {

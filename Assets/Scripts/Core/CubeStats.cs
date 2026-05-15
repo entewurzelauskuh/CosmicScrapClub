@@ -17,5 +17,19 @@ namespace CubeFly.Core
 
         [Tooltip("Mass of this cube. Reserved for fly-mode inertia calculations.")]
         public float mass = 1f;
+
+        // Apply incoming damage. Armour fully absorbs sub-armour hits (no chip
+        // damage) — matching the formula stated on armourValue's tooltip and
+        // the MaterialDefinition contract. HP clamps to zero. Returns the
+        // actual HP lost so callers can log / feed forward to the upcoming
+        // shield + damage-type system without re-deriving the math.
+        public float TakeDamage(float incoming)
+        {
+            if (incoming <= 0f) return 0f;
+            float effective = Mathf.Max(0f, incoming - armourValue);
+            if (effective <= 0f) return 0f;
+            healthPoints = Mathf.Max(0f, healthPoints - effective);
+            return effective;
+        }
     }
 }

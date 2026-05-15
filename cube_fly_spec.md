@@ -6,7 +6,9 @@ Pipeline (URP) — Universal 3D template.
 **Project goal.** A four-scene interactive demonstrator where the player
 opens a Main Menu, picks one of three save slots, builds a cube
 construct in a Hangar, and then pilots the assembled construct like a
-plane — including shooting with weapon-cube types. Construct data is
+plane — including shooting with weapon-cube types, registering hits
+on a 200×200 practice arena seeded with destructible target dummies,
+and taking kinetic damage when crashing into things. Construct data is
 held in-memory by a static class for cross-scene transitions and
 persisted to disk per slot.
 
@@ -26,7 +28,7 @@ This document is the single canonical spec. Companion docs:
 | `MainMenu`      | First scene the player sees. Shows three buttons: **Hangar** → HangarSelect, **Settings** (placeholder), **Exit**. |
 | `HangarSelect`  | Save-slot picker. Three cards (one per slot); each shows stats + last-edited timestamp when filled, "<empty>" otherwise. Selecting a slot loads its `ConstructSave` into `GameData` (or clears `GameData` for an empty slot) and transitions to `BuildScene` with that slot armed for autosave. |
 | `BuildScene`    | Hangar. The player places, rotates, and deletes cubes around a fixed semi-transparent **alpha cube**. Construct changes autosave (debounced) to the armed slot. |
-| `FlyScene`      | Pilot mode. The construct is rebuilt from in-memory `GameData` and flown with 6-axis thrust + pitch / yaw / roll + camera mouse-look. Weapon-cubes fire on LMB; weapon-type selection on digits / scroll wheel. |
+| `FlyScene`      | Pilot mode. The construct is rebuilt from in-memory `GameData` and flown with 6-axis thrust + pitch / yaw / roll + camera mouse-look. Weapon-cubes fire on LMB; weapon-type selection on digits / scroll wheel. Hits register against placed cubes and world targets; crashes deal kinetic damage. A flat 200×200 world map seeded with 20 target dummies provides the practice arena. |
 
 A persistent corner button (`Fly!` / `Hangar`) sits in the top-right of
 BuildScene and FlyScene and toggles between them. The button is hidden
@@ -249,8 +251,8 @@ return to them naturally; the dictionary is session-scoped.
 
 ## Cube Stats (`CubeStats`)
 
-`CubeFly.Core.CubeStats` is a tiny `MonoBehaviour` placeholder for
-in-game statistics that future combat / damage systems will mutate:
+`CubeFly.Core.CubeStats` is a tiny `MonoBehaviour` carrying the
+gameplay-relevant per-cube state plus two damage-application methods:
 
 ```csharp
 public class CubeStats : MonoBehaviour
@@ -258,6 +260,9 @@ public class CubeStats : MonoBehaviour
     public float healthPoints;
     public float armourValue;
     public float mass;
+
+    public float TakeDamage(float incoming);     // armour-aware (projectile path)
+    public float TakeRawDamage(float incoming);  // armour-bypass (kinetic path)
 }
 ```
 
@@ -265,7 +270,12 @@ Every placeable shape prefab — including the alpha cube — has this
 component attached. At spawn time `MaterialDefinition.ApplyTo` writes
 the chosen material's HP/AV/mass into the spawned cube's `CubeStats`.
 Per-cube mass is read from this component when the build UI computes
-the live `Mass: X / 100` readout.
+the live `Mass: X / 100` readout. The two damage methods are used by
+the **Combat** section below — `TakeDamage` clamps HP via
+`effective = max(0, raw − armourValue)` and is consumed by projectile
+hits; `TakeRawDamage` skips armour and is consumed by crash damage.
+Both return the actual HP delta so callers can log / chain off the
+result.
 
 ---
 
@@ -292,6 +302,48 @@ float massMultiplier = Mathf.Lerp(1f, 1f - maxSlowdown, t);
 That multiplier scales **acceleration** *and* **rotation rates** — but
 not `maxSpeed` or `drag`. A 10-mass ship feels nimble; a 100-mass ship
 takes ~10× longer to accelerate and turn.
+
+---
+
+## Combat
+
+Three damage sources are wired today: bullets from `PyramidWeapon`,
+rockets from `CylinderWeapon`, and kinetic crashes from
+`FlyCrashDetector`. All three route through a single
+`CubeFly.Fly.CubeDamage.ApplyAndLog` pipeline that handles the damage
+math, logging, and (on fatal hits) the death animation and cleanup.
+
+### Damage routing
+
+- **Projectile damage** (bullets, rockets, future energy weapons) — uses `CubeStats.TakeDamage(raw)`. Armour absorbs sub-armour hits: `effective = max(0, raw − armourValue)`. A 1-damage bullet against an AV-10 cube does nothing; a 20-damage rocket against the same cube does 10.
+- **Kinetic damage** (crashes; future explosion concussion, melee, etc.) — uses `CubeStats.TakeRawDamage(raw)`. Skips armour entirely. The rationale is that armour mitigates penetration, not raw kinetic energy: a steel plate stops a bullet, not a 35 u/s collision into a wall.
+- The roadmap's upcoming **damage-type system** (projectile vs energy vs kinetic) generalises this two-method split into a single `DamageType` enum that shields can react to differently. The two-method shape today gives us the wiring without locking in the enum.
+
+### Hit registration
+
+- `Bullet` and `Rocket` do **per-frame swept raycasts** (not Unity triggers) so they don't tunnel through cubes at speeds above ~60 u/s per 50 Hz tick. The raycast covers from the previous frame's projectile position to the current one.
+- Self-construct hits are filtered: the firing weapon hands its construct `Transform` to the projectile at `Launch`, and any hit whose collider is a descendant of that transform is skipped. Treats Unity's "destroyed object" sentinel as not-self so in-flight projectiles outlive their firing cube.
+- On a non-self hit, the projectile resolves the hit object's `CubeStats` (via `GetComponentInParent`) and routes through `CubeDamage.ApplyAndLog` with `ignoreArmour: false`, then `Destroy`s itself.
+
+### Crash damage
+
+- `FlyCrashDetector` is a sibling component on the `FlyController` GameObject with `[DefaultExecutionOrder(100)]` so it runs after the flight integration each `FixedUpdate`. For each cube child of `CubeConstruct`, it sweeps the cube's `BoxCollider` from its previous-frame world position to its current one via `Physics.BoxCastNonAlloc`.
+- **Layer mask**: `Default + PlacedCube + AlphaCube`. Self-construct hits filtered identically to projectiles.
+- **Damage formula**: `clamp(impactSpeed × 0.3, 1, 10)` where `impactSpeed = step / Time.fixedDeltaTime`. Below 3 u/s, no damage at all (landing gently doesn't punish). At `FlyController`'s `maxSpeed` of 37.5 u/s the formula caps at 10. Routes through `CubeDamage.ApplyAndLog` with `ignoreArmour: true`.
+- **Entry-only** model: a per-cube `_inContact` boolean fires damage on the first frame of contact only. Sliding / scraping along a surface registers ONE damage event, not one per frame. To re-arm, the sweep must miss for one frame. Mirrors `OnCollisionEnter` semantics without using Unity's physics events (the construct is transform-driven, so OnCollisionEnter wouldn't fire reliably anyway).
+- **Known gap, addressed by the upcoming *Rigidbody-driven construct* roadmap item**: the construct still **phases through** colliders at the physics layer. Crashes register damage but don't physically stop the ship. Bouncing comes for free once the Rigidbody refactor lands, and the bespoke sweep here gets replaced with `OnCollisionEnter` + `ContactPoint.thisCollider` so damage charges to the specific cube that actually touched the wall.
+
+### Cube death
+
+- When `TakeDamage` / `TakeRawDamage` brings HP to zero AND the cube isn't tagged `AlphaCube`, `CubeDamage.ApplyAndLog`:
+  1. Removes the cube's `GameData` entry (only relevant for player-construct cubes carrying `PlacedCubeData`) so the mass budget and Hangar re-entry stay consistent.
+  2. Lazily `AddComponent`s a `CubeFly.Core.CubeDeath` and calls `BeginDeath(outwardOrigin)`.
+- `CubeDeath` detaches the cube from its parent, disables all colliders, and runs a 2-second drift along a direction biased 70% outward from `outwardOrigin` (the construct center for player cubes; random with upward bias for free-standing world cubes). Then `Destroy`s the GameObject.
+- The alpha cube takes damage but **doesn't run the death animation** — `CubeDeath.BeginDeath` returns silently on alpha-tagged cubes. End-of-run (a future roadmap item) handles the actual game-over condition; until then the alpha just sits at HP 0 visually.
+
+### Disconnected sub-pieces
+
+When a structural cube is destroyed in flight, child cubes that should logically detach with it stay attached to the construct. The Hangar's existing flood-fill cleanup is BuildScene-only — it doesn't run in Fly. This is a deliberate v1 simplification; a Fly-mode flood-fill is in the **Later** roadmap section.
 
 ---
 
@@ -363,11 +415,13 @@ Autosave (see *Save / Load*) flushes 0.25 s after the last
 Scene contents:
 
 - `CubeConstruct` empty GameObject — the construct's pivot. Starts at `(0, 10, 0)`.
-- `FlyController` rebuilds the construct on `Start`, instantiating one `alphaCubePrefab` at the origin plus one shape-prefab per `Placement` in `GameData`. `MaterialDefinition.ApplyTo` is invoked per placement. Any spawned `WeaponBehavior` is collected for the shooting controller.
+- `FlyController` rebuilds the construct on `Start`, instantiating one `alphaCubePrefab` at the origin plus one shape-prefab per `Placement` in `GameData`. `MaterialDefinition.ApplyTo` is invoked per placement. Any spawned `WeaponBehavior` is collected for the shooting controller. `FlyController` lives on a GameObject that also hosts `FlyShootingController` and `FlyCrashDetector` as siblings (single GameObject, three components).
 - `Main Camera` with `FlyCamera`.
 - `FlyShootingController` — owns the per-frame fire / weapon-selection dispatch.
+- `FlyCrashDetector` — per-cube swept `BoxCast` each `FixedUpdate`. See **Combat** below.
 - `FlyWeaponToolbarController` — bottom-of-screen weapon toolbar with reload bars.
 - `FlyCrosshair` — screen-space reticle that projects `construct.forward * 100` so on-screen reticle and actual aim agree.
+- One `Ground` prefab instance at the origin (200×200 flat plane) and 20 `WorldTargetCube` prefab instances scattered in front of the spawn position — the basic flat-plain practice arena. Targets are tuned fragile (HP 30, AV 0) so the demo is actually destructible.
 - Directional Light.
 - `UIBootstrap` (idempotent — no-ops if `UIManager` is already alive).
 
@@ -478,6 +532,8 @@ are URP/Lit:
 | `RocketMat`            | Opaque      | Cylinder-weapon projectile.                                          |
 | `PreviewCubeMat`       | Transparent | Preview-bounds ghost (red-tinted via MPB for invalid placements).   |
 | `AlphaCubeIndicatorMat`| Opaque      | Red arrow indicator.                                                 |
+| `GroundMat`            | Opaque      | World map ground plane — dark olive-grey.                            |
+| `WorldTargetCubeMat`   | Opaque      | World target dummies — rusty orange, distinct from the armour palette. |
 
 ---
 

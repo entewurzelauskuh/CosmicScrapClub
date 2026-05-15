@@ -31,6 +31,10 @@ The companion documents are:
 - **ESC pause overlay.** Self-bootstrapping DDOL singleton. ESC pauses anywhere in BuildScene / FlyScene; `Menu` returns to Main Menu, `Back to Desktop` quits.
 - **6-axis thrust + pitch / yaw / roll + RMB free-look camera** with snap-back.
 - **Shooting (Fly mode).** LMB fires every weapon of the currently selected type. Digits 1–9 and mouse wheel cycle the active type. A screen-space crosshair projects `construct.forward * 100` so the on-screen reticle and the actual aim agree.
+- **Projectile hit registration.** Bullets and rockets do per-frame swept raycasts (not Unity triggers) so they don't tunnel through cubes at high speed. Self-construct hits are filtered. Damage routes through `CubeStats.TakeDamage` with the documented `effective = max(0, raw − armourValue)` formula.
+- **Cube destruction & death animation.** When a cube's HP hits zero it detaches, disables its colliders, drifts outward at ~2 u/s for 2 s, then despawns. Player-construct cubes are removed from `GameData` at the same time so the mass budget and Hangar re-entry stay consistent. The alpha cube is special-cased — it takes damage but doesn't run the animation, awaiting the end-of-run condition.
+- **Crash damage.** Each construct cube does a per-frame swept `BoxCast` against the world; first-frame contact (entry-only, no per-frame piling during scrapes) applies kinetic damage scaled to impact speed. Bypasses armour because armour mitigates penetration, not raw kinetic energy.
+- **Basic world map.** 200×200 ground plane plus 20 rusty-orange target dummies in `FlyScene` so you have something to fly around, crash into, and shoot at.
 - **File logging** to `Logs/runtime-<timestamp>.log` alongside the Editor console.
 
 The project is intentionally MonoBehaviour-driven (no DOTS / ECS) — it is small enough that data-oriented patterns would be overkill.
@@ -166,15 +170,17 @@ beneath it can be clicked.
 ```
 Assets/
   Scenes/         MainMenu, HangarSelect, BuildScene, FlyScene (+ template's SampleScene, unused)
-  Scripts/Core/   GameData, ConstructSave, CubeStats, ShapeDefinition, ShapeRegistry,
+  Scripts/Core/   GameData, ConstructSave, CubeStats, CubeDeath,
+                  ShapeDefinition, ShapeRegistry,
                   MaterialDefinition, MaterialRegistry, SaveManager, PauseMenu,
-                  PrimitiveMeshes, PrismMeshAuthor, PyramidMeshAuthor,
+                  PrimitiveMeshes, PrismMeshAuthor, PyramidMeshAuthor, CylinderMeshAuthor,
                   UIManager, UIStyle, UIBootstrap, SceneSwitcher,
                   FileLogHandler, LogBootstrapper
   Scripts/Build/  BuildManager, CubePreview, BuildCamera, BuildToolbarController,
                   BuildIndicatorController, PlacedCubeData
   Scripts/Fly/    FlyController, FlyCamera, FlyCrosshair,
                   FlyShootingController, FlyWeaponToolbarController,
+                  FlyCrashDetector, CubeDamage, ProjectileHit,
                   WeaponBehavior, PyramidWeapon, CylinderWeapon,
                   Bullet, Rocket
   Scripts/HangarSelect/ HangarSelectController
@@ -184,9 +190,11 @@ Assets/
   Materials/Defs/ MaterialRegistry + MaterialA/B/C/D,
                   PyramidWeaponMatDef, CylinderWeaponMatDef
   Materials/      Per-prefab URP/Lit materials (AlphaCube, Placed*, Preview,
-                  Bullet, Rocket, weapon-shape, AlphaCubeIndicator)
+                  Bullet, Rocket, weapon-shape, AlphaCubeIndicator,
+                  Ground, WorldTargetCube)
   Prefabs/        AlphaCube, PlacedCube[A–D], PlacedPrism, PlacedPyramid,
-                  PlacedCylinder, PreviewCube, AlphaCubeIndicator
+                  PlacedCylinder, PreviewCube, AlphaCubeIndicator,
+                  Ground, WorldTargetCube
   Prefabs/Projectiles/ Bullet, Rocket
   Input/          CubeFlyInputActions (.inputactions + hand-rolled C# wrapper)
   UI/             UICanvas, UIBootstrap prefabs

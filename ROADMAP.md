@@ -6,7 +6,7 @@ A living planning doc. What works today, what we're building next, and where the
 
 ## Vision
 
-Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, and (soon) reactors / shields / thrusters, then fly it. You can already place shapes, save / load three constructs, and shoot bullets and rockets in flight; the next chunk of work turns that scaffold into an actual game — damage, destruction, a world to fly through, and ships that have meaningfully different roles.
+Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, and (soon) reactors / shields / thrusters, then fly it. You can already place shapes, save / load three constructs, shoot bullets and rockets in flight, register hits, blow cubes off enemies, and take damage when you crash into things. The next chunk of work closes out the combat-damage loop (alpha death = end of run), upgrades the construct to a real physics object (no more phasing through the ground), gives ships meaningfully different classes, and lays in the power / shield / energy-weapon foundation.
 
 It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DOTS), pure C# everywhere, and the docs are kept honest so you can read [`full_architecture.md`](full_architecture.md) and immediately know which file does what. If you've been wanting to mess around in a Unity codebase that's neither toy-sized nor incomprehensible, this might be the project for you.
 
@@ -14,62 +14,63 @@ It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DO
 
 ## Where we are today
 
-Read [`cube_fly_spec.md`](cube_fly_spec.md) for the canonical product spec and [`full_architecture.md`](full_architecture.md) for the file-by-file implementation map. In a sentence: four scenes (`MainMenu → HangarSelect → BuildScene ⇄ FlyScene`), three save slots, ESC pause overlay, a decoupled Shape × Material build system (Cube / Slope / Pyramid weapon / Cylinder weapon × four armour materials), per-cube HP / Armour / Mass placeholder stats, symmetric face-validity placement rules, mass-driven flight feel, 6-axis flight with pitch/yaw/roll + RMB free-look, a screen-space crosshair, and two functioning weapons (bullets + rockets) selected from a toolbar with digit keys, mouse-wheel cycling, and live reload bars.
+Read [`cube_fly_spec.md`](cube_fly_spec.md) for the canonical product spec and [`full_architecture.md`](full_architecture.md) for the file-by-file implementation map. In a sentence: four scenes (`MainMenu → HangarSelect → BuildScene ⇄ FlyScene`), three save slots, ESC pause overlay, a decoupled Shape × Material build system (Cube / Slope / Pyramid weapon / Cylinder weapon × four armour materials), per-cube HP / Armour / Mass placeholder stats, symmetric face-validity placement rules, mass-driven flight feel, 6-axis flight with pitch/yaw/roll + RMB free-look, a screen-space crosshair, two functioning weapons (bullets + rockets) selected from a toolbar with digit keys and mouse-wheel cycling, a basic 200×200 world map seeded with 20 target dummies, projectile hit registration with armour-aware damage, an outward-drift cube destruction animation, and kinetic crash damage that bypasses armour.
 
-The shooting system already places projectiles in the world. The next obvious gap is that nothing happens when those projectiles hit anything.
+### Shipped since the last roadmap pass
+
+- Projectile hit registration — swept raycasts on `Bullet` and `Rocket`, self-construct filtering, armour-aware damage via `CubeStats.TakeDamage`.
+- Basic world map — 200×200 ground plane plus 20 hand-placed rusty-orange `WorldTargetCube` dummies in `FlyScene`.
+- Cube destruction & death animation — at-zero-HP cubes detach, disable colliders, drift outward at ~2 u/s for 2 s, then despawn.
+- Crash damage — per-cube swept `BoxCast` each `FixedUpdate`, entry-only damage gating, armour-bypass kinetic damage via `CubeStats.TakeRawDamage`. Player ship cubes can now actually die.
 
 ---
 
 ## Up Next
 
-### Combat & Damage Model
+In running order. We finish closing out the combat-damage loop, then do the Rigidbody refactor as a foundation upgrade, then layer everything else on top.
 
-- **Hit registration on projectiles** — `Bullet` and `Rocket` need colliders + a Unity physics hit pass. On hit, look up the target's `CubeStats`, apply `damage = max(0, projectile.damage - armourValue)`, subtract from `healthPoints`. Both projectiles already carry a `damage` field — the wiring is what's missing.
-- **Cube destruction & death animation** — when a cube's `healthPoints` reaches 0, detach it from its parent in the construct, pick a random direction, disable its collider, drift it slowly across a short distance, then despawn. It's mostly a cinematic effect on top of the existing data flow (`GameData.Remove`, the flood-fill cleanup, etc.). Drifting with collider disabled means it can clip through other geometry — that's intentional, keeps the effect cheap.
-- **Crash damage** — when the construct collides with anything else in the world, every cube that participates in the collision takes damage scaled by impact speed (a few points at slow taps, up to ~10 at terminal velocity). Encourages the player to actually *fly* their ship rather than ramming it into stuff with no consequence.
-- **End-of-run condition** — if the **alpha cube** (the always-present anchor cube at the origin) reaches 0 HP, the run is over. The cockpit role is already filled by the alpha cube — no new "critical part" concept needed. The actual end-of-run handling (respawn? back to hangar? score screen?) is TBD; we'll figure it out when the rest of the damage model is in.
+### Combat & Damage Model (one item left)
+
+- **End-of-run condition** — when the alpha cube reaches 0 HP, the run ends. The cockpit role is already filled by the alpha cube — no new "critical part" concept needed. The actual end-of-run handling (respawn? back to hangar? score screen?) is TBD; we'll figure it out when we get there. Until this lands, the alpha takes damage but doesn't die (the existing `CubeDeath` defensively skips it).
+
+### Flight & Movement
+
+- **🆕 Rigidbody-driven construct** — replace the current transform-based flight with the canonical Unity pattern: one `Rigidbody` on the construct root, individual `Collider`s on each cube (no per-cube Rigidbody). `FlyController` rewrites to apply forces (`AddRelativeForce` for thrust, `AddRelativeTorque` for pitch / roll, world torque for yaw) instead of writing `transform.position` / `Rotate` directly. `CollisionDetectionMode.Continuous` to prevent tunneling at top speed; `PhysicMaterial`s on Ground + WorldTargetCubes for friction and bounciness. This is the foundation for "actually bouncing off things" (no more phasing through the ground), unlocks proper inertia for ship classes, and **lets crash damage use `OnCollisionEnter` / `ContactPoint.thisCollider` to charge damage to the specific cube that actually touched the wall** — instead of every cube on the construct registering a swept-cast hit. Expect to re-tune all flight parameters (force magnitudes ≠ acceleration rates, drag uses `Rigidbody.drag`, mass-driven responsiveness comes naturally from `Rigidbody.mass`).
+
+- **Ship classes** — pick one when you create a new slot in HangarSelect. Three classes to start:
+  - **Allrounder** — the current defaults.
+  - **Tank** — higher alpha cube HP, higher mass cap (~200?), proportionally lower base movement responsiveness.
+  - **Scout** — lower alpha cube HP, lower mass cap (~60?), higher base movement responsiveness.
+
+  Stored as part of the save slot metadata so the chosen class survives Hangar ↔ Fly transitions and reloads.
+
+- **Minimum responsiveness floor** — once Tank class lifts the mass cap above 100, the current `maxSlowdown = 0.9` formula caps at 10% responsiveness; a max-out tank build would hit 4% responsiveness at mass 250 (a brick). Add an explicit `Mathf.Max(massMultiplier, MIN_RESPONSIVENESS)` floor. The Rigidbody refactor changes what "responsiveness" means structurally (it falls out of `Rigidbody.mass` rather than a manual multiplier), but the same floor concept applies — heavy ship should still be controllable.
+
+- **Thruster cube** — a non-weapon subsystem. **Boosts acceleration in the direction opposite its placement face** (the convention matches the cylinder weapon: the placement face is what attaches to the construct, the opposite face is the "boost face"). So placing a thruster on the back of the ship with the placement face pointing forward gives you a *frontal* boost. Stacks per-direction: more thrusters facing the same way = faster acceleration toward that direction. Doesn't change `maxSpeed`, only how quickly the ship reaches it. Post-Rigidbody refactor, this just adds force in the boost direction.
 
 ### Power & Energy
 
 The big foundation block. Three damage-source types, two energy producers/consumers, a shield that interacts with both. Builds compose: dropping a reactor in your ship unlocks energy weapons and shields; losing reactors degrades them in a predictable order.
 
-- **Damage types** — every weapon declares itself as either **projectile** (current bullets and rockets) or **energy** (forthcoming). The damage type travels with the projectile / beam so shields can react to it.
+- **Damage types** — every weapon declares itself as either **projectile** (current bullets and rockets) or **energy** (forthcoming). The damage type travels with the projectile / beam so shields can react to it. The existing `CubeStats.TakeRawDamage` covers the third type (kinetic / crash damage) and gives us a template for how the type system gets wired in.
 - **Reactor cube** — produces a fixed amount of power per tick. Energy weapons and shields *consume* power; armour and projectile weapons don't. Construct's total power is `sum(reactors.output) - sum(consumers.draw)`; if it goes negative, consumers shut off in priority order (see below).
 - **Shield generator cube** — heavy (mass 10), draws power. Each shield cube contributes **+50 shield points** to a single shared shield pool covering the whole construct. Additive, no cap — limited by the mass budget. Shields absorb damage *before* HP. **−10% damage from projectile sources, +10% damage from energy sources** (so a shield is a counter to projectile weapons and a vulnerability against energy ones). Shield points regenerate slowly back up to max after **5 seconds without taking damage**.
-- **Power-loss cascade** — when reactors are destroyed and the construct goes power-negative, the priority is **energy weapons stop first, then shields stop**. (Both are at-the-mercy-of-power consumers; weapons go first because losing fire is a survivable inconvenience, losing shields is a death sentence.)
-- **First energy weapon: Laser beam** — see *Laser weapon* below. Needs the power system to be in first.
+- **Power-loss cascade** — when reactors are destroyed and the construct goes power-negative, the priority is **energy weapons stop first, then shields stop**.
 
 ### Laser Weapon
 
-The first energy-type weapon, and the testbed for the damage-type system.
+The first energy-type weapon, and the testbed for the damage-type system. Depends on **Power & Energy** above.
 
 - **Behaviour** — Hold LMB, continuous beam fires in **one direction** (the cube's barrel axis, same placement-face convention as the cylinder weapon). No reload, no per-shot cooldown.
 - **Heat mechanic** — A heat value tracks 0–100. Firing increases heat fast. At 100, the laser stops firing and **"Overheated!" flashes three times** somewhere prominent (probably under the crosshair). Heat then drops slowly back toward 0. If the player releases LMB *before* hitting 100, heat drops at a faster rate. So short controlled bursts are sustainable; sustained beam isn't.
 - **HUD** — a heat progress bar **below the crosshair**, visible only while the laser is the selected weapon type.
 - **Energy-typed damage** — full +10% damage against shields, no special interaction with HP. Pairs naturally with the projectile-vs-energy split above.
 
-### Ship Architecture & Movement
-
-- **Ship classes** — pick one when you create a new slot in HangarSelect. Three classes to start:
-  - **Allrounder** — the current defaults (mass cap 100, baseline HP, baseline accel/rotation).
-  - **Tank** — higher alpha cube HP, higher mass cap (~200?), proportionally lower base movement responsiveness.
-  - **Scout** — lower alpha cube HP, lower mass cap (~60?), higher base movement responsiveness.
-
-  Stored as part of the save slot metadata so the chosen class survives Hangar ↔ Fly transitions and reloads.
-
-- **Minimum responsiveness floor** — the current mass slowdown formula caps at 10% responsiveness because `maxSlowdown = 0.9`. Once Tank class lifts the mass cap above 100, the formula needs an explicit `Mathf.Max(massMultiplier, MIN_RESPONSIVENESS)` floor so a max-out tank build stays controllable (currently you'd hit 4% responsiveness at mass 250 — effectively a brick).
-
-- **Thruster cube** — a non-weapon subsystem. **Boosts acceleration in the direction opposite its placement face** (the convention matches the cylinder weapon: the placement face is what attaches to the construct, the opposite face is the "boost face"). So placing a thruster on the back of the ship with the placement face pointing forward gives you a *frontal* boost. Stacks per-direction: more thrusters facing the same way = faster acceleration toward that direction. Doesn't change `maxSpeed`, only how quickly the ship reaches it.
-
-### World
-
-- **A basic game map** — a single flat square plain with a handful of static cubes scattered above it. Something to fly around, crash into (testbed for *Crash damage*), and shoot at (testbed for *Hit registration*). Specifically *not* an AI sandbox yet — just static target dummies. Replaces the current "fly in an empty void" experience.
-
 ---
 
 ## Later
 
-These are deferred until the core combat / power / damage loop above is solid. Roughly in the order we'd pick them up.
+These are deferred until the active sections above are largely done. Roughly in the order we'd pick them up.
 
 - **More weapon variants** — homing missile, shotgun, mine layer, etc. (Each is a small `WeaponBehavior` subclass — the architecture already supports it.)
 - **Audio + SFX pass** — engine hum, weapon SFX, impact thuds, ambient. The project is silent today.

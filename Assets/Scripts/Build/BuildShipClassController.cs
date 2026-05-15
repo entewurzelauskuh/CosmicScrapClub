@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace CubeFly.Build
 {
-    // Top-left BuildScene dropdown for picking the construct's ship
+    // Middle-left BuildScene dropdown for picking the construct's ship
     // class. Changing it updates GameData.ActiveShipClass and notifies
     // BuildManager, which re-applies the alpha-cube HP, refreshes the
     // Mass / HP readout, and lets the change autosave through the

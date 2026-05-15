@@ -110,9 +110,12 @@ namespace CubeFly.Fly
         //   ship-class movement multiplier and the responsiveness-floor
         //   over-cap ratio.
         // _torqueFactor — multiplies the pitch/yaw/roll torques. Folds
-        //   in the class multiplier, the inertia-tensor mass
-        //   compensation (mass^rotationMassCompensation), and the same
-        //   over-cap ratio.
+        //   in three things: the class multiplier; the inertia
+        //   compensation `effectiveMass^rotationMassCompensation` where
+        //   effectiveMass = min(rb.mass, maxResponsivenessMass) — note
+        //   it is the CAPPED mass, not rb.mass; and the over-cap ratio
+        //   applied separately on top. See ResolveRigidbody for the
+        //   exact composition.
         float _linearForceFactor = 1f;
         float _torqueFactor = 1f;
 
@@ -327,9 +330,11 @@ namespace CubeFly.Fly
                 _rb.linearVelocity = v.normalized * maxSpeed;
 
             // Rotation: torque is scaled by `_torqueFactor`, which folds
-            // in the ship-class movement multiplier, the inertia-tensor
-            // mass compensation (mass^rotationMassCompensation), and the
-            // responsiveness-floor over-cap ratio. See ResolveRigidbody.
+            // in the ship-class movement multiplier, the inertia
+            // compensation `effectiveMass^rotationMassCompensation`
+            // (effectiveMass is rb.mass capped at maxResponsivenessMass),
+            // and the responsiveness-floor over-cap ratio applied
+            // separately. See ResolveRigidbody for the composition.
 
             // Pitch: local X. Up arrow → nose up → torque around local -X.
             if (_pitchInput != 0f)

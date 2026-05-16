@@ -3,27 +3,38 @@ Shader "Desert/OutlineEdgeDetect"
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" }
-        ZWrite Off ZTest Always Cull Off
 
         Pass
         {
             Name "OutlineEdgeDetect"
+            // Render state must live inside the Pass: at SubShader scope it was
+            // not applied and the fullscreen triangle was culled.
+            ZWrite Off ZTest Always Cull Off
 
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
-            TEXTURE2D(_CameraNormalsTexture);
-            SAMPLER(sampler_CameraNormalsTexture);
+            TEXTURE2D(_BlitTexture);          SAMPLER(sampler_BlitTexture);
+            TEXTURE2D(_CameraNormalsTexture); SAMPLER(sampler_CameraNormalsTexture);
 
             float4 _OutlineColor;
             float  _Thickness;
             float  _DepthThreshold;
             float  _NormalThreshold;
-            float4 _BlitTexture_TexelSize;
+
+            struct Attributes { uint vertexID : SV_VertexID; };
+            struct Varyings   { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+
+            Varyings Vert(Attributes IN)
+            {
+                Varyings OUT;
+                OUT.positionCS = GetFullScreenTriangleVertexPosition(IN.vertexID);
+                OUT.uv         = GetFullScreenTriangleTexCoord(IN.vertexID);
+                return OUT;
+            }
 
             float3 SampleNormal(float2 uv)
             {
@@ -32,8 +43,8 @@ Shader "Desert/OutlineEdgeDetect"
 
             half4 Frag(Varyings IN) : SV_Target
             {
-                float2 uv    = IN.texcoord;
-                float2 texel = _BlitTexture_TexelSize.xy * _Thickness;
+                float2 uv    = IN.uv;
+                float2 texel = (1.0 / _ScreenParams.xy) * _Thickness;
 
                 // Roberts-cross sample offsets
                 float2 uv0 = uv + float2(-1, -1) * texel;
@@ -55,7 +66,7 @@ Shader "Desert/OutlineEdgeDetect"
 
                 float edge = saturate(max(depthEdge, normalEdge));
 
-                half4 sceneColor = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv);
+                half4 sceneColor = SAMPLE_TEXTURE2D(_BlitTexture, sampler_BlitTexture, uv);
                 return lerp(sceneColor, _OutlineColor, edge * _OutlineColor.a);
             }
             ENDHLSL

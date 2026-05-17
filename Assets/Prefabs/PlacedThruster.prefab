@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 4785404037463498868}
   - component: {fileID: 6141264308032467503}
   - component: {fileID: 4265342515596355001}
+  - component: {fileID: 1901085999347279926}
   m_Layer: 6
   m_Name: PlacedThruster
   m_TagString: Untagged
@@ -155,3 +156,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cecb37aefd13f4e77aca04f1ca8b5d56, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Core.ThrusterMeshAuthor
+--- !u!114 &1901085999347279926
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1538907889469750075}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bc1279ba60c6c4b9388b9c14483cd975, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.ThrusterBehavior

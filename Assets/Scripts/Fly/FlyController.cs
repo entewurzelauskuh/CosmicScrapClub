@@ -59,11 +59,34 @@ namespace CubeFly.Fly
         // so it can group weapons by ShapeDefinition for selection + dispatch.
         readonly List<WeaponBehavior> _spawnedWeapons = new();
 
+        // Collected during BuildConstruct — every ThrusterBehavior on the
+        // spawned construct. The boost activation rule in FixedUpdate
+        // walks this list each physics step to decide which input axes
+        // get the ×1.3 thrust multiplier. Same collected-into-a-list
+        // pattern as _spawnedWeapons.
+        readonly List<ThrusterBehavior> _spawnedThrusters = new();
+
         [Header("Linear thrust (Rigidbody.AddForce)")]
         [Tooltip("Force in Newtons applied per FixedUpdate while thrust input is held. Mass affects acceleration: accel = thrustForce / Rigidbody.mass. Starting value tuned for a ~25-mass construct; expect to retune.")]
         [SerializeField] float thrustForce = 100f;
         [Tooltip("Hard cap on Rigidbody.linearVelocity magnitude. Independent of mass — heavy ships just take longer to reach it.")]
         [SerializeField] float maxSpeed = 37.5f;
+
+        [Header("Boost (Thruster cubes — Left Ctrl)")]
+        [Tooltip("Max Boost resource. The 0-100 meter starts each Fly session full at this value.")]
+        [SerializeField] float boostMax = 100f;
+        [Tooltip("Boost drained per second while actively boosting (>=1 thruster contributing).")]
+        [SerializeField] float boostDrainPerSecond = 40f;
+        [Tooltip("Boost regenerated per second when not boosting and not overboosted.")]
+        [SerializeField] float boostRegenPerSecond = 15f;
+        [Tooltip("Boost regenerated per second while overboosted — the slow recovery rate. Overboosted is entered when boost hits 0 and cleared only when boost regenerates all the way back to boostMax.")]
+        [SerializeField] float boostRegenOverboostedPerSecond = 6f;
+        [Tooltip("Per-axis thrust-force multiplier applied to any of the 6 input axes with at least one contributing thruster. Flat — the number of aligned thrusters does not matter.")]
+        [SerializeField] float boostThrustMultiplier = 1.3f;
+        [Tooltip("Max-speed multiplier while actively boosting — the linear-velocity clamp ceiling rises to maxSpeed * this.")]
+        [SerializeField] float boostMaxSpeedMultiplier = 1.3f;
+        [Tooltip("Speed (u/s per second) at which over-cap velocity eases back down to maxSpeed once boosting ends. Tuned so the drop from maxSpeed*boostMaxSpeedMultiplier to maxSpeed reads as quick but not an instant snap — a fraction of a second.")]
+        [SerializeField] float overCapDecaySpeed = 60f;
 
         [Header("Rotation (Rigidbody.AddTorque)")]
         [Tooltip("Pitch torque in Newton-metres applied per FixedUpdate while pitch input is held. Multiplied by the mass-compensation factor below before being applied.")]
@@ -119,7 +142,33 @@ namespace CubeFly.Fly
         float _linearForceFactor = 1f;
         float _torqueFactor = 1f;
 
+        // --- Boost resource state ---
+        // _boost is the 0-100 meter; it starts full at boostMax (set in
+        // Start). _overboosted latches true when _boost hits 0 and
+        // clears only when _boost regenerates all the way back to
+        // boostMax — while latched, boosting is disabled entirely.
+        // _boostingThisFrame is set each FixedUpdate by the activation
+        // rule (Task 5; provisionally in Task 4) — true iff >=1 thruster
+        // is contributing, i.e. the construct is "actively boosting";
+        // it drives drain-vs-regen and the boosted speed clamp.
+        float _boost;
+        bool _overboosted;
+        bool _boostingThisFrame;
+
+        // Sampled in Update from the Boost input action (Left Ctrl),
+        // consumed in FixedUpdate — same Update-samples / FixedUpdate-
+        // applies split as _thrustInput and the rotation inputs.
+        bool _boostHeld;
+
         const string TAG = "FlyController";
+
+        // Boost meter as a 0-1 fraction, for the HUD (FlyBoostBar).
+        public float BoostFraction => boostMax > 0f ? Mathf.Clamp01(_boost / boostMax) : 0f;
+
+        // True while the Boost resource is exhausted and recovering —
+        // boosting is disabled until the meter refills to boostMax.
+        // FlyBoostBar reads this to drive the "Overboosted!" flash.
+        public bool IsOverboosted => _overboosted;
 
         void Awake()
         {
@@ -134,8 +183,10 @@ namespace CubeFly.Fly
         void Start()
         {
             BuildConstruct();
+            // Boost begins each Fly session full (spec §5).
+            _boost = boostMax;
             int total = GameData.PlacedCubes.Count + 1; // +1 for the alpha cube
-            Debug.unityLogger.Log(TAG, $"FlyScene ready. Construct rebuilt: {total} cube(s) (including alpha). Weapons: {_spawnedWeapons.Count}.");
+            Debug.unityLogger.Log(TAG, $"FlyScene ready. Construct rebuilt: {total} cube(s) (including alpha). Weapons: {_spawnedWeapons.Count}. Thrusters: {_spawnedThrusters.Count}.");
             Debug.unityLogger.Log(TAG, $"Construct initial position: {construct.position}");
 
             ResolveRigidbody();
@@ -280,6 +331,17 @@ namespace CubeFly.Fly
                     weapon.Shape = shape;
                     _spawnedWeapons.Add(weapon);
                 }
+
+                // Collect any ThrusterBehavior on this placement — wire
+                // it to the construct so it can express its thrust
+                // direction in the construct's local frame. Same
+                // collected-into-a-list pattern as WeaponBehavior above.
+                ThrusterBehavior thruster = go.GetComponent<ThrusterBehavior>();
+                if (thruster != null)
+                {
+                    thruster.Construct = construct;
+                    _spawnedThrusters.Add(thruster);
+                }
             }
         }
 
@@ -304,11 +366,22 @@ namespace CubeFly.Fly
             _pitchInput  = _input.Fly.Pitch.ReadValue<float>();
             _yawInput    = _input.Fly.Yaw.ReadValue<float>();
             _rollInput   = _input.Fly.Roll.ReadValue<float>();
+            _boostHeld   = _input.Fly.Boost.IsPressed();
         }
 
         void FixedUpdate()
         {
             if (_rb == null) return;
+
+            // --- Boost: evaluate whether the construct is actively
+            // boosting this physics step, then tick the resource.
+            // PROVISIONAL evaluation (Task 4): boost-held + resource
+            // available + any thrust input. Task 5 replaces this with
+            // the real per-thruster, per-axis activation rule. The
+            // drain/regen/overboosted code below is final.
+            bool boostAvailable = _boostHeld && _boost > 0f && !_overboosted;
+            _boostingThisFrame = boostAvailable && _thrustInput.sqrMagnitude > 0f && _spawnedThrusters.Count > 0;
+            TickBoostResource();
 
             // Linear thrust — local-frame input rotated into world frame,
             // then applied as continuous force. ForceMode.Force integrates
@@ -349,6 +422,40 @@ namespace CubeFly.Fly
             // positive local-Z torque; E reverses.
             if (_rollInput != 0f)
                 _rb.AddRelativeTorque(Vector3.forward * (-_rollInput * rollTorque * _torqueFactor), ForceMode.Force);
+        }
+
+        // Ticks the Boost resource each FixedUpdate: drains while
+        // actively boosting, regenerates otherwise, and runs the
+        // overboosted latch. Overboosted is entered the moment boost
+        // hits 0 and cleared only when boost regenerates all the way
+        // back to boostMax — a full recovery is required (spec §5).
+        // _boostingThisFrame is set by the activation rule just above
+        // the call site in FixedUpdate.
+        void TickBoostResource()
+        {
+            float dt = Time.fixedDeltaTime;
+
+            if (_boostingThisFrame)
+            {
+                _boost -= boostDrainPerSecond * dt;
+            }
+            else
+            {
+                float regen = _overboosted ? boostRegenOverboostedPerSecond : boostRegenPerSecond;
+                _boost += regen * dt;
+            }
+
+            _boost = Mathf.Clamp(_boost, 0f, boostMax);
+
+            // Overboosted latch. Enter at 0; exit only at full boostMax.
+            if (!_overboosted)
+            {
+                if (_boost <= 0f) _overboosted = true;
+            }
+            else
+            {
+                if (_boost >= boostMax) _overboosted = false;
+            }
         }
     }
 }

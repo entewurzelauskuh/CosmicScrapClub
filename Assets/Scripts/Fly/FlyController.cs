@@ -373,34 +373,65 @@ namespace CubeFly.Fly
         {
             if (_rb == null) return;
 
-            // --- Boost: evaluate whether the construct is actively
-            // boosting this physics step, then tick the resource.
-            // PROVISIONAL evaluation (Task 4): boost-held + resource
-            // available + any thrust input. Task 5 replaces this with
-            // the real per-thruster, per-axis activation rule. The
-            // drain/regen/overboosted code below is final.
-            bool boostAvailable = _boostHeld && _boost > 0f && !_overboosted;
-            _boostingThisFrame = boostAvailable && _thrustInput.sqrMagnitude > 0f && _spawnedThrusters.Count > 0;
+            // --- Boost: evaluate the per-axis activation rule, tick the
+            // resource, then apply the per-axis ×1.3 to the thrust.
+            // boostAxes.{x,y,z} is 1 when >=1 thruster contributes on
+            // that input axis, else 0 — a flat OR, no stacking.
+            Vector3 boostAxes = EvaluateBoostAxes();
+            _boostingThisFrame = boostAxes.x > 0f || boostAxes.y > 0f || boostAxes.z > 0f;
             TickBoostResource();
 
             // Linear thrust — local-frame input rotated into world frame,
             // then applied as continuous force. ForceMode.Force integrates
             // over dt internally; multiplying by Time.fixedDeltaTime here
             // would double-integrate and is a classic Rigidbody bug.
+            //
+            // Boost: each input axis with a contributing thruster has its
+            // thrust-force component multiplied by boostThrustMultiplier
+            // (×1.3). Flat — boostAxes components are 0 or 1, so the
+            // multiplier never compounds with the count of thrusters.
             if (_thrustInput.sqrMagnitude > 0f)
             {
-                Vector3 worldThrust = construct.right   * _thrustInput.x +
-                                      construct.up      * _thrustInput.y +
-                                      construct.forward * _thrustInput.z;
+                float mulX = boostAxes.x > 0f ? boostThrustMultiplier : 1f;
+                float mulY = boostAxes.y > 0f ? boostThrustMultiplier : 1f;
+                float mulZ = boostAxes.z > 0f ? boostThrustMultiplier : 1f;
+                Vector3 worldThrust = construct.right   * (_thrustInput.x * mulX) +
+                                      construct.up      * (_thrustInput.y * mulY) +
+                                      construct.forward * (_thrustInput.z * mulZ);
                 _rb.AddForce(worldThrust * (thrustForce * _linearForceFactor), ForceMode.Force);
             }
 
-            // Hard speed cap. linearVelocity is the Unity 6 name; pre-6
-            // would be `velocity`. We accept whatever drag has already done
-            // and clamp on top so a long burn doesn't blow past maxSpeed.
+            // Speed cap with Boost. While actively boosting, the ceiling
+            // is maxSpeed * boostMaxSpeedMultiplier (×1.3); otherwise it
+            // is maxSpeed. The hard clamp applies at that *active*
+            // ceiling — a true cap, so thrust can't push past it.
+            //
+            // Post-boost over-cap decay: when boosting has just ended,
+            // speed may still sit above maxSpeed. We don't hard-snap it
+            // down — we ease it toward maxSpeed at overCapDecaySpeed
+            // (u/s per second), a fast but non-instant drop. The hard
+            // clamp (above) and the decay coexist: the clamp stops new
+            // overshoot at the active ceiling, the decay bleeds off
+            // existing over-cap speed once the ceiling has dropped.
+            float speedCeiling = _boostingThisFrame
+                ? maxSpeed * boostMaxSpeedMultiplier
+                : maxSpeed;
+
             Vector3 v = _rb.linearVelocity;
-            if (v.sqrMagnitude > maxSpeed * maxSpeed)
-                _rb.linearVelocity = v.normalized * maxSpeed;
+            float speed = v.magnitude;
+
+            if (speed > speedCeiling)
+            {
+                // Hard clamp at the active ceiling.
+                _rb.linearVelocity = v * (speedCeiling / speed);
+            }
+            else if (!_boostingThisFrame && speed > maxSpeed)
+            {
+                // Not boosting, still over the normal cap (boost just
+                // ended) — ease down toward maxSpeed, don't snap.
+                float decayed = Mathf.MoveTowards(speed, maxSpeed, overCapDecaySpeed * Time.fixedDeltaTime);
+                _rb.linearVelocity = v * (decayed / speed);
+            }
 
             // Rotation: torque is scaled by `_torqueFactor`, which folds
             // in the ship-class movement multiplier, the inertia
@@ -456,6 +487,47 @@ namespace CubeFly.Fly
             {
                 if (_boost >= boostMax) _overboosted = false;
             }
+        }
+
+        // Evaluates the boost activation rule (spec §6.2) and returns a
+        // per-axis mask: component = 1 when >=1 thruster contributes on
+        // that input axis this FixedUpdate, else 0. A thruster
+        // contributes iff ALL THREE hold:
+        //   (1) Left Ctrl is held;
+        //   (2) the Boost resource is >0 and not overboosted;
+        //   (3) the player is commanding thrust along the thruster's
+        //       axis — the matching _thrustInput component is non-zero
+        //       and the SAME SIGN as the thruster's thrust direction.
+        // _thrustInput and ThrusterBehavior.LocalThrustAxis are both in
+        // the construct's local frame, so condition (3) is a direct
+        // per-component sign match. The mask is a flat OR — a second
+        // aligned thruster does not push a component past 1 (no
+        // stacking, spec §6.3).
+        Vector3 EvaluateBoostAxes()
+        {
+            Vector3 axes = Vector3.zero;
+
+            // Conditions (1) and (2) are global — fail them and no
+            // thruster can contribute, so skip the per-thruster walk.
+            if (!_boostHeld || _boost <= 0f || _overboosted) return axes;
+
+            for (int i = 0; i < _spawnedThrusters.Count; i++)
+            {
+                ThrusterBehavior thruster = _spawnedThrusters[i];
+                if (thruster == null) continue;
+
+                Vector3 dir = thruster.LocalThrustAxis;
+
+                // Condition (3), per axis: input non-zero AND same sign
+                // as the thrust direction. dir is snapped to a unit
+                // axis so exactly one component is non-zero; the
+                // products below isolate that axis.
+                if (dir.x != 0f && _thrustInput.x * dir.x > 0f) axes.x = 1f;
+                if (dir.y != 0f && _thrustInput.y * dir.y > 0f) axes.y = 1f;
+                if (dir.z != 0f && _thrustInput.z * dir.z > 0f) axes.z = 1f;
+            }
+
+            return axes;
         }
     }
 }

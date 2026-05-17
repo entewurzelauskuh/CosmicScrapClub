@@ -28,14 +28,15 @@ namespace CubeFly.Desert
         public Mesh BuildMesh()
         {
             int n = Mathf.Max(2, resolution);
+            float extent = Mathf.Max(1f, size);
             int verts = n + 1;
             var mesh = new Mesh { name = "DesertGround" };
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
             var positions = new Vector3[verts * verts];
             var uvs = new Vector2[verts * verts];
-            float step = size / n;
-            float half = size * 0.5f;
+            float step = extent / n;
+            float half = extent * 0.5f;
 
             var rng = new System.Random(seed);
             Vector2 swellOff  = new Vector2((float)rng.NextDouble() * 1000f, (float)rng.NextDouble() * 1000f);

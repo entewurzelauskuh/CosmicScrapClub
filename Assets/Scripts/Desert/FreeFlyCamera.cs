@@ -20,7 +20,7 @@ namespace CubeFly.Desert
         {
             Vector3 e = transform.eulerAngles;
             _yaw = e.y;
-            _pitch = e.x;
+            _pitch = e.x > 180f ? e.x - 360f : e.x;
         }
 
         void Update()
@@ -49,7 +49,7 @@ namespace CubeFly.Desert
             if (kb.qKey.isPressed) world += Vector3.down;
 
             float speed = moveSpeed * (kb.leftShiftKey.isPressed ? boostMultiplier : 1f);
-            Vector3 move = transform.TransformDirection(local.normalized) + world.normalized;
+            Vector3 move = (transform.TransformDirection(local) + world).normalized;
             transform.position += move * speed * Time.deltaTime;
         }
     }

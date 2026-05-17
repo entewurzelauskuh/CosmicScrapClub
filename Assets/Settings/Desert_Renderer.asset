@@ -16,7 +16,7 @@ MonoBehaviour:
   settings:
     edgeDetectShader: {fileID: 4800000, guid: db5750342746149f79ae7001958b7e1c, type: 3}
     outlineColor: {r: 0, g: 0, b: 0, a: 1}
-    thickness: 3
+    thickness: 1.5
     depthThreshold: 0.4
     normalThreshold: 0.3
     injectionPoint: 550

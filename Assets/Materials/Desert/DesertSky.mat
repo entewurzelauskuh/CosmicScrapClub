@@ -7,12 +7,11 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Limestone
-  m_Shader: {fileID: 4800000, guid: d7223cec705274952885eebf8564d8ad, type: 3}
+  m_Name: DesertSky
+  m_Shader: {fileID: 4800000, guid: 3021ceda059e04555a84b6369fec8416, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _STRATA_ON
+  m_ValidKeywords: []
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -26,17 +25,15 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _Bands: 3
-    - _MinLight: 0.3
-    - _StrataOn: 1
-    - _StrataScale: 0.1
-    - _StrataStrength: 0.45
-    - _StrataWarp: 2.5
-    - _TwoToneScale: 0.045
-    - _TwoToneStrength: 0.28
+    - _HorizonExponent: 3
+    - _SkyExponent: 1.4
+    - _SunHaloPower: 48
+    - _SunHaloStrength: 0.25
+    - _SunSize: 0.012
     m_Colors:
-    - _BaseColor: {r: 0.8, g: 0.75, b: 0.62, a: 1}
-    - _StrataColor: {r: 0.5, g: 0.36, b: 0.24, a: 1}
-    - _TwoToneColor: {r: 0.62, g: 0.56, b: 0.45, a: 1}
+    - _GroundColor: {r: 0.52, g: 0.4, b: 0.3, a: 1}
+    - _HorizonColor: {r: 0.93, g: 0.82, b: 0.62, a: 1}
+    - _SkyColor: {r: 0.42, g: 0.55, b: 0.72, a: 1}
+    - _SunColor: {r: 1.9, g: 1.7, b: 1.3, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

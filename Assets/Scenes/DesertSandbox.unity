@@ -11817,6 +11817,7 @@ GameObject:
   - component: {fileID: 1508937134}
   - component: {fileID: 1508937133}
   - component: {fileID: 1508937136}
+  - component: {fileID: 1508937137}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -11942,6 +11943,21 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!114 &1508937137
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1508937132}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0d26b320ed4b45868958135a3b8d606, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Desert.FreeFlyCamera
+  moveSpeed: 35
+  boostMultiplier: 3
+  lookSensitivity: 0.12
 --- !u!1 &1578969277
 GameObject:
   m_ObjectHideFlags: 0

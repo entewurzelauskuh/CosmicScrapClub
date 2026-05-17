@@ -24,23 +24,16 @@ Read [`cube_fly_spec.md`](cube_fly_spec.md) for the canonical product spec and [
 - Crash damage — kinetic, armour-bypassing damage on collision via `CubeStats.TakeRawDamage`. Player ship cubes can now actually die.
 - End-of-run condition — alpha cube at 0 HP shows a "Construct Destroyed" overlay and returns to the main menu. Closes the Combat & Damage Model section.
 - Rigidbody-driven construct — the construct is now a non-kinematic `Rigidbody` compound body. Physics-based flight (`AddForce` / `AddTorque`), real bouncing off the ground and world cubes, `OnCollisionEnter`-based crash damage charged to the contact-point cube. Adaptive third-person camera. Speed + HP HUD readouts.
+- Ship classes — Allrounder / Tank / Scout, chosen via a dropdown in BuildScene and stored per save slot. Each class sets the alpha cube's HP, the build mass cap, and a movement multiplier (`ShipClass` / `ShipClasses`).
+- Minimum responsiveness floor — above `maxResponsivenessMass`, applied thrust and torque scale up by `mass / cap`, so linear acceleration and turn rate flatten out instead of falling toward zero and the heaviest Tank build still flies (`FlyController.ResolveRigidbody`).
 
 ---
 
 ## Up Next
 
-In running order. The combat-damage loop and the Rigidbody foundation are done; from here it's ship variety, then the Power & Energy block, then the energy weapon.
+In running order. Ship classes, the combat-damage loop and the Rigidbody foundation are done; from here it's the thruster cube, then the Power & Energy block, then the energy weapon.
 
 ### Flight & Movement
-
-- **Ship classes** — pick one when you create a new slot in HangarSelect. Three classes to start:
-  - **Allrounder** — the current defaults.
-  - **Tank** — higher alpha cube HP, higher mass cap (~200?), proportionally lower base movement responsiveness.
-  - **Scout** — lower alpha cube HP, lower mass cap (~60?), higher base movement responsiveness.
-
-  Stored as part of the save slot metadata so the chosen class survives Hangar ↔ Fly transitions and reloads.
-
-- **Minimum responsiveness floor** — post-Rigidbody, "responsiveness" is now `thrustForce / rb.mass` for linear and `torque · mass^rotationMassCompensation / inertiaTensor` for rotation. Once Tank class lifts the mass cap well above 100, a max-out tank build could become a near-immovable brick. Need an explicit floor — likely an effective-mass cap in the force calculation, or a minimum-acceleration guarantee — so the heaviest possible build still flies. The `maxAngularSpeed` cap added in the Rigidbody refactor already covers the *upper* bound on light ships; this is the matching *lower* bound for heavy ones.
 
 - **Thruster cube** — a non-weapon subsystem. **Boosts acceleration in the direction opposite its placement face** (the convention matches the cylinder weapon: the placement face is what attaches to the construct, the opposite face is the "boost face"). So placing a thruster on the back of the ship with the placement face pointing forward gives you a *frontal* boost. Stacks per-direction: more thrusters facing the same way = faster acceleration toward that direction. Doesn't change `maxSpeed`, only how quickly the ship reaches it. Post-Rigidbody refactor, this just adds force in the boost direction.
 

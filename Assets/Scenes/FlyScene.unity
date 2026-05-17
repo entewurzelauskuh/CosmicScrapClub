@@ -293,6 +293,13 @@ MonoBehaviour:
   shootingController: {fileID: 300003}
   thrustForce: 100
   maxSpeed: 37.5
+  boostMax: 100
+  boostDrainPerSecond: 40
+  boostRegenPerSecond: 15
+  boostRegenOverboostedPerSecond: 6
+  boostThrustMultiplier: 1.3
+  boostMaxSpeedMultiplier: 1.3
+  overCapDecaySpeed: 60
   pitchTorque: 30
   yawTorque: 30
   rollTorque: 30
@@ -634,6 +641,7 @@ GameObject:
   - component: {fileID: 700003}
   - component: {fileID: 700004}
   - component: {fileID: 700005}
+  - component: {fileID: 700006}
   m_Layer: 0
   m_Name: FlyHUD
   m_TagString: Untagged
@@ -728,6 +736,29 @@ MonoBehaviour:
   anchoredPosition: {x: 20, y: 60}
   size: {x: 280, y: 40}
   fontSize: 22
+--- !u!114 &700006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7fef5286470e44c8a6398580c22ef1d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.FlyBoostBar
+  flyController: {fileID: 0}
+  anchoredPosition: {x: -90, y: 0}
+  barSize: {x: 12, y: 120}
+  fillColor: {r: 0.36, g: 0.62, b: 1, a: 1}
+  frameColor: {r: 0.05, g: 0.07, b: 0.12, a: 1}
+  flashAnchoredPosition: {x: 0, y: 70}
+  flashFontSize: 26
+  flashColor: {r: 1, g: 0.45, b: 0.3, a: 1}
+  flashCount: 3
+  flashOnSeconds: 0.18
+  flashOffSeconds: 0.12
 --- !u!1001 &29337581
 PrefabInstance:
   m_ObjectHideFlags: 0

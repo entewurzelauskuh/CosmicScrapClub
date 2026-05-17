@@ -80,7 +80,14 @@ namespace CubeFly.Input
             // IsPressed() each frame; per-weapon reload throttles the rate.
             InputAction fire = _flyMap.AddAction("Fire", InputActionType.Button, "<Mouse>/leftButton");
 
-            Fly = new FlyActions(_flyMap, thrust, pitch, yaw, roll, look, lookHeld, fire);
+            // Boost: Left Ctrl. Held-down semantics — FlyController polls
+            // IsPressed() each FixedUpdate; the boost only actually fires
+            // a thruster when the player is also commanding thrust along
+            // that thruster's push axis (see ThrusterBehavior / the
+            // FixedUpdate activation rule).
+            InputAction boost = _flyMap.AddAction("Boost", InputActionType.Button, "<Keyboard>/leftCtrl");
+
+            Fly = new FlyActions(_flyMap, thrust, pitch, yaw, roll, look, lookHeld, fire, boost);
         }
 
         public void Dispose()
@@ -119,11 +126,12 @@ namespace CubeFly.Input
             public InputAction Look     { get; }
             public InputAction LookHeld { get; }
             public InputAction Fire     { get; }
+            public InputAction Boost    { get; }
 
             public FlyActions(InputActionMap map,
                 InputAction thrust, InputAction pitch, InputAction yaw,
                 InputAction roll, InputAction look, InputAction lookHeld,
-                InputAction fire)
+                InputAction fire, InputAction boost)
             {
                 _map     = map;
                 Thrust   = thrust;
@@ -133,6 +141,7 @@ namespace CubeFly.Input
                 Look     = look;
                 LookHeld = lookHeld;
                 Fire     = fire;
+                Boost    = boost;
             }
 
             public void Enable() => _map.Enable();

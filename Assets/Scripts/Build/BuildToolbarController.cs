@@ -719,8 +719,9 @@ namespace CubeFly.Build
         {
             switch (category)
             {
-                case ShapeCategory.Weapon: return weaponsButtonLabel;
-                default:                   return category.ToString();
+                case ShapeCategory.Weapon:  return weaponsButtonLabel;
+                case ShapeCategory.Utility: return "Utilities";
+                default:                    return category.ToString();
             }
         }
 
@@ -865,9 +866,10 @@ namespace CubeFly.Build
             ShapeRegistry shapes = buildManager.Shapes;
             MaterialRegistry mats = buildManager.Materials;
             ShapeDefinition shape = shapes != null ? shapes.Get(buildManager.CurrentShapeIndex) : null;
-            // ResolveMaterial picks coupled weaponMaterial for weapons;
-            // registry-indexed MaterialDefinition for armour. Single
-            // call site keeps the format string symmetric.
+            // ResolveMaterial picks the coupled coupledMaterial for
+            // non-armour shapes; registry-indexed MaterialDefinition
+            // for armour. Single call site keeps the format string
+            // symmetric.
             MaterialDefinition mat = shape != null
                 ? shape.ResolveMaterial(buildManager.CurrentMaterialIndex, mats)
                 : null;

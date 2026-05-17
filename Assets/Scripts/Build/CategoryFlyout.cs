@@ -183,7 +183,7 @@ namespace CubeFly.Build
             {
                 int shapeIndex = _shapeIndices[e];
                 ShapeDefinition shape = _buildManager.Shapes.Get(shapeIndex);
-                MaterialDefinition wmat = shape != null ? shape.weaponMaterial : null;
+                MaterialDefinition wmat = shape != null ? shape.coupledMaterial : null;
                 string title = shape != null ? shape.displayName : $"Shape #{shapeIndex}";
                 string statLine = wmat != null
                     ? $"HP {wmat.healthPoints:F0}  ·  AV {wmat.armourValue:F0}  ·  M {wmat.mass:F1}"
@@ -272,7 +272,7 @@ namespace CubeFly.Build
             int swatchShape = ContainsShape(activeIdx) ? activeIdx : _lastArmedShapeIndex;
 
             ShapeDefinition shape = _buildManager.Shapes.Get(swatchShape);
-            MaterialDefinition wmat = shape != null ? shape.weaponMaterial : null;
+            MaterialDefinition wmat = shape != null ? shape.coupledMaterial : null;
             _swatch.color = wmat != null ? wmat.SwatchColor : Color.gray;
         }
 

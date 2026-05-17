@@ -6,20 +6,23 @@ namespace CubeFly.Core
     // (Cube, Slope) pull their material from the MaterialRegistry's
     // A/B/C/D pool, with the per-shape memory dict in BuildManager
     // remembering each shape's last-armed choice. Weapon shapes
-    // (Pyramid, future) are 1:1 coupled with their own dedicated
-    // MaterialDefinition referenced by `weaponMaterial`; the regular
-    // material flyout is suppressed for them.
+    // (Pyramid, Cylinder) and Utility shapes (Thruster) are 1:1
+    // coupled with their own dedicated MaterialDefinition referenced
+    // by `coupledMaterial`; the regular material flyout is suppressed
+    // for them. Utility is the non-armour, non-weapon category — the
+    // Thruster is its first member.
     public enum ShapeCategory
     {
         Armour,
         Weapon,
+        Utility,
     }
 
     // One placeable shape — geometry + collider only. For armour
     // shapes, stats / colour / gameplay identity come from the chosen
-    // MaterialDefinition at spawn time. For weapon shapes, the
-    // MaterialDefinition is fixed (`weaponMaterial`) and the toolbar
-    // doesn't offer alternatives.
+    // MaterialDefinition at spawn time. For weapon and utility shapes,
+    // the MaterialDefinition is fixed (`coupledMaterial`) and the
+    // toolbar doesn't offer alternatives.
     [CreateAssetMenu(fileName = "Shape", menuName = "CubeFly/Shape")]
     public class ShapeDefinition : ScriptableObject
     {
@@ -29,11 +32,12 @@ namespace CubeFly.Core
         [Tooltip("Prefab spawned for this shape. Must carry a CubeStats and a 1×1×1 collider so adjacency/face-detection works in the cell-based grid. The MaterialDefinition supplies the renderer material and stat values at spawn.")]
         public GameObject prefab;
 
-        [Tooltip("Armour shapes use the MaterialRegistry's A/B/C/D pool. Weapon shapes use their own coupled `weaponMaterial`.")]
+        [Tooltip("Armour shapes use the MaterialRegistry's A/B/C/D pool. Weapon and Utility shapes use their own coupled `coupledMaterial`.")]
         public ShapeCategory category = ShapeCategory.Armour;
 
-        [Tooltip("Material applied at spawn time when category == Weapon. Ignored for armour shapes (the chosen MaterialDefinition from MaterialRegistry is used instead).")]
-        public MaterialDefinition weaponMaterial;
+        [Tooltip("Material applied at spawn time for non-armour shapes (Weapon, Utility). Ignored for armour shapes (the chosen MaterialDefinition from MaterialRegistry is used instead).")]
+        [UnityEngine.Serialization.FormerlySerializedAs("weaponMaterial")]
+        public MaterialDefinition coupledMaterial;
 
         // ---------- Valid attachment faces ----------
         //
@@ -93,16 +97,28 @@ namespace CubeFly.Core
 
         // Resolves the MaterialDefinition that should be applied to a
         // placement of this shape. Armour shapes consult the supplied
-        // registry by index; weapon shapes ignore the registry and
-        // return their coupled `weaponMaterial`. Returns null when
-        // either the registry is missing or the index is out of range
-        // (armour) / weaponMaterial is unassigned (weapon).
+        // registry by index; non-armour shapes (Weapon, Utility)
+        // ignore the registry and return their coupled
+        // `coupledMaterial`. Returns null when either the registry is
+        // missing or the index is out of range (armour) /
+        // coupledMaterial is unassigned (non-armour).
         public MaterialDefinition ResolveMaterial(int materialIndex, MaterialRegistry materialRegistry)
         {
-            if (category == ShapeCategory.Weapon) return weaponMaterial;
+            if (category != ShapeCategory.Armour) return coupledMaterial;
             return materialRegistry != null ? materialRegistry.Get(materialIndex) : null;
         }
 
+        // Category == Weapon. Kept for the toolbar's weapon-specific
+        // readout ("(Weapon)" label) and any weapon-only gameplay.
         public bool IsWeapon => category == ShapeCategory.Weapon;
+
+        // Category == Armour — pulls its material from MaterialRegistry.
+        public bool IsArmour => category == ShapeCategory.Armour;
+
+        // Category != Armour (Weapon or Utility) — uses the coupled
+        // `coupledMaterial` instead of the MaterialRegistry pool. The
+        // toolbar (non-armour category flyouts) and the save layer
+        // group on this rather than on IsWeapon.
+        public bool UsesCoupledMaterial => category != ShapeCategory.Armour;
     }
 }

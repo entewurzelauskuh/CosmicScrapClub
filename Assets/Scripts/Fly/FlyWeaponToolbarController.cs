@@ -140,8 +140,8 @@ namespace CubeFly.Fly
                 WeaponTypeGroup group = shootingController.Types[i];
                 ShapeDefinition shape = group.Shape;
                 string label = shape != null ? shape.displayName : $"Weapon #{i}";
-                Color swatchColor = (shape != null && shape.weaponMaterial != null)
-                    ? shape.weaponMaterial.SwatchColor
+                Color swatchColor = (shape != null && shape.coupledMaterial != null)
+                    ? shape.coupledMaterial.SwatchColor
                     : Color.gray;
 
                 // ---- Button ----

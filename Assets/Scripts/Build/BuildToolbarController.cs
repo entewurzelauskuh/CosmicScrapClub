@@ -202,8 +202,8 @@ namespace CubeFly.Build
                 ShapeDefinition activeShape = buildManager.Shapes != null
                     ? buildManager.Shapes.Get(buildManager.CurrentShapeIndex)
                     : null;
-                bool weaponActive = activeShape != null && activeShape.IsWeapon;
-                if (!weaponActive)
+                bool nonArmourActive = activeShape != null && activeShape.UsesCoupledMaterial;
+                if (!nonArmourActive)
                 {
                     int matCount = buildManager.Materials != null ? buildManager.Materials.Count : 0;
                     int matMax = Mathf.Min(DigitKeys.Length, matCount);
@@ -369,7 +369,8 @@ namespace CubeFly.Build
                 string label = CategoryButtonLabel(category);
                 float anchoredX = startX + slot * (buttonSize.x + spacing);
 
-                CategoryFlyout flyout = new CategoryFlyout(
+                CategoryFlyout flyout = null;
+                flyout = new CategoryFlyout(
                     buildManager,
                     this,
                     indices,
@@ -384,8 +385,8 @@ namespace CubeFly.Build
                     hoverPeekDelay,
                     BuildCornerSwatch,
                     BuildEntrySwatch,
-                    () => CloseFlyoutsExcept(null),
-                    () => AnyOtherFlyoutPinned(null));
+                    () => CloseFlyoutsExcept(flyout),
+                    () => AnyOtherFlyoutPinned(flyout));
                 flyout.BuildButton(root, anchoredX);
                 flyout.BuildFlyout(root);
                 _categoryFlyouts.Add(flyout);
@@ -676,10 +677,9 @@ namespace CubeFly.Build
 
         // Mutual-exclusion helper passed to each CategoryFlyout as its
         // `closeOthers` action: close the material flyout and every
-        // category flyout other than `keep` (pass null to close them
-        // all). A flyout never needs to close itself, so passing the
-        // caller as `keep` is harmless — Hide() on an already-shown
-        // flyout that is about to re-open is a no-op-then-reopen.
+        // category flyout other than `keep`. Each CategoryFlyout passes
+        // itself as `keep`, so opening it closes the others without
+        // closing-and-reopening itself.
         void CloseFlyoutsExcept(CategoryFlyout keep)
         {
             if (_flyout != null && _flyout.activeSelf) HideFlyout();
@@ -719,8 +719,9 @@ namespace CubeFly.Build
         {
             switch (category)
             {
-                case ShapeCategory.Weapon: return weaponsButtonLabel;
-                default:                   return category.ToString();
+                case ShapeCategory.Weapon:  return weaponsButtonLabel;
+                case ShapeCategory.Utility: return "Utilities";
+                default:                    return category.ToString();
             }
         }
 
@@ -865,9 +866,10 @@ namespace CubeFly.Build
             ShapeRegistry shapes = buildManager.Shapes;
             MaterialRegistry mats = buildManager.Materials;
             ShapeDefinition shape = shapes != null ? shapes.Get(buildManager.CurrentShapeIndex) : null;
-            // ResolveMaterial picks coupled weaponMaterial for weapons;
-            // registry-indexed MaterialDefinition for armour. Single
-            // call site keeps the format string symmetric.
+            // ResolveMaterial picks the coupled coupledMaterial for
+            // non-armour shapes; registry-indexed MaterialDefinition
+            // for armour. Single call site keeps the format string
+            // symmetric.
             MaterialDefinition mat = shape != null
                 ? shape.ResolveMaterial(buildManager.CurrentMaterialIndex, mats)
                 : null;
@@ -877,10 +879,10 @@ namespace CubeFly.Build
             float av   = mat != null ? mat.armourValue  : 0f;
             float mass = mat != null ? mat.mass         : 0f;
 
-            if (shape != null && shape.IsWeapon)
+            if (shape != null && shape.UsesCoupledMaterial)
             {
                 _selectedStatsLabel.text =
-                    $"Selected: {sname} (Weapon)\nHP: {hp:F0}    AV: {av:F0}    Mass: {mass:F1}";
+                    $"Selected: {sname} ({shape.category})\nHP: {hp:F0}    AV: {av:F0}    Mass: {mass:F1}";
             }
             else
             {

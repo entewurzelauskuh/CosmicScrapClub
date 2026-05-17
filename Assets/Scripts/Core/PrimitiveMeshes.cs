@@ -10,6 +10,7 @@ namespace CubeFly.Core
         static Mesh _triangularPrism;
         static Mesh _squarePyramid;
         static Mesh _hollowCylinder;
+        static Mesh _cone;
 
         // 1×1×1 right-triangular prism centred at the origin. The
         // hypotenuse (slope) runs from the front-bottom edge to the
@@ -232,6 +233,84 @@ namespace CubeFly.Core
             }
 
             Mesh m = new Mesh { name = "HollowCylinder" };
+            m.vertices = verts;
+            m.triangles = tris;
+            m.RecalculateNormals();
+            m.RecalculateBounds();
+            return m;
+        }
+
+        // 1×1×1 circular-base cone. Base circle at y=-0.5 radius 0.5
+        // (fills the cell horizontally), apex at y=+0.5. The base is
+        // the only valid attachment face per ShapeUtilityThruster —
+        // it is the cone's placement face; the apex is the exhaust
+        // nozzle. Designed to fully occupy one grid cell so the
+        // cell-graph adjacency / face-detection raycasts behave the
+        // same as for cubes, slopes and pyramids. Triangle windings
+        // produce outward-facing normals in Unity's left-handed
+        // CW-front convention; verified analytically at theta=0. The
+        // base ring and the side ring are separate vertex copies so
+        // RecalculateNormals gives the base a flat -Y normal and each
+        // side triangle its own outward normal (no smoothing across
+        // the base-to-side seam).
+        public static Mesh Cone
+        {
+            get
+            {
+                if (_cone == null) _cone = BuildCone();
+                return _cone;
+            }
+        }
+
+        static Mesh BuildCone()
+        {
+            const int N = 24;          // segments around the circumference
+            const float h = 0.5f;      // half-height (fills the unit cell)
+            const float r = 0.5f;      // base radius (matches cube half-width)
+
+            // Vertex layout (2N + 2 total):
+            //   [0]            base centre              (flat -Y)
+            //   [1 .. N]       base rim ring            (flat -Y)
+            //   [N+1 .. 2N]    side rim ring (a copy)   (outward radial)
+            //   [2N+1]         apex                     (outward radial)
+            Vector3[] verts = new Vector3[2 * N + 2];
+            verts[0] = new Vector3(0f, -h, 0f);          // base centre
+            verts[2 * N + 1] = new Vector3(0f, h, 0f);   // apex
+
+            for (int i = 0; i < N; i++)
+            {
+                float theta = i * (2f * Mathf.PI / N);
+                Vector3 rim = new Vector3(r * Mathf.Cos(theta), -h, r * Mathf.Sin(theta));
+                verts[1 + i]     = rim;   // base rim copy
+                verts[N + 1 + i] = rim;   // side rim copy
+            }
+
+            // Base fan: N triangles, each (centre, rim[i], rim[i+1]).
+            // Side: N triangles, each (rim[i], apex, rim[i+1]).
+            // 3 indices per triangle x 2N triangles = 6N indices.
+            int[] tris = new int[6 * N];
+            int t = 0;
+            for (int i = 0; i < N; i++)
+            {
+                int j = (i + 1) % N;
+
+                // Base triangle — normal -Y. Winding (centre, rim[i],
+                // rim[i+1]); verified at theta=0 the cross product
+                // (rim[0]-centre) x (rim[1]-centre) points -Y.
+                tris[t++] = 0;
+                tris[t++] = 1 + i;
+                tris[t++] = 1 + j;
+
+                // Side triangle — outward radial normal. Winding
+                // (rim[i], apex, rim[i+1]); verified at theta=0 the
+                // cross product (apex-rim[0]) x (rim[1]-rim[0]) points
+                // +X on the +X side of the cone.
+                tris[t++] = N + 1 + i;
+                tris[t++] = 2 * N + 1;
+                tris[t++] = N + 1 + j;
+            }
+
+            Mesh m = new Mesh { name = "Cone" };
             m.vertices = verts;
             m.triangles = tris;
             m.RecalculateNormals();

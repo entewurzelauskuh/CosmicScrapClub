@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1b2a4f1c8e3a4d6db5f1eecf4a0a1b01, type: 3}
-  m_Name: ShapeWeaponPyramid
-  m_EditorClassIdentifier: 
-  displayName: Pyramid
-  prefab: {fileID: 7800000, guid: c2c2c2c2000000300000000000000030, type: 3}
-  category: 1
-  coupledMaterial: {fileID: 11400000, guid: 2b2a4f1c8e3a4d6db5f1eecf4a0a2c21, type: 2}
+  m_Name: ShapeUtilityThruster
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Core.ShapeDefinition
+  displayName: Thruster
+  prefab: {fileID: 1538907889469750075, guid: 7782fd3b172534997afc22da42479533, type: 3}
+  category: 2
+  coupledMaterial: {fileID: 11400000, guid: 7a2a2baa7dc8c45dca6ceaaaff265214, type: 2}
   faceNegX: 0
   facePosX: 0
   faceNegY: 1

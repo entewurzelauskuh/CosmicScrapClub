@@ -112,23 +112,12 @@ namespace CubeFly.Build
         Coroutine _peekRoutine;
         RectTransform _canvasRect;
 
-        // Weapons UI state — single toolbar button + dedicated flyout.
-        // Built only when the ShapeRegistry contains at least one
-        // shape with category == Weapon. The Weapons button replaces
-        // the per-shape buttons that armour shapes get.
-        Button _weaponsButton;
-        Image _weaponsBackground;
-        Image _weaponsSwatch;
-        int[] _weaponShapeIndices;        // shape indices (into ShapeRegistry) of every weapon
-        GameObject _weaponsFlyout;
-        CanvasGroup _weaponsFlyoutGroup;
-        Button[] _weaponsFlyoutButtons;
-        Image[] _weaponsFlyoutBackgrounds;
-        bool _weaponsFlyoutPinned;
-        Coroutine _weaponsPeekRoutine;
-        // Last-armed weapon — drives the Weapons button's swatch when
-        // an armour shape is active. Defaults to the first weapon.
-        int _lastArmedWeaponIndex = -1;
+        // Non-armour categories — one CategoryFlyout per category that
+        // the ShapeRegistry contains (Weapons today; Utilities lands in
+        // a later PR as a data-only addition). Each owns its toolbar
+        // button + swatch, its flyout, and its peek/pin/last-armed
+        // state. Empty when the registry has no non-armour shapes.
+        readonly List<CategoryFlyout> _categoryFlyouts = new List<CategoryFlyout>();
 
         static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
         static readonly Color FlyoutEntryIdle   = new Color(0.18f, 0.18f, 0.22f, 0.95f);
@@ -181,8 +170,8 @@ namespace CubeFly.Build
             // Keyboard shortcuts:
             //   • Digits 1..9 (no modifier) → arm armour shape by
             //     toolbar slot order (the on-screen order, not the
-            //     ShapeRegistry index). Weapons are reachable only
-            //     through the Weapons flyout.
+            //     ShapeRegistry index). Non-armour shapes are reachable
+            //     only through their category flyout.
             //   • Shift+Digit1..9 → set the active armour shape's
             //     material by registry index.
             // Letter keys are avoided to keep R/T (rotation) and any
@@ -209,7 +198,7 @@ namespace CubeFly.Build
             else if (shift)
             {
                 // Shift+digit only meaningful while an armour shape is
-                // active — weapons have no material choice.
+                // active — non-armour shapes have no material choice.
                 ShapeDefinition activeShape = buildManager.Shapes != null
                     ? buildManager.Shapes.Get(buildManager.CurrentShapeIndex)
                     : null;
@@ -232,18 +221,14 @@ namespace CubeFly.Build
 
             if (kb.mKey.wasPressedThisFrame)
             {
-                // For weapons, M toggles the weapons flyout; for
-                // armour shapes it toggles the per-shape material
-                // flyout (existing behaviour).
-                ShapeDefinition activeShape = buildManager.Shapes != null
-                    ? buildManager.Shapes.Get(buildManager.CurrentShapeIndex)
-                    : null;
-                if (activeShape != null && activeShape.IsWeapon)
+                // M toggles the flyout of the active shape's category:
+                // the matching CategoryFlyout for a non-armour shape,
+                // the per-shape material flyout for an armour shape.
+                CategoryFlyout activeCategory =
+                    FindCategoryFlyout(buildManager.CurrentShapeIndex);
+                if (activeCategory != null)
                 {
-                    if (_weaponsFlyout != null && _weaponsFlyout.activeSelf && _weaponsFlyoutPinned)
-                        HideWeaponsFlyout();
-                    else
-                        OpenWeaponsFlyout(pin: true);
+                    activeCategory.Toggle();
                 }
                 else
                 {
@@ -263,7 +248,7 @@ namespace CubeFly.Build
                 && (PauseMenu.Instance == null || !PauseMenu.Instance.EscConsumedThisFrame))
             {
                 if (_flyout != null && _flyout.activeSelf) HideFlyout();
-                if (_weaponsFlyout != null && _weaponsFlyout.activeSelf) HideWeaponsFlyout();
+                for (int i = 0; i < _categoryFlyouts.Count; i++) _categoryFlyouts[i].Hide();
             }
         }
 
@@ -293,40 +278,57 @@ namespace CubeFly.Build
             mrt.anchoredPosition = floatingAnchoredPosition;
             mrt.sizeDelta = floatingSize;
 
-            // ---- Shape buttons + Weapons + Delete ----
+            // ---- Shape buttons + category flyouts + Delete ----
             //
             // Toolbar slots, left to right:
             //   • One button per ARMOUR shape (each with a material
             //     flyout via right-click / re-click / hover-peek).
-            //   • One "Weapons" button for ALL weapon shapes
-            //     collectively, with a dedicated weapons flyout. Only
-            //     built when the registry contains at least one weapon.
+            //   • One CategoryFlyout button per non-armour category in
+            //     the registry (Weapons today; Utilities later), each
+            //     collapsing all that category's shapes behind a
+            //     dedicated flyout.
             //   • Delete tool button.
             //
             // _shapeButtons/_shapeSwatches/_shapeBackgrounds remain
             // indexed by ShapeRegistry index for simplicity — entries
-            // for weapon shapes are left null.
+            // for non-armour shapes are left null.
             ShapeRegistry shapes = buildManager.Shapes;
             int totalShapes = shapes != null ? shapes.Count : 0;
             _shapeButtons = new Button[totalShapes];
             _shapeBackgrounds = new Image[totalShapes];
             _shapeSwatches = new Image[totalShapes];
 
+            // Partition the registry into armour shapes and the
+            // non-armour categories. Each non-armour category keeps its
+            // shapes in registry order; categories themselves are
+            // ordered by first appearance in the registry — so Weapons
+            // (and, later, Utilities) slot in deterministically.
             List<int> armourIndices = new List<int>();
-            List<int> weaponIndices = new List<int>();
+            List<ShapeCategory> categoryOrder = new List<ShapeCategory>();
+            Dictionary<ShapeCategory, List<int>> categoryIndices =
+                new Dictionary<ShapeCategory, List<int>>();
             for (int i = 0; i < totalShapes; i++)
             {
                 ShapeDefinition def = shapes.Get(i);
                 if (def == null) continue;
-                if (def.IsWeapon) weaponIndices.Add(i);
-                else              armourIndices.Add(i);
+                if (def.category == ShapeCategory.Armour)
+                {
+                    armourIndices.Add(i);
+                }
+                else
+                {
+                    if (!categoryIndices.TryGetValue(def.category, out List<int> list))
+                    {
+                        list = new List<int>();
+                        categoryIndices.Add(def.category, list);
+                        categoryOrder.Add(def.category);
+                    }
+                    list.Add(i);
+                }
             }
-            _weaponShapeIndices = weaponIndices.ToArray();
             _armourShapeIndices = armourIndices.ToArray();
-            if (_weaponShapeIndices.Length > 0) _lastArmedWeaponIndex = _weaponShapeIndices[0];
 
-            bool hasWeapons = _weaponShapeIndices.Length > 0;
-            int slotCount = armourIndices.Count + (hasWeapons ? 1 : 0) + 1; // +1 for Delete
+            int slotCount = armourIndices.Count + categoryOrder.Count + 1; // +1 for Delete
             float totalWidth = slotCount * buttonSize.x + Mathf.Max(0, slotCount - 1) * spacing;
             float startX = -totalWidth / 2f + buttonSize.x / 2f;
             int slot = 0;
@@ -356,22 +358,37 @@ namespace CubeFly.Build
                 slot++;
             }
 
-            // Weapons button + flyout (one per category, not per weapon).
-            if (hasWeapons)
+            // One CategoryFlyout per non-armour category — its button
+            // takes one slot; its flyout panel is built immediately
+            // after so its anchored-X tracks the button.
+            _categoryFlyouts.Clear();
+            for (int c = 0; c < categoryOrder.Count; c++)
             {
-                (Button wBtn, Text _) = UIStyle.BuildLabeledButton(root, weaponsButtonLabel, buttonSize, fontSize);
-                RectTransform wrt = (RectTransform)wBtn.transform;
-                wrt.anchorMin = wrt.anchorMax = wrt.pivot = new Vector2(0.5f, 0f);
-                wrt.anchoredPosition = new Vector2(startX + slot * (buttonSize.x + spacing), bottomMargin);
+                ShapeCategory category = categoryOrder[c];
+                int[] indices = categoryIndices[category].ToArray();
+                string label = CategoryButtonLabel(category);
+                float anchoredX = startX + slot * (buttonSize.x + spacing);
 
-                wBtn.onClick.AddListener(OnWeaponsButtonClicked);
-                AddWeaponsPointerHandlers(wBtn.gameObject);
-
-                Image wSwatch = BuildCornerSwatch(wrt);
-                _weaponsSwatch = wSwatch;
-
-                _weaponsButton = wBtn;
-                _weaponsBackground = wBtn.GetComponent<Image>();
+                CategoryFlyout flyout = new CategoryFlyout(
+                    buildManager,
+                    this,
+                    indices,
+                    label,
+                    buttonSize,
+                    fontSize,
+                    bottomMargin,
+                    flyoutEntrySize,
+                    flyoutEntrySpacing,
+                    flyoutBottomGap,
+                    peekAlpha,
+                    hoverPeekDelay,
+                    BuildCornerSwatch,
+                    BuildEntrySwatch,
+                    () => CloseFlyoutsExcept(null),
+                    () => AnyOtherFlyoutPinned(null));
+                flyout.BuildButton(root, anchoredX);
+                flyout.BuildFlyout(root);
+                _categoryFlyouts.Add(flyout);
                 slot++;
             }
 
@@ -409,7 +426,6 @@ namespace CubeFly.Build
             selRT.sizeDelta = selectedStatsSize;
 
             BuildFlyout(root);
-            if (hasWeapons) BuildWeaponsFlyout(root);
         }
 
         // ---------- Shape button interactions ----------
@@ -485,7 +501,7 @@ namespace CubeFly.Build
             // deliberate pinned selection just because they hovered
             // a different button.
             if (_flyout != null && _flyout.activeSelf && _flyoutPinned) yield break;
-            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf && _weaponsFlyoutPinned) yield break;
+            if (AnyCategoryFlyoutPinned()) yield break;
             OpenFlyoutForShape(shapeIndex, pin: false);
             _peekRoutine = null;
         }
@@ -564,10 +580,10 @@ namespace CubeFly.Build
             ShapeDefinition def = buildManager.Shapes.Get(shapeIndex);
             if (def == null || def.IsWeapon) return;
 
-            // Mutual exclusion with the weapons flyout — opening one
-            // must close the other so they never visually overlap.
-            // OpenWeaponsFlyout has the symmetric call.
-            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf) HideWeaponsFlyout();
+            // Mutual exclusion with the category flyouts — opening one
+            // must close the others so they never visually overlap.
+            // CategoryFlyout.Open has the symmetric call via closeOthers.
+            CloseAllCategoryFlyouts();
 
             // Capture "is this the same shape as the one currently
             // pinned?" BEFORE overwriting _flyoutOwnerShape, otherwise
@@ -636,189 +652,75 @@ namespace CubeFly.Build
             }
         }
 
-        // ---------- Weapons button + flyout ----------
+        // ---------- Category flyouts (Weapons; Utilities later) ----------
 
-        void OnWeaponsButtonClicked()
+        // The CategoryFlyout that owns `shapeIndex`, or null when the
+        // shape is an armour shape (no category flyout) or out of range.
+        CategoryFlyout FindCategoryFlyout(int shapeIndex)
         {
-            // Toggle the weapons flyout. Unlike the per-shape buttons,
-            // the Weapons button doesn't double as a "switch shape"
-            // shortcut — picking a weapon happens inside the flyout
-            // so the player can see what's available.
-            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf && _weaponsFlyoutPinned)
-                HideWeaponsFlyout();
-            else
-                OpenWeaponsFlyout(pin: true);
-        }
-
-        void AddWeaponsPointerHandlers(GameObject buttonObject)
-        {
-            EventTrigger trigger = buttonObject.AddComponent<EventTrigger>();
-
-            EventTrigger.Entry enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-            enter.callback.AddListener(_ => OnWeaponsButtonHoverEnter());
-            trigger.triggers.Add(enter);
-
-            EventTrigger.Entry exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-            exit.callback.AddListener(_ => OnWeaponsButtonHoverExit());
-            trigger.triggers.Add(exit);
-
-            EventTrigger.Entry click = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-            click.callback.AddListener(data =>
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
             {
-                PointerEventData ped = data as PointerEventData;
-                if (ped == null) return;
-                if (ped.button == PointerEventData.InputButton.Right)
-                    OpenWeaponsFlyout(pin: true);
-            });
-            trigger.triggers.Add(click);
-        }
-
-        void OnWeaponsButtonHoverEnter()
-        {
-            if (_weaponsPeekRoutine != null) StopCoroutine(_weaponsPeekRoutine);
-            _weaponsPeekRoutine = StartCoroutine(WeaponsPeekAfterDelay());
-        }
-
-        void OnWeaponsButtonHoverExit()
-        {
-            if (_weaponsPeekRoutine != null)
-            {
-                StopCoroutine(_weaponsPeekRoutine);
-                _weaponsPeekRoutine = null;
+                if (_categoryFlyouts[i].ContainsShape(shapeIndex))
+                    return _categoryFlyouts[i];
             }
-            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf && !_weaponsFlyoutPinned)
-            {
-                if (!IsPointerOverWeaponsFlyout()) HideWeaponsFlyout();
-            }
+            return null;
         }
 
-        IEnumerator WeaponsPeekAfterDelay()
+        // Hide every category flyout. Used on shape / tool change and as
+        // half of the material-flyout mutual-exclusion.
+        void CloseAllCategoryFlyouts()
         {
-            yield return new WaitForSeconds(hoverPeekDelay);
-            // Don't peek-open if ANY flyout is already pinned —
-            // would unpin the user's selection.
-            if (_weaponsFlyout != null && _weaponsFlyout.activeSelf && _weaponsFlyoutPinned) yield break;
-            if (_flyout != null && _flyout.activeSelf && _flyoutPinned) yield break;
-            OpenWeaponsFlyout(pin: false);
-            _weaponsPeekRoutine = null;
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
+                _categoryFlyouts[i].Hide();
         }
 
-        void BuildWeaponsFlyout(RectTransform canvas)
+        // Mutual-exclusion helper passed to each CategoryFlyout as its
+        // `closeOthers` action: close the material flyout and every
+        // category flyout other than `keep` (pass null to close them
+        // all). A flyout never needs to close itself, so passing the
+        // caller as `keep` is harmless — Hide() on an already-shown
+        // flyout that is about to re-open is a no-op-then-reopen.
+        void CloseFlyoutsExcept(CategoryFlyout keep)
         {
-            int count = _weaponShapeIndices != null ? _weaponShapeIndices.Length : 0;
-            _weaponsFlyoutButtons = new Button[count];
-            _weaponsFlyoutBackgrounds = new Image[count];
-
-            _weaponsFlyout = new GameObject("WeaponsFlyout",
-                typeof(RectTransform), typeof(CanvasGroup));
-            RectTransform frt = (RectTransform)_weaponsFlyout.transform;
-            frt.SetParent(canvas, false);
-            frt.anchorMin = frt.anchorMax = frt.pivot = new Vector2(0.5f, 0f);
-            frt.sizeDelta = new Vector2(
-                flyoutEntrySize.x,
-                count * flyoutEntrySize.y + Mathf.Max(0, count - 1) * flyoutEntrySpacing);
-
-            _weaponsFlyoutGroup = _weaponsFlyout.GetComponent<CanvasGroup>();
-            _weaponsFlyoutGroup.interactable = true;
-            _weaponsFlyoutGroup.blocksRaycasts = true;
-
-            for (int e = 0; e < count; e++)
-            {
-                int shapeIndex = _weaponShapeIndices[e];
-                ShapeDefinition shape = buildManager.Shapes.Get(shapeIndex);
-                MaterialDefinition wmat = shape != null ? shape.weaponMaterial : null;
-                string title = shape != null ? shape.displayName : $"Weapon #{shapeIndex}";
-                string statLine = wmat != null
-                    ? $"HP {wmat.healthPoints:F0}  ·  AV {wmat.armourValue:F0}  ·  M {wmat.mass:F1}"
-                    : "—";
-
-                (Button btn, Text label) = UIStyle.BuildLabeledButton(
-                    frt,
-                    $"{title}\n<size={Mathf.Max(10, fontSize - 8)}>{statLine}</size>",
-                    flyoutEntrySize, fontSize);
-                label.supportRichText = true;
-                label.alignment = TextAnchor.MiddleLeft;
-                RectTransform brt = (RectTransform)btn.transform;
-                brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
-                float y = e * (flyoutEntrySize.y + flyoutEntrySpacing);
-                brt.anchoredPosition = new Vector2(0f, y);
-
-                BuildEntrySwatch(brt, wmat != null ? wmat.SwatchColor : Color.gray);
-
-                int captured = shapeIndex;
-                btn.onClick.AddListener(() => OnWeaponsFlyoutEntryClicked(captured));
-                _weaponsFlyoutButtons[e] = btn;
-                _weaponsFlyoutBackgrounds[e] = btn.GetComponent<Image>();
-            }
-
-            _weaponsFlyout.SetActive(false);
-        }
-
-        void OnWeaponsFlyoutEntryClicked(int shapeIndex)
-        {
-            buildManager.SetCurrentShape(shapeIndex);
-            _lastArmedWeaponIndex = shapeIndex;
-            HideWeaponsFlyout();
-        }
-
-        void OpenWeaponsFlyout(bool pin)
-        {
-            if (_weaponsFlyout == null || _weaponsButton == null) return;
-
-            // Opening one flyout closes the other so they never overlap.
             if (_flyout != null && _flyout.activeSelf) HideFlyout();
-
-            RectTransform wbtnRT = (RectTransform)_weaponsButton.transform;
-            RectTransform frt = (RectTransform)_weaponsFlyout.transform;
-            frt.anchoredPosition = new Vector2(
-                wbtnRT.anchoredPosition.x,
-                bottomMargin + buttonSize.y / 2f + flyoutBottomGap);
-
-            _weaponsFlyout.SetActive(true);
-            _weaponsFlyoutGroup.alpha = pin ? 1f : peekAlpha;
-            _weaponsFlyoutGroup.blocksRaycasts = pin;
-            _weaponsFlyoutPinned = pin;
-            RefreshWeaponsFlyoutEntryHighlights();
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
+            {
+                if (_categoryFlyouts[i] == keep) continue;
+                _categoryFlyouts[i].Hide();
+            }
         }
 
-        void HideWeaponsFlyout()
+        // True when at least one category flyout is currently pinned.
+        bool AnyCategoryFlyoutPinned()
         {
-            if (_weaponsFlyout == null || !_weaponsFlyout.activeSelf) return;
-            _weaponsFlyout.SetActive(false);
-            _weaponsFlyoutPinned = false;
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
+                if (_categoryFlyouts[i].IsPinned) return true;
+            return false;
         }
 
-        bool IsPointerOverWeaponsFlyout()
+        // The `anyOtherFlyoutPinned` predicate passed to each
+        // CategoryFlyout: true when the material flyout, or any category
+        // flyout other than `self`, is pinned. A category flyout's peek
+        // logic uses it to avoid unpinning another flyout's deliberate
+        // selection on a stray hover.
+        bool AnyOtherFlyoutPinned(CategoryFlyout self)
         {
-            if (EventSystem.current == null || _weaponsFlyout == null) return false;
-            PointerEventData ped = new PointerEventData(EventSystem.current)
+            if (_flyout != null && _flyout.activeSelf && _flyoutPinned) return true;
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
             {
-                position = Mouse.current != null ? (Vector2)Mouse.current.position.ReadValue() : Vector2.zero
-            };
-            List<RaycastResult> results = new List<RaycastResult>();
-            EventSystem.current.RaycastAll(ped, results);
-            for (int i = 0; i < results.Count; i++)
-            {
-                Transform t = results[i].gameObject.transform;
-                while (t != null)
-                {
-                    if (t.gameObject == _weaponsFlyout) return true;
-                    t = t.parent;
-                }
+                if (_categoryFlyouts[i] == self) continue;
+                if (_categoryFlyouts[i].IsPinned) return true;
             }
             return false;
         }
 
-        void RefreshWeaponsFlyoutEntryHighlights()
+        // Toolbar button label for a non-armour category.
+        string CategoryButtonLabel(ShapeCategory category)
         {
-            if (_weaponsFlyoutBackgrounds == null || _weaponShapeIndices == null) return;
-            int activeShape = buildManager.CurrentShapeIndex;
-            for (int e = 0; e < _weaponsFlyoutBackgrounds.Length; e++)
+            switch (category)
             {
-                if (_weaponsFlyoutBackgrounds[e] == null) continue;
-                bool isActive = _weaponShapeIndices[e] == activeShape
-                    && (buildManager.Shapes.Get(activeShape)?.IsWeapon ?? false);
-                _weaponsFlyoutBackgrounds[e].color = isActive ? FlyoutEntryActive : FlyoutEntryIdle;
+                case ShapeCategory.Weapon: return weaponsButtonLabel;
+                default:                   return category.ToString();
             }
         }
 
@@ -861,17 +763,19 @@ namespace CubeFly.Build
         {
             UpdateButtonStates();
             RefreshSelectedStats();
-            RefreshWeaponsButtonSwatch();
-            RefreshWeaponsFlyoutEntryHighlights();
-            // Track last-armed weapon so the Weapons button swatch
-            // keeps its colour when the player switches to an armour
-            // shape and back.
-            ShapeDefinition shape = buildManager.Shapes != null
-                ? buildManager.Shapes.Get(shapeIndex) : null;
-            if (shape != null && shape.IsWeapon) _lastArmedWeaponIndex = shapeIndex;
+            // Refresh every category flyout's button swatch + flyout
+            // highlights, and let each note an arm of one of its own
+            // shapes so its corner swatch keeps that colour when the
+            // player switches to another category and back.
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
+            {
+                _categoryFlyouts[i].NoteArmedShape(shapeIndex);
+                _categoryFlyouts[i].RefreshSwatch();
+                _categoryFlyouts[i].RefreshFlyoutHighlights();
+            }
             // Closing the flyouts on shape change avoids stale state.
             HideFlyout();
-            HideWeaponsFlyout();
+            CloseAllCategoryFlyouts();
         }
 
         void OnCurrentMaterialChanged(int shapeIndex, int materialIndex)
@@ -890,7 +794,7 @@ namespace CubeFly.Build
             if (tool == BuildTool.Delete)
             {
                 HideFlyout();
-                HideWeaponsFlyout();
+                CloseAllCategoryFlyouts();
             }
         }
 
@@ -914,11 +818,11 @@ namespace CubeFly.Build
                         : UIStyle.BackgroundIdle;
                 }
             }
-            // The Weapons button gets the same selected highlight as
-            // armour shapes, but switches on whenever ANY weapon is the
-            // active shape (rather than a specific shape index).
-            if (_weaponsBackground != null)
-                _weaponsBackground.color = weaponActive ? SelectedTypeColor : UIStyle.BackgroundIdle;
+            // Each category button gets the same selected highlight as
+            // the armour buttons, lit whenever a shape in that category
+            // is the active shape.
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
+                _categoryFlyouts[i].RefreshButtonHighlight();
             if (_deleteBackground != null)
                 _deleteBackground.color = deleteActive ? deleteSelectedColor : UIStyle.BackgroundIdle;
         }
@@ -931,7 +835,8 @@ namespace CubeFly.Build
             {
                 for (int i = 0; i < _shapeSwatches.Length; i++) RefreshSwatchFor(i);
             }
-            RefreshWeaponsButtonSwatch();
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
+                _categoryFlyouts[i].RefreshSwatch();
         }
 
         void RefreshSwatchFor(int shapeIndex)
@@ -943,26 +848,6 @@ namespace CubeFly.Build
             int mIdx = buildManager.GetMaterialForShape(shapeIndex);
             MaterialDefinition mdef = mats.Get(mIdx);
             _shapeSwatches[shapeIndex].color = mdef != null ? mdef.SwatchColor : Color.gray;
-        }
-
-        // The Weapons button's corner swatch shows the colour of the
-        // currently-armed weapon (when one is active) or the last-armed
-        // weapon (when an armour shape is active). Defaults to the
-        // first weapon's colour on cold-start.
-        void RefreshWeaponsButtonSwatch()
-        {
-            if (_weaponsSwatch == null) return;
-            if (buildManager == null || buildManager.Shapes == null) return;
-
-            int activeIdx = buildManager.CurrentShapeIndex;
-            ShapeDefinition activeShape = buildManager.Shapes.Get(activeIdx);
-            int swatchShape = (activeShape != null && activeShape.IsWeapon)
-                ? activeIdx
-                : _lastArmedWeaponIndex;
-
-            ShapeDefinition shape = buildManager.Shapes.Get(swatchShape);
-            MaterialDefinition wmat = shape != null ? shape.weaponMaterial : null;
-            _weaponsSwatch.color = wmat != null ? wmat.SwatchColor : Color.gray;
         }
 
         // ---------- Bottom-left stat readouts ----------

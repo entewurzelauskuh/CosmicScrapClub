@@ -401,34 +401,34 @@ namespace CubeFly.Fly
                 _rb.AddForce(worldThrust * (thrustForce * _linearForceFactor), ForceMode.Force);
             }
 
-            // Speed cap with Boost. While actively boosting, the ceiling
-            // is maxSpeed * boostMaxSpeedMultiplier (×1.3); otherwise it
-            // is maxSpeed. The hard clamp applies at that *active*
-            // ceiling — a true cap, so thrust can't push past it.
+            // Speed cap with Boost. boostedCeiling — maxSpeed *
+            // boostMaxSpeedMultiplier (×1.3) — is the absolute ceiling:
+            // nothing, boosting or not, may exceed it, and the hard
+            // clamp enforces that. While boosting, speed is free to sit
+            // anywhere up to that ceiling.
             //
             // Post-boost over-cap decay: when boosting has just ended,
-            // speed may still sit above maxSpeed. We don't hard-snap it
-            // down — we ease it toward maxSpeed at overCapDecaySpeed
-            // (u/s per second), a fast but non-instant drop. The hard
-            // clamp (above) and the decay coexist: the clamp stops new
-            // overshoot at the active ceiling, the decay bleeds off
-            // existing over-cap speed once the ceiling has dropped.
-            float speedCeiling = _boostingThisFrame
-                ? maxSpeed * boostMaxSpeedMultiplier
-                : maxSpeed;
+            // speed may still sit in the maxSpeed..boostedCeiling band.
+            // We don't hard-snap it down — we ease it toward maxSpeed at
+            // overCapDecaySpeed (u/s per second), a fast but non-instant
+            // drop. The hard clamp must stay at boostedCeiling (not the
+            // current-frame ceiling) so this easing branch is reachable
+            // the moment boosting stops.
+            float boostedCeiling = maxSpeed * boostMaxSpeedMultiplier;
 
             Vector3 v = _rb.linearVelocity;
             float speed = v.magnitude;
 
-            if (speed > speedCeiling)
+            if (speed > boostedCeiling)
             {
-                // Hard clamp at the active ceiling.
-                _rb.linearVelocity = v * (speedCeiling / speed);
+                // Above the absolute (boosted) ceiling — hard clamp.
+                // Thrust can't push past this whether boosting or not.
+                _rb.linearVelocity = v * (boostedCeiling / speed);
             }
             else if (!_boostingThisFrame && speed > maxSpeed)
             {
-                // Not boosting, still over the normal cap (boost just
-                // ended) — ease down toward maxSpeed, don't snap.
+                // Boost just ended, still in the maxSpeed..boostedCeiling
+                // band — ease down toward maxSpeed, don't snap.
                 float decayed = Mathf.MoveTowards(speed, maxSpeed, overCapDecaySpeed * Time.fixedDeltaTime);
                 _rb.linearVelocity = v * (decayed / speed);
             }

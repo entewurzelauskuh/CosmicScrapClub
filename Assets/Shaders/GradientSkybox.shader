@@ -8,7 +8,7 @@ Shader "Desert/GradientSkybox"
         _SkyExponent     ("Sky Falloff", Range(0.2, 6))         = 1.4
         _HorizonExponent ("Horizon Falloff", Range(0.2, 6))     = 3.0
         [HDR] _SunColor  ("Sun Color", Color)                   = (1.9, 1.7, 1.3, 1)
-        _SunSize         ("Sun Size", Range(0.005, 0.2))        = 0.045
+        _SunSize         ("Sun Size", Range(0.005, 0.2))        = 0.012
         _SunHaloPower    ("Sun Halo Tightness", Range(4, 256))  = 48
         _SunHaloStrength ("Sun Halo Strength", Range(0, 1))     = 0.25
     }

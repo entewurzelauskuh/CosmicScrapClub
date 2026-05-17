@@ -222,13 +222,13 @@ namespace CubeFly.Core
         // Sum of all placed cubes' masses. Does NOT include the alpha
         // cube — callers add that separately. Resolves each
         // placement's material via ShapeDefinition.ResolveMaterial so
-        // weapon shapes pull from their coupled weaponMaterial and
-        // armour shapes pull from MaterialRegistry by index.
-        // Placements whose shape or material lookup fails (registry
-        // null, shape not in registry, weapon with missing
-        // weaponMaterial) are silently skipped — this can under-count
-        // total mass if the registries are misconfigured. Returns 0
-        // when `shapes` is null.
+        // non-armour shapes (Weapon, Utility) pull from their coupled
+        // coupledMaterial and armour shapes pull from MaterialRegistry
+        // by index. Placements whose shape or material lookup fails
+        // (registry null, shape not in registry, non-armour shape with
+        // missing coupledMaterial) are silently skipped — this can
+        // under-count total mass if the registries are misconfigured.
+        // Returns 0 when `shapes` is null.
         public static float SumPlacedMasses(ShapeRegistry shapes, MaterialRegistry materials)
         {
             if (shapes == null) return 0f;
@@ -310,14 +310,14 @@ namespace CubeFly.Core
                         continue;
                     }
 
-                    // Weapon shapes have a coupled material that the
-                    // load path resolves via the shape, not via name
-                    // lookup in MaterialRegistry — the saved material
-                    // name is informational for those entries. Set
-                    // MaterialIndex to -1 (sentinel "use coupled").
+                    // Weapon and Utility shapes have a coupled material
+                    // that the load path resolves via the shape, not
+                    // via name lookup in MaterialRegistry — the saved
+                    // material name is informational for those entries.
+                    // Set MaterialIndex to -1 (sentinel "use coupled").
                     ShapeDefinition shape = shapeRegistry.Get(shapeIndex);
                     int materialIndex;
-                    if (shape != null && shape.IsWeapon)
+                    if (shape != null && shape.UsesCoupledMaterial)
                     {
                         materialIndex = -1;
                     }
@@ -366,10 +366,10 @@ namespace CubeFly.Core
             {
                 Placement p = _placedCubes[i];
                 ShapeDefinition s = shapeRegistry != null ? shapeRegistry.Get(p.ShapeIndex) : null;
-                // For weapon shapes the material is implicit (coupled
-                // to the shape) — we still write a non-empty name for
-                // diagnosability, but the load path resolves via the
-                // shape rather than name-lookup.
+                // For non-armour shapes (Weapon, Utility) the material
+                // is implicit (coupled to the shape) — we still write a
+                // non-empty name for diagnosability, but the load path
+                // resolves via the shape rather than name-lookup.
                 MaterialDefinition m = s != null ? s.ResolveMaterial(p.MaterialIndex, materialRegistry) : null;
                 save.placements[i] = new PlacementRecord
                 {

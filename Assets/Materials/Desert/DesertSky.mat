@@ -29,7 +29,7 @@ Material:
     - _SkyExponent: 1.4
     - _SunHaloPower: 48
     - _SunHaloStrength: 0.25
-    - _SunSize: 0.045
+    - _SunSize: 0.012
     m_Colors:
     - _GroundColor: {r: 0.52, g: 0.4, b: 0.3, a: 1}
     - _HorizonColor: {r: 0.93, g: 0.82, b: 0.62, a: 1}

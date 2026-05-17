@@ -3,7 +3,7 @@ Shader "Desert/CelShaded"
     Properties
     {
         _BaseColor ("Base Color", Color) = (0.80, 0.60, 0.40, 1)
-        _Bands ("Light Bands", Range(2, 5)) = 3
+        [IntRange] _Bands ("Light Bands", Range(2, 5)) = 3
         _MinLight ("Min Light Floor", Range(0, 1)) = 0.3
 
         [Header(Two Tone Breakup)]
@@ -179,7 +179,9 @@ Shader "Desert/CelShaded"
             }
             half4 DNFrag(V IN) : SV_Target
             {
-                return half4(normalize(IN.normalWS) * 0.5 + 0.5, 0);
+                // URP's _CameraNormalsTexture is a float texture of signed world
+                // normals; output them raw (no 0..1 remap) to match URP's encoding.
+                return half4(normalize(IN.normalWS), 0);
             }
             ENDHLSL
         }

@@ -50,7 +50,18 @@ namespace CubeFly.Fly
         [Tooltip("Seconds the flash label is hidden per cycle.")]
         [SerializeField] float flashOffSeconds = 0.12f;
 
+        [Header("Critical zone (bottom of the meter)")]
+        [Tooltip("Fill color while the meter is in its critical bottom band (FlyController.IsBoostCritical).")]
+        [SerializeField] Color criticalColor = new Color(0.95f, 0.25f, 0.20f, 1f);
+        [Tooltip("Seconds for one full throb cycle (alpha + size) while critical. Larger = slower.")]
+        [SerializeField] float criticalPulseSeconds = 1.2f;
+        [Tooltip("Size throb amplitude while critical — the bar's localScale oscillates by +/- this fraction. 0.01 = +/-1%.")]
+        [SerializeField] float criticalSizePulse = 0.01f;
+        [Tooltip("Low point of the alpha throb while critical; the high point is 1.")]
+        [SerializeField] float criticalAlphaMin = 0.55f;
+
         Canvas _canvas;
+        RectTransform _frame;    // bar background; localScale throbs while critical
         RectTransform _fill;     // grows bottom-up with BoostFraction
         Image _fillImage;
         Image _frameImage;
@@ -86,11 +97,26 @@ namespace CubeFly.Fly
             // upward.
             _fill.sizeDelta = new Vector2(barSize.x, barSize.y * fraction);
 
-            // Opacity ramps with use: invisible at full boost, opaque
-            // when drained.
-            float alpha = 1f - fraction;
-            SetImageAlpha(_fillImage, fillColor, alpha);
-            SetImageAlpha(_frameImage, frameColor, alpha);
+            // Critical zone (bottom band) — red fill, slow alpha + size
+            // throb. Otherwise the normal look: blue fill, opacity ramps
+            // with use, no throb.
+            if (flyController.IsBoostCritical)
+            {
+                float pulse01 = 0.5f * (1f + Mathf.Sin(
+                    Time.unscaledTime * (2f * Mathf.PI / criticalPulseSeconds)));
+                float critAlpha = Mathf.Lerp(criticalAlphaMin, 1f, pulse01);
+                SetImageAlpha(_fillImage, criticalColor, critAlpha);
+                SetImageAlpha(_frameImage, frameColor, critAlpha);
+                float scale = 1f + (pulse01 * 2f - 1f) * criticalSizePulse;
+                _frame.localScale = new Vector3(scale, scale, 1f);
+            }
+            else
+            {
+                float alpha = 1f - fraction;
+                SetImageAlpha(_fillImage, fillColor, alpha);
+                SetImageAlpha(_frameImage, frameColor, alpha);
+                _frame.localScale = Vector3.one;
+            }
 
             // Edge-triggered Overboosted flash.
             bool overboosted = flyController.IsOverboosted;
@@ -148,6 +174,7 @@ namespace CubeFly.Fly
             if (uiLayer >= 0) frameGO.layer = uiLayer;
             frameGO.transform.SetParent(canvasRoot, false);
             RectTransform frameRT = (RectTransform)frameGO.transform;
+            _frame = frameRT;
             frameRT.anchorMin = frameRT.anchorMax = frameRT.pivot = new Vector2(0.5f, 0.5f);
             frameRT.sizeDelta = barSize;
             frameRT.anchoredPosition = anchoredPosition;

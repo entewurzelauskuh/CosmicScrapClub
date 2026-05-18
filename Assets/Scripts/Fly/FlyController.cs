@@ -87,6 +87,8 @@ namespace CubeFly.Fly
         [SerializeField] float boostMaxSpeedMultiplier = 1.3f;
         [Tooltip("Speed (u/s per second) at which over-cap velocity eases back down to maxSpeed once boosting ends. Tuned so the drop from maxSpeed*boostMaxSpeedMultiplier to maxSpeed reads as quick but not an instant snap — a fraction of a second.")]
         [SerializeField] float overCapDecaySpeed = 60f;
+        [Tooltip("Fill fraction (0-1) marking the bottom 'critical' band of the Boost meter. Below this the HUD bar turns red and throbs; an overboosted construct also stays locked out of boosting until the meter refills back up to this mark. 0.10 = the bottom 10%.")]
+        [SerializeField] float criticalBoostFraction = 0.10f;
 
         [Header("Rotation (Rigidbody.AddTorque)")]
         [Tooltip("Pitch torque in Newton-metres applied per FixedUpdate while pitch input is held. Multiplied by the mass-compensation factor below before being applied.")]
@@ -145,12 +147,12 @@ namespace CubeFly.Fly
         // --- Boost resource state ---
         // _boost is the 0-100 meter; it starts full at boostMax (set in
         // Start). _overboosted latches true when _boost hits 0 and
-        // clears only when _boost regenerates all the way back to
-        // boostMax — while latched, boosting is disabled entirely.
+        // clears once _boost refills to the criticalBoostFraction mark
+        // — while latched, boosting is disabled entirely.
         // _boostingThisFrame is set each FixedUpdate by the activation
-        // rule (Task 5; provisionally in Task 4) — true iff >=1 thruster
-        // is contributing, i.e. the construct is "actively boosting";
-        // it drives drain-vs-regen and the boosted speed clamp.
+        // rule — true iff >=1 thruster is contributing, i.e. the
+        // construct is "actively boosting"; it drives drain-vs-regen
+        // and the boosted speed clamp.
         float _boost;
         bool _overboosted;
         bool _boostingThisFrame;
@@ -166,9 +168,16 @@ namespace CubeFly.Fly
         public float BoostFraction => boostMax > 0f ? Mathf.Clamp01(_boost / boostMax) : 0f;
 
         // True while the Boost resource is exhausted and recovering —
-        // boosting is disabled until the meter refills to boostMax.
-        // FlyBoostBar reads this to drive the "Overboosted!" flash.
+        // boosting is disabled until the meter refills to the
+        // criticalBoostFraction mark. FlyBoostBar reads this to drive
+        // the "Overboosted!" flash.
         public bool IsOverboosted => _overboosted;
+
+        // True while the Boost meter sits in its bottom criticalBoostFraction
+        // band. Drives the FlyBoostBar critical-zone red throb. Independent
+        // of _overboosted — it also shows when the player drains low without
+        // bottoming out.
+        public bool IsBoostCritical => BoostFraction <= criticalBoostFraction;
 
         void Awake()
         {
@@ -458,10 +467,11 @@ namespace CubeFly.Fly
         // Ticks the Boost resource each FixedUpdate: drains while
         // actively boosting, regenerates otherwise, and runs the
         // overboosted latch. Overboosted is entered the moment boost
-        // hits 0 and cleared only when boost regenerates all the way
-        // back to boostMax — a full recovery is required (spec §5).
-        // _boostingThisFrame is set by the activation rule just above
-        // the call site in FixedUpdate.
+        // hits 0 and cleared once the meter refills to the
+        // criticalBoostFraction mark — the penalty (slow regen + no
+        // boosting) spans the bottom band only. _boostingThisFrame is
+        // set by the activation rule just above the call site in
+        // FixedUpdate.
         void TickBoostResource()
         {
             float dt = Time.fixedDeltaTime;
@@ -478,14 +488,15 @@ namespace CubeFly.Fly
 
             _boost = Mathf.Clamp(_boost, 0f, boostMax);
 
-            // Overboosted latch. Enter at 0; exit only at full boostMax.
+            // Overboosted latch. Enter at 0; exit once the meter has
+            // refilled to the criticalBoostFraction mark.
             if (!_overboosted)
             {
                 if (_boost <= 0f) _overboosted = true;
             }
             else
             {
-                if (_boost >= boostMax) _overboosted = false;
+                if (_boost >= boostMax * criticalBoostFraction) _overboosted = false;
             }
         }
 

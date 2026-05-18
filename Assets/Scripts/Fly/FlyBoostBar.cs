@@ -46,7 +46,7 @@ namespace CubeFly.Fly
         [Tooltip("Number of visible/hidden flash cycles on overboosted entry.")]
         [SerializeField] int flashCount = 3;
         [Tooltip("Seconds the flash label is visible per cycle.")]
-        [SerializeField] float flashOnSeconds = 0.18f;
+        [SerializeField] float flashOnSeconds = 0.27f;
         [Tooltip("Seconds the flash label is hidden per cycle.")]
         [SerializeField] float flashOffSeconds = 0.12f;
 

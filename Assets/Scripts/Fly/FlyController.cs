@@ -79,7 +79,7 @@ namespace CubeFly.Fly
         [SerializeField] float boostDrainPerSecond = 40f;
         [Tooltip("Boost regenerated per second when not boosting and not overboosted.")]
         [SerializeField] float boostRegenPerSecond = 15f;
-        [Tooltip("Boost regenerated per second while overboosted — the slow recovery rate. Overboosted is entered when boost hits 0 and cleared only when boost regenerates all the way back to boostMax.")]
+        [Tooltip("Boost regenerated per second while overboosted — the slow recovery rate. Overboosted is entered when boost hits 0 and cleared once boost regenerates back up to the criticalBoostFraction mark.")]
         [SerializeField] float boostRegenOverboostedPerSecond = 6f;
         [Tooltip("Per-axis thrust-force multiplier applied to any of the 6 input axes with at least one contributing thruster. Flat — the number of aligned thrusters does not matter.")]
         [SerializeField] float boostThrustMultiplier = 1.3f;
@@ -188,6 +188,16 @@ namespace CubeFly.Fly
         void OnEnable() => _input.Fly.Enable();
         void OnDisable() => _input.Fly.Disable();
         void OnDestroy() => _input?.Dispose();
+
+        // Editor-only: keep designer-tunable values in their valid
+        // range. criticalBoostFraction must stay in [0,1] — a value
+        // above 1 makes the overboost latch's clear threshold
+        // (boostMax * criticalBoostFraction) unreachable, which would
+        // permanently lock out boosting for the whole Fly session.
+        void OnValidate()
+        {
+            criticalBoostFraction = Mathf.Clamp01(criticalBoostFraction);
+        }
 
         void Start()
         {

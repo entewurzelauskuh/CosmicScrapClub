@@ -4,13 +4,15 @@
 
 **Goal:** Apply three play-test-driven tuning tweaks to the Thruster boost mechanic — a red critical-zone HUD throb, a shorter overboost recovery penalty, and a slower "Overboosted!" flash.
 
-**Architecture:** All three changes are localized edits to two existing MonoBehaviours (`FlyController`, `FlyBoostBar`) plus serialized values in `FlyScene.unity`. A new `criticalBoostFraction` field on `FlyController` defines a "bottom 10%" band that drives both the overboost-recovery threshold and — via a new `IsBoostCritical` property — the HUD's red-throb visual. No new files, no new systems.
+**Architecture:** All three changes are localized edits to two existing MonoBehaviours (`FlyController`, `FlyBoostBar`) plus serialized values in `FlyScene.unity`. A new `criticalBoostFraction` field on `FlyController` defines a "bottom 25%" band that drives both the overboost-recovery threshold and — via a new `IsBoostCritical` property — the HUD's red-throb visual. No new files, no new systems.
 
 **Tech Stack:** Unity 6.3 LTS (6000.3.11f1), URP, C# MonoBehaviours, new Input System. Verification is by compile-check (Unity MCP `refresh_unity` + `read_console`) and a final FlyScene play-test — this project does not unit-test gameplay MonoBehaviours, matching the prior Thruster PRs.
 
 **Spec:** `boost_overboost_tuning_spec.md` (repo root).
 
 ---
+
+> **Tuning note (post-merge):** the critical band and size pulse were retuned during the Task 5 play-test from the starting defaults to their shipped values — `criticalBoostFraction = 0.25` (critical band = the bottom 25%, not 10%) and `criticalSizePulse = 0.05` (±5%, not ±1%). The Task 1–2 sections below describe and implement the original `0.10` / `0.01` defaults as planned; the Task 5 checklist reflects the shipped values. The retune is commit `b467ddb`.
 
 ## Setup
 
@@ -375,8 +377,8 @@ This project verifies gameplay feel by play-testing, not automated tests. This t
 
 Enter Play mode (`manage_editor` play control, or have the user press Play). Confirm:
 
-- **Regen partition (1b):** Hold Left Ctrl + a thrust key to drain Boost to empty. Confirm the construct becomes overboosted (cannot boost, slow regen). Confirm that once the meter refills to ~10% the overboost lock lifts — boosting works again — and regen visibly speeds up for the climb to full.
-- **Critical throb (1a):** Confirm the bar is red and gently throbs (brightness + a slight ~±1% size pulse, ~1.2 s per cycle) whenever the meter is in its bottom ~10% — both while overboosted and while merely drained low without bottoming out. Confirm it returns to the normal blue look above the 10% mark.
+- **Regen partition (1b):** Hold Left Ctrl + a thrust key to drain Boost to empty. Confirm the construct becomes overboosted (cannot boost, slow regen). Confirm that once the meter refills to ~25% the overboost lock lifts — boosting works again — and regen visibly speeds up for the climb to full.
+- **Critical throb (1a):** Confirm the bar is red and gently throbs (brightness + a slight ~±5% size pulse, ~1.2 s per cycle) whenever the meter is in its bottom ~25% — both while overboosted and while merely drained low without bottoming out. Confirm it returns to the normal blue look above the 25% mark.
 - **Flash timing (2):** Confirm the "Overboosted!" message flash is noticeably slower than before (each flash visible longer).
 
 - [ ] **Step 2: Check the console**

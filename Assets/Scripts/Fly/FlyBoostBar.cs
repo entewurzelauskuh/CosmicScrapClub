@@ -15,6 +15,8 @@ namespace CubeFly.Fly
     //           bottom and growing up.
     // Opacity — alpha = 1 - BoostFraction: near-invisible at full
     //           boost, opaque when drained ("ramps with use", spec §7).
+    //           While IsBoostCritical this is overridden — the bar
+    //           instead pulses red on a slow sine throb (alpha + size).
     // Position— screen-fixed near screen centre, offset left. NOT
     //           parented to the FlyCrosshair reticle — that reticle
     //           drifts as the construct turns and would drag the bar
@@ -77,6 +79,16 @@ namespace CubeFly.Fly
         void Awake()
         {
             BuildUI();
+        }
+
+        // Editor-only: keep designer-tunable values sane.
+        // criticalPulseSeconds is the divisor in the throb's sine
+        // frequency — 0 would yield Infinity/NaN and break the bar;
+        // criticalAlphaMin is an alpha and must stay in [0,1].
+        void OnValidate()
+        {
+            criticalPulseSeconds = Mathf.Max(0.01f, criticalPulseSeconds);
+            criticalAlphaMin = Mathf.Clamp01(criticalAlphaMin);
         }
 
         void Start()

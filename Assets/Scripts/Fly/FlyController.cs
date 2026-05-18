@@ -87,8 +87,8 @@ namespace CubeFly.Fly
         [SerializeField] float boostMaxSpeedMultiplier = 1.3f;
         [Tooltip("Speed (u/s per second) at which over-cap velocity eases back down to maxSpeed once boosting ends. Tuned so the drop from maxSpeed*boostMaxSpeedMultiplier to maxSpeed reads as quick but not an instant snap — a fraction of a second.")]
         [SerializeField] float overCapDecaySpeed = 60f;
-        [Tooltip("Fill fraction (0-1) marking the bottom 'critical' band of the Boost meter. Below this the HUD bar turns red and throbs; an overboosted construct also stays locked out of boosting until the meter refills back up to this mark. 0.10 = the bottom 10%.")]
-        [SerializeField] float criticalBoostFraction = 0.10f;
+        [Tooltip("Fill fraction (0-1) marking the bottom 'critical' band of the Boost meter. Below this the HUD bar turns red and throbs; an overboosted construct also stays locked out of boosting until the meter refills back up to this mark. 0.25 = the bottom 25%.")]
+        [SerializeField] float criticalBoostFraction = 0.25f;
 
         [Header("Rotation (Rigidbody.AddTorque)")]
         [Tooltip("Pitch torque in Newton-metres applied per FixedUpdate while pitch input is held. Multiplied by the mass-compensation factor below before being applied.")]

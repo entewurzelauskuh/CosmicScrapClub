@@ -55,8 +55,8 @@ namespace CubeFly.Fly
         [SerializeField] Color criticalColor = new Color(0.95f, 0.25f, 0.20f, 1f);
         [Tooltip("Seconds for one full throb cycle (alpha + size) while critical. Larger = slower.")]
         [SerializeField] float criticalPulseSeconds = 1.2f;
-        [Tooltip("Size throb amplitude while critical — the bar's localScale oscillates by +/- this fraction. 0.01 = +/-1%.")]
-        [SerializeField] float criticalSizePulse = 0.01f;
+        [Tooltip("Size throb amplitude while critical — the bar's localScale oscillates by +/- this fraction. 0.05 = +/-5%.")]
+        [SerializeField] float criticalSizePulse = 0.05f;
         [Tooltip("Low point of the alpha throb while critical; the high point is 1.")]
         [SerializeField] float criticalAlphaMin = 0.55f;
 

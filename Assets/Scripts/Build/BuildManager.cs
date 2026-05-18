@@ -175,10 +175,16 @@ namespace CubeFly.Build
         {
             ResolveLayerMasks();
 
-            _input = new CubeFlyInputActions();
+            EnsureInput();
 
             Debug.unityLogger.Log(TAG, "BuildManager initialised.");
         }
+
+        // _input is a plain (non-serialized) object, so it only exists once
+        // Awake has run on this instance. A Play-mode domain reload re-invokes
+        // OnEnable without re-running Awake, which left _input null at the
+        // lifecycle call sites — create it on demand so they never deref null.
+        void EnsureInput() => _input ??= new CubeFlyInputActions();
 
         // Resolve the build/remove layer masks. If the named layers aren't
         // defined in Project Settings → Tags and Layers, LayerMask.GetMask
@@ -214,8 +220,15 @@ namespace CubeFly.Build
             }
         }
 
-        void OnEnable() => _input.Build.Enable();
-        void OnDisable() => _input.Build.Disable();
+        void OnEnable()
+        {
+            EnsureInput();
+            _input.Build.Enable();
+        }
+
+        // _input is legitimately null if OnDisable runs before Awake has
+        // initialised this instance — nothing to disable in that case.
+        void OnDisable() => _input?.Build.Disable();
         void OnDestroy()
         {
             _input?.Dispose();

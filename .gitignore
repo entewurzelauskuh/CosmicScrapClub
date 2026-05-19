@@ -109,3 +109,16 @@ InitTestScene*.unity*
 # Local construct save slots (project-folder dev path; the SAVES_IN_PROJECT
 # scripting define / UNITY_EDITOR routes SaveManager writes here).
 /Saves/
+
+# macOS desktop-services files
+.DS_Store
+
+# IDE / editor state
+.idea/
+.vscode/
+
+# Visual Studio's newer XML solution format (the older *.sln is ignored above)
+*.slnx
+
+# Claude Code agent / tooling state (worktrees, local config)
+.claude/

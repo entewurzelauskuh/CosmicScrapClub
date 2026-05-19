@@ -286,7 +286,7 @@ Every placeable shape prefab — including the alpha cube — has this
 component attached. At spawn time `MaterialDefinition.ApplyTo` writes
 the chosen material's HP/AV/mass into the spawned cube's `CubeStats`.
 Per-cube mass is read from this component when the build UI computes
-the live `Mass: X / 100` readout. The two damage methods are used by
+the live `Mass: X / cap` readout. The two damage methods are used by
 the **Combat** section below — `TakeDamage` clamps HP via
 `effective = max(0, raw − armourValue)` and is consumed by projectile
 hits; `TakeRawDamage` skips armour and is consumed by crash damage.
@@ -466,7 +466,7 @@ Build-scene UI overlays (built at runtime by `BuildToolbarController`):
 - **Top-left** — `Rotate: R/T` hint label.
 - **Top-centre** — fading red floating message slot (used for "Too much mass!").
 - **Bottom-left** — two stat readouts:
-  - `Mass: X / 100` (live, recomputed on `ConstructChanged`; the denominator is the active ship class's mass cap).
+  - `Mass: X / cap` (live, recomputed on `ConstructChanged`; the denominator is the active ship class's mass cap).
   - `HP: Y` (sum of all placed cubes' health, including alpha).
 
 Tools:

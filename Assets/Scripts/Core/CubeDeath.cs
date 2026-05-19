@@ -41,13 +41,20 @@ namespace CubeFly.Core
 
         bool _dying;
 
-        // Raised once when any non-alpha cube begins its death sequence,
-        // AFTER it has detached from its construct and disabled its
-        // colliders. FlyController subscribes to recompute the construct's
+        // Raised when a genuine player-construct cube has died — it has
+        // been removed from GameData and its death sequence kicked off.
+        // CubeDamage is the sole raiser (via RaiseCubeDied) and fires it
+        // only for real construct cubes, NOT world props or turret
+        // pyramids. FlyController subscribes to recompute the construct's
         // Rigidbody mass. Static so a dying cube needs no reference to its
         // listeners; subscribers MUST unsubscribe (a static event outlives
         // scene loads).
         public static event System.Action CubeDied;
+
+        // Raises CubeDied. Called by CubeDamage once a construct cube's
+        // GameData entry is removed and BeginDeath has detached it, so
+        // listeners observe the construct already shrunk by the dead cube.
+        public static void RaiseCubeDied() => CubeDied?.Invoke();
 
         public void BeginDeath(Vector3 outwardOrigin)
         {
@@ -66,11 +73,6 @@ namespace CubeFly.Core
                 $"'{name}' destroyed at {transform.position} (drift dir {driftDir}).");
 
             StartCoroutine(DriftAndDespawn(driftDir));
-
-            // The cube is now de-parented and its colliders disabled, so
-            // listeners (FlyController's mass recompute) observe the
-            // construct already shrunk by this cube.
-            CubeDied?.Invoke();
         }
 
         Vector3 ComputeDriftDirection(Vector3 outwardOrigin)

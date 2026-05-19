@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CubeFly.Build;
 using CubeFly.Core;
 using CubeFly.Input;
 using UnityEngine;
@@ -348,6 +349,16 @@ namespace CubeFly.Fly
                 // Apply the orientation chosen at build-time so each cube
                 // keeps its placed pose relative to the construct.
                 go.transform.localRotation = p.Rotation;
+
+                // Stamp the placement's grid cell onto the cube. The
+                // flight damage pipeline (CubeDamage) reads
+                // PlacedCubeData.cell to drop the right GameData entry
+                // when this cube dies — without this it always removes
+                // cell (0,0,0) (a no-op), so the construct's mass never
+                // updates. BuildManager does the same stamp at placement.
+                PlacedCubeData placedData = go.GetComponent<PlacedCubeData>();
+                if (placedData != null) placedData.cell = p.Cell;
+
                 // ResolveMaterial picks the right MaterialDefinition for
                 // the placement's shape category — armour pulls from
                 // the registry by index, weapons return their coupled

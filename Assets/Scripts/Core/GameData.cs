@@ -218,6 +218,51 @@ namespace CubeFly.Core
             return false;
         }
 
+        // Face-aware flood-fill from the origin (the alpha cube). Returns
+        // the set of cells reachable from the origin across
+        // HasFaceConnection edges — the origin itself is always included.
+        // Any placed cell NOT in the returned set is "dangling": still in
+        // GameData but graph-disconnected from the alpha. Shared by
+        // BuildManager.RemoveDanglingCubes (delete-tool cleanup) and the
+        // FlyScene cube-death cascade so both judge connectivity by one
+        // rule.
+        public static HashSet<Vector3Int> GetCellsConnectedToOrigin(ShapeRegistry shapeRegistry)
+        {
+            HashSet<Vector3Int> visited = new HashSet<Vector3Int> { Vector3Int.zero };
+            Queue<Vector3Int> queue = new Queue<Vector3Int>();
+            queue.Enqueue(Vector3Int.zero);
+
+            while (queue.Count > 0)
+            {
+                Vector3Int curr = queue.Dequeue();
+
+                // Resolve the current cell's shape + rotation. The origin
+                // holds the alpha cube (six-faces-valid, no Placement
+                // record) — represented as a null shape, which
+                // HasFaceConnection reads as the alpha.
+                ShapeDefinition currShape = null;
+                Quaternion currRotation = Quaternion.identity;
+                if (curr != Vector3Int.zero)
+                {
+                    Placement p = GetPlacementAt(curr);
+                    currShape = shapeRegistry != null ? shapeRegistry.Get(p.ShapeIndex) : null;
+                    currRotation = p.Rotation;
+                }
+
+                for (int i = 0; i < Neighbors.Length; i++)
+                {
+                    Vector3Int dir = Neighbors[i];
+                    Vector3Int nb = curr + dir;
+                    if (visited.Contains(nb)) continue;
+                    if (!HasFaceConnection(curr, currShape, currRotation, dir, shapeRegistry))
+                        continue;
+                    visited.Add(nb);
+                    queue.Enqueue(nb);
+                }
+            }
+            return visited;
+        }
+
         public static Bounds GetConstructBounds()
         {
             Bounds bounds = new Bounds(Vector3.zero, Vector3.one);

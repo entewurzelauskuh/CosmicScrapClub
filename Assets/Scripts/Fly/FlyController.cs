@@ -185,9 +185,26 @@ namespace CubeFly.Fly
             Debug.unityLogger.Log(TAG, "FlyController initialised.");
         }
 
-        void OnEnable() => _input.Fly.Enable();
-        void OnDisable() => _input.Fly.Disable();
+        void OnEnable()
+        {
+            _input.Fly.Enable();
+            CubeDeath.CubeDied += OnCubeDied;
+        }
+
+        void OnDisable()
+        {
+            _input.Fly.Disable();
+            CubeDeath.CubeDied -= OnCubeDied;
+        }
+
         void OnDestroy() => _input?.Dispose();
+
+        // A cube died in flight (CubeDeath.CubeDied). It is already gone
+        // from GameData and detached from the construct, so re-resolving
+        // the Rigidbody now recomputes mass + the mass-derived flight
+        // factors for the lighter ship (Unity rebuilds the inertia tensor
+        // from the shrunken compound collider when rb.mass is set).
+        void OnCubeDied() => ResolveRigidbody();
 
         // Editor-only: keep designer-tunable values in their valid
         // range. criticalBoostFraction must stay in [0,1] — a value
@@ -275,7 +292,7 @@ namespace CubeFly.Fly
                           * overCap;
 
             Debug.unityLogger.Log(TAG,
-                $"Rigidbody armed. Total mass: {totalMass:F1} (rb.mass: {_rb.mass:F1}). " +
+                $"Rigidbody mass resolved. Total mass: {totalMass:F1} (rb.mass: {_rb.mass:F1}). " +
                 $"Ship class {GameData.ActiveShipClass} → movement ×{movementMultiplier:F2}. " +
                 $"linearForceFactor={_linearForceFactor:F2}, torqueFactor={_torqueFactor:F2} " +
                 $"(overCap ×{overCap:F2}, compensation exp={rotationMassCompensation:F2}). " +

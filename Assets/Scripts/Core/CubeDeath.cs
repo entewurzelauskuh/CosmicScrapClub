@@ -41,6 +41,14 @@ namespace CubeFly.Core
 
         bool _dying;
 
+        // Raised once when any non-alpha cube begins its death sequence,
+        // AFTER it has detached from its construct and disabled its
+        // colliders. FlyController subscribes to recompute the construct's
+        // Rigidbody mass. Static so a dying cube needs no reference to its
+        // listeners; subscribers MUST unsubscribe (a static event outlives
+        // scene loads).
+        public static event System.Action CubeDied;
+
         public void BeginDeath(Vector3 outwardOrigin)
         {
             if (CompareTag("AlphaCube")) return;
@@ -58,6 +66,11 @@ namespace CubeFly.Core
                 $"'{name}' destroyed at {transform.position} (drift dir {driftDir}).");
 
             StartCoroutine(DriftAndDespawn(driftDir));
+
+            // The cube is now de-parented and its colliders disabled, so
+            // listeners (FlyController's mass recompute) observe the
+            // construct already shrunk by this cube.
+            CubeDied?.Invoke();
         }
 
         Vector3 ComputeDriftDirection(Vector3 outwardOrigin)

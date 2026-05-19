@@ -255,15 +255,18 @@ namespace CubeFly.Fly
             int selected = shootingController.SelectedTypeIndex;
             for (int i = 0; i < _buttons.Length; i++)
             {
-                WeaponTypeGroup group = shootingController.Types[i];
+                // One Instances scan per group per frame — GetDeadState
+                // derives both flags from a single AliveCount walk.
+                shootingController.Types[i].GetDeadState(
+                    out bool fullyDead, out bool partiallyDead);
 
                 if (_buttons[i] != null)
-                    _buttons[i].interactable = !group.IsFullyDead;
+                    _buttons[i].interactable = !fullyDead;
 
                 if (_buttonBackgrounds[i] != null)
                 {
                     Color bg;
-                    if (group.IsFullyDead)  bg = deadColor;
+                    if (fullyDead)          bg = deadColor;
                     else if (i == selected) bg = SelectedTypeColor;
                     else                    bg = UIStyle.BackgroundIdle;
                     _buttonBackgrounds[i].color = bg;
@@ -271,9 +274,8 @@ namespace CubeFly.Fly
 
                 if (_deathMarks[i] != null)
                 {
-                    bool partial = group.IsPartiallyDead;
-                    _deathMarks[i].enabled = partial;
-                    if (partial)
+                    _deathMarks[i].enabled = partiallyDead;
+                    if (partiallyDead)
                     {
                         // Slow sine alpha pulse between deathMarkAlphaMin
                         // and 1, driven by unscaled time so it keeps

@@ -241,6 +241,7 @@ namespace CubeFly.Fly
 
         // Instances still alive — non-null (excludes Unity-destroyed
         // cubes) and IsAlive (excludes cubes mid death-drift at 0 HP).
+        // O(n); prefer GetDeadState when both dead-state flags are needed.
         public int AliveCount
         {
             get
@@ -255,13 +256,29 @@ namespace CubeFly.Fly
             }
         }
 
+        // Both dead-state flags from a SINGLE AliveCount scan. The weapon
+        // toolbar polls liveness every frame for every group, so deriving
+        // both flags together keeps that to one Instances walk per group
+        // per frame instead of one walk per flag read.
+        public void GetDeadState(out bool fullyDead, out bool partiallyDead)
+        {
+            int alive = AliveCount;
+            fullyDead = alive == 0;
+            partiallyDead = Instances.Count > 1 && alive > 0 && alive < Instances.Count;
+        }
+
         // Every instance of this type is dead. A group always has >=1
         // instance (RegisterWeapons only creates a group for a member).
-        public bool IsFullyDead => AliveCount == 0;
+        public bool IsFullyDead
+        {
+            get { GetDeadState(out bool fullyDead, out _); return fullyDead; }
+        }
 
         // Some but not all instances are dead — only meaningful for a
         // multi-instance type.
-        public bool IsPartiallyDead =>
-            Instances.Count > 1 && AliveCount > 0 && AliveCount < Instances.Count;
+        public bool IsPartiallyDead
+        {
+            get { GetDeadState(out _, out bool partiallyDead); return partiallyDead; }
+        }
     }
 }

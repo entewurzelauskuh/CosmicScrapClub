@@ -17,7 +17,7 @@ namespace CubeFly.Fly
         [Tooltip("Bullet prefab to launch (Assets/Prefabs/Projectiles/Bullet).")]
         [SerializeField] GameObject bulletPrefab;
         [Tooltip("Seconds between shots.")]
-        [SerializeField] float fireInterval = 1f;
+        [SerializeField, Min(0.05f)] float fireInterval = 1f;
         [Tooltip("Damage each launched bullet carries. Set well above typical cube armour so shots actually bite.")]
         [SerializeField] float damage = 40f;
         [Tooltip("Muzzle position in local space — bullets spawn here. Default is the mounted pyramid's apex.")]
@@ -29,14 +29,26 @@ namespace CubeFly.Fly
 
         void Start()
         {
+            // Validate the bullet prefab once. A missing prefab, or one
+            // without a Bullet component, disables the turret outright —
+            // better than instantiating + warning on every shot for the
+            // rest of the session.
             if (bulletPrefab == null)
-                Debug.unityLogger.LogWarning(TAG, $"'{name}': no bulletPrefab assigned — turret is inert.");
+            {
+                Debug.unityLogger.LogWarning(TAG, $"'{name}': no bulletPrefab assigned — turret disabled.");
+                enabled = false;
+                return;
+            }
+            if (bulletPrefab.GetComponent<Bullet>() == null)
+            {
+                Debug.unityLogger.LogWarning(TAG,
+                    $"'{name}': bulletPrefab '{bulletPrefab.name}' has no Bullet component — turret disabled.");
+                enabled = false;
+            }
         }
 
         void Update()
         {
-            if (bulletPrefab == null) return;
-
             _timer += Time.deltaTime;
             if (_timer < fireInterval) return;
             _timer -= fireInterval;
@@ -46,18 +58,11 @@ namespace CubeFly.Fly
             Vector3 muzzle = transform.TransformPoint(muzzleOffset);
             Vector3 dir = transform.up;
 
-            GameObject go = Instantiate(bulletPrefab);
-            Bullet bullet = go.GetComponent<Bullet>();
-            if (bullet == null)
-            {
-                Debug.unityLogger.LogWarning(TAG, $"'{name}': bulletPrefab has no Bullet component.");
-                Destroy(go);
-                return;
-            }
-
-            // firingConstruct = this turret, so the bullet skips the
-            // turret's own collider; it flies outward and can still hit
-            // anything else (the player construct, other world cubes).
+            // bulletPrefab and its Bullet component were validated in
+            // Start; firingConstruct = this turret so the bullet skips
+            // the turret's own collider and can still hit anything else
+            // (the player construct, other world cubes).
+            Bullet bullet = Instantiate(bulletPrefab).GetComponent<Bullet>();
             bullet.Launch(muzzle, dir, transform, damage);
         }
     }

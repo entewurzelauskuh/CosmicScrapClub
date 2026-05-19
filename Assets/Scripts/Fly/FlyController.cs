@@ -361,8 +361,8 @@ namespace CubeFly.Fly
 
                 // ResolveMaterial picks the right MaterialDefinition for
                 // the placement's shape category — armour pulls from
-                // the registry by index, weapons return their coupled
-                // weaponMaterial.
+                // the registry by index, non-armour shapes (weapon /
+                // utility) return their coupledMaterial.
                 MaterialDefinition mdef = shape.ResolveMaterial(p.MaterialIndex, materialRegistry);
                 mdef?.ApplyTo(go);
 

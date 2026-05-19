@@ -122,7 +122,10 @@ namespace CubeFly.Core
             return true;
         }
 
-        public static void Remove(Vector3Int cell)
+        // Returns true when a placement occupied `cell` and was removed;
+        // false when no placement was there (so callers can tell whether
+        // a real construct cube actually left the list).
+        public static bool Remove(Vector3Int cell)
         {
             for (int i = _placedCubes.Count - 1; i >= 0; i--)
             {
@@ -131,9 +134,10 @@ namespace CubeFly.Core
                     _placedCubes.RemoveAt(i);
                     _byCell.Remove(cell);
                     Debug.unityLogger.Log(TAG, $"Cell removed: {cell}. Total placed: {_placedCubes.Count}");
-                    return;
+                    return true;
                 }
             }
+            return false;
         }
 
         public static bool IsOccupied(Vector3Int cell) => _byCell.ContainsKey(cell);

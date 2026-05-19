@@ -70,12 +70,21 @@ namespace CubeFly.Fly
             // identifies their slot in GameData. Removing here keeps
             // the mass budget and Hangar re-entry consistent. World
             // targets have no PlacedCubeData and skip this branch.
+            // GameData.Remove returns true only when a real construct
+            // cube actually left the placement list — world props and
+            // turret pyramids (a PlacedCubeData whose cell isn't in
+            // GameData) return false.
             PlacedCubeData placed = stats.GetComponent<PlacedCubeData>();
-            if (placed != null) GameData.Remove(placed.cell);
+            bool removedFromConstruct = placed != null && GameData.Remove(placed.cell);
 
             CubeDeath death = stats.GetComponent<CubeDeath>()
                            ?? stats.gameObject.AddComponent<CubeDeath>();
             death.BeginDeath(outwardOrigin);
+
+            // Notify the flight controller to recompute construct mass —
+            // only for genuine construct cubes, so destroying world
+            // targets / turrets doesn't spam ResolveRigidbody.
+            if (removedFromConstruct) CubeDeath.RaiseCubeDied();
 
             return applied;
         }

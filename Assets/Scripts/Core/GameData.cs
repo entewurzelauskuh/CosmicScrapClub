@@ -143,18 +143,54 @@ namespace CubeFly.Core
         public static Placement GetPlacementAt(Vector3Int cell)
             => _byCell.TryGetValue(cell, out Placement p) ? p : default;
 
-        // Symmetric face-validity check. A placement at `cell` with
-        // (shape, rotation) is valid when, for at least one of the six
-        // cell-face neighbours, BOTH:
-        //   • the new piece has a real surface on the face pointing at
-        //     that neighbour (in its rotation), AND
-        //   • the neighbour piece has a real surface on the face pointing
-        //     back at us (in its rotation).
+        // Face-aware connectivity primitive — shared by placement
+        // validation (IsValidAttachment) and build cleanup
+        // (BuildManager.RemoveDanglingCubes) so both judge "connected"
+        // by the same rule.
         //
-        // The alpha cube at the origin counts as a cube — all six faces
-        // valid. Empty cells are skipped. The check reduces to the old
-        // "any face-adjacent cell is occupied" rule for all-cube
-        // constructs, since cubes have all six faces valid.
+        // Returns true when a piece (sourceShape, sourceRotation) at
+        // `cell` is face-connected to the cell-face neighbour in
+        // direction `dir`: the neighbour cell must be occupied (or the
+        // alpha cube at the origin), AND both touching faces must carry a
+        // real surface — the source's face toward the neighbour and the
+        // neighbour's face back toward the source.
+        //
+        // The alpha cube is a six-faces-valid cube; pass sourceShape ==
+        // null to treat the SOURCE as the alpha. A null shapeRegistry
+        // disables the face checks and falls back to pure occupancy (the
+        // pre-face-aware behaviour) so cleanup degrades safely if the
+        // registry is unset rather than pruning the whole build.
+        public static bool HasFaceConnection(Vector3Int cell, ShapeDefinition sourceShape,
+            Quaternion sourceRotation, Vector3Int dir, ShapeRegistry shapeRegistry)
+        {
+            Vector3Int neighborCell = cell + dir;
+            bool neighborIsAlpha = neighborCell == Vector3Int.zero;
+            if (!neighborIsAlpha && !IsOccupied(neighborCell)) return false;
+
+            // No registry → can't read face flags; fall back to pure
+            // occupancy so a missing registry can't delete the build.
+            if (shapeRegistry == null) return true;
+
+            // Source's face toward the neighbour. A null sourceShape is
+            // the alpha cube — all six faces valid.
+            if (sourceShape != null && !sourceShape.IsWorldFaceValid(dir, sourceRotation))
+                return false;
+
+            if (neighborIsAlpha) return true;
+
+            Placement neighborPlacement = GetPlacementAt(neighborCell);
+            ShapeDefinition neighborShape = shapeRegistry.Get(neighborPlacement.ShapeIndex);
+            if (neighborShape == null) return false;
+            return neighborShape.IsWorldFaceValid(-dir, neighborPlacement.Rotation);
+        }
+
+        // Symmetric face-validity check for PLACEMENT. A placement at
+        // `cell` with (shape, rotation) is valid when it is face-connected
+        // (HasFaceConnection) to at least one of its six cell-face
+        // neighbours. The alpha cube at the origin counts as a cube — all
+        // six faces valid. The check reduces to the old "any face-adjacent
+        // cell is occupied" rule for all-cube constructs, since cubes have
+        // all six faces valid.
         public static bool IsValidAttachment(Vector3Int cell, int newShapeIndex,
             Quaternion newRotation, ShapeRegistry shapeRegistry)
         {
@@ -164,25 +200,8 @@ namespace CubeFly.Core
 
             for (int i = 0; i < Neighbors.Length; i++)
             {
-                Vector3Int dir = Neighbors[i];
-                Vector3Int neighborCell = cell + dir;
-
-                bool isAlpha = neighborCell == Vector3Int.zero;
-                if (!isAlpha && !IsOccupied(neighborCell)) continue;
-
-                // 1. New piece's face toward the neighbour must be valid.
-                if (!newShape.IsWorldFaceValid(dir, newRotation)) continue;
-
-                // 2. Neighbour's face toward us must be valid. The alpha
-                //    cube is a cube → all six trivially valid.
-                if (isAlpha) return true;
-
-                Placement neighborPlacement = GetPlacementAt(neighborCell);
-                ShapeDefinition neighborShape = shapeRegistry.Get(neighborPlacement.ShapeIndex);
-                if (neighborShape == null) continue;
-                if (!neighborShape.IsWorldFaceValid(-dir, neighborPlacement.Rotation)) continue;
-
-                return true;
+                if (HasFaceConnection(cell, newShape, newRotation, Neighbors[i], shapeRegistry))
+                    return true;
             }
             return false;
         }

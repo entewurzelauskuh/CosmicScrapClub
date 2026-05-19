@@ -586,7 +586,11 @@ namespace CubeFly.Build
             }
         }
 
-        // BFS from origin across occupied cells; anything not visited is dangling.
+        // BFS from origin across FACE-CONNECTED cells; anything not
+        // visited is dangling. Connectivity uses GameData.HasFaceConnection
+        // — the same face-aware rule placement validation uses — so the
+        // cleanup graph can no longer keep a cube that is merely
+        // occupancy-adjacent through a face neither shape actually has.
         void RemoveDanglingCubes()
         {
             Debug.unityLogger.Log(TAG, "Running flood-fill to detect dangling cubes.");
@@ -598,11 +602,27 @@ namespace CubeFly.Build
             while (queue.Count > 0)
             {
                 Vector3Int curr = queue.Dequeue();
+
+                // Resolve the current cell's shape + rotation. The origin
+                // holds the alpha cube (six-faces-valid, no Placement
+                // record) — represented as a null shape, which
+                // HasFaceConnection reads as the alpha.
+                ShapeDefinition currShape = null;
+                Quaternion currRotation = Quaternion.identity;
+                if (curr != Vector3Int.zero)
+                {
+                    Placement p = GameData.GetPlacementAt(curr);
+                    currShape = shapeRegistry != null ? shapeRegistry.Get(p.ShapeIndex) : null;
+                    currRotation = p.Rotation;
+                }
+
                 for (int i = 0; i < GameData.Neighbors.Length; i++)
                 {
-                    Vector3Int nb = curr + GameData.Neighbors[i];
+                    Vector3Int dir = GameData.Neighbors[i];
+                    Vector3Int nb = curr + dir;
                     if (visited.Contains(nb)) continue;
-                    if (!GameData.IsOccupied(nb)) continue;
+                    if (!GameData.HasFaceConnection(curr, currShape, currRotation, dir, shapeRegistry))
+                        continue;
                     visited.Add(nb);
                     queue.Enqueue(nb);
                 }

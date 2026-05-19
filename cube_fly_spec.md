@@ -16,8 +16,12 @@ This document is the single canonical spec. Companion docs:
 
 - `full_architecture.md` — implementation-level architecture overview.
 - `README.md` — clone / open / run instructions and a controls cheat-sheet.
+- `ROADMAP.md` — what's shipped, what's next, where the project is headed.
 - `weapon_shooting_spec.md` — deep dive on the Fly-mode shooting
   system (weapons, projectiles, crosshair, dispatch).
+- `thruster_boost_spec.md` — deep dive on the thruster cube and the
+  flight boost mechanic.
+- `boost_overboost_tuning_spec.md` — the boost / overboost tuning pass.
 
 ---
 
@@ -109,19 +113,20 @@ the fallback path renames the existing file to `slotN.json.bak`, moves
 the temp into place, then deletes the bak. A crash mid-write leaves
 either the previous file intact or the bak available for recovery.
 
-**On-disk format** (`ConstructSave`, version `1`):
+**On-disk format** (`ConstructSave`, version `2`):
 
 ```csharp
 [Serializable]
 public class ConstructSave
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     public int    version           = CurrentVersion;
     public string slotName          = string.Empty;
     public long   createdUtcTicks;
     public long   modifiedUtcTicks;
     public float  totalMass;        // denormalised — recomputed on load
     public float  totalHealthPoints;
+    public string shipClass         = string.Empty;  // ShipClass by name
     public PlacementRecord[] placements = Array.Empty<PlacementRecord>();
 }
 
@@ -139,6 +144,9 @@ Schema rules:
 
 - Shape and material are stored **by name**, so reordering
   `ShapeRegistry` / `MaterialRegistry` doesn't break existing saves.
+- `shipClass` is stored **by name**. A v1 save (no `shipClass`) loads
+  as `Allrounder` — the empty/unknown string falls back to the default
+  class, so no migration code is needed.
 - `version > CurrentVersion` is refused on load (returns `false`).
 - Missing `placements` is tolerated (treated as empty array).
 - `totalMass` / `totalHealthPoints` are denormalised for the picker UI;
@@ -154,8 +162,9 @@ BuildScene), autosave is disabled and a one-line warning is logged.
 
 **Slot metadata.** `SaveSlotInfo` is a read-only struct built once per
 slot by `HangarSelectController` for the slot cards. It carries cube
-count, total mass / HP, and a parsed `DateTime` for the modified
-timestamp. Out-of-range ticks fall back to `default(DateTime)`.
+count, total mass / HP, the construct's `ShipClass`, and a parsed
+`DateTime` for the modified timestamp. Out-of-range ticks fall back to
+`default(DateTime)`.
 
 ---
 
@@ -167,14 +176,15 @@ the geometry-only axis; `MaterialDefinition` is the stats / colour axis.
 `ShapeDefinition` (ScriptableObject):
 
 ```csharp
-public enum ShapeCategory { Armour, Weapon }
+public enum ShapeCategory { Armour, Weapon, Utility }
 
 public class ShapeDefinition : ScriptableObject
 {
     public string             displayName;
     public GameObject         prefab;             // 1×1×1 colliders required
     public ShapeCategory      category;
-    public MaterialDefinition weaponMaterial;     // used only when category == Weapon
+    public MaterialDefinition coupledMaterial;    // used by Weapon + Utility shapes
+                                                  // (was weaponMaterial; [FormerlySerializedAs])
 
     // Local-space attachment validity (six cube-cell face directions).
     public bool faceNegX, facePosX, faceNegY, facePosY, faceNegZ, facePosZ;
@@ -183,6 +193,8 @@ public class ShapeDefinition : ScriptableObject
     public bool                IsWorldFaceValid(Vector3Int worldDir, Quaternion rotation);
     public MaterialDefinition  ResolveMaterial(int materialIndex, MaterialRegistry registry);
     public bool                IsWeapon => category == ShapeCategory.Weapon;
+    public bool                IsArmour => category == ShapeCategory.Armour;
+    public bool                UsesCoupledMaterial => category != ShapeCategory.Armour;
 }
 ```
 
@@ -194,6 +206,7 @@ public class ShapeDefinition : ScriptableObject
 | `ShapeSlope.asset`       | Armour   | bottom (-Y), back (-Z), left (-X), right (+X) | Front (+Z) and top (+Y) are cut away by the hypotenuse. |
 | `ShapeWeaponPyramid.asset` | Weapon | bottom (-Y) only                              | Apex up; coupled to `PyramidWeaponMatDef`.             |
 | `ShapeWeaponCylinder.asset` | Weapon | bottom (-Y) only                            | Hollow tube axis +Y; coupled to `CylinderWeaponMatDef`. |
+| `ShapeUtilityThruster.asset` | Utility | bottom (-Y) only                           | Cone geometry; coupled to `ThrusterMatDef`.            |
 
 **Symmetric face validity.** A placement at `cell` with `(shape,
 rotation)` is valid only when, for at least one face-neighbour:
@@ -236,12 +249,13 @@ public class MaterialDefinition : ScriptableObject
 MaterialB, MaterialC, MaterialD — collected into `MaterialRegistry`.
 The order is what `Placement.MaterialIndex` references.
 
-**Coupled weapon materials**: `PyramidWeaponMatDef` and
-`CylinderWeaponMatDef`. These are not in `MaterialRegistry`; they are
-referenced by their parent `ShapeDefinition.weaponMaterial` field.
-`ShapeDefinition.ResolveMaterial(index, registry)` returns the coupled
-weapon material for weapon shapes and the registry-indexed armour
-material for armour shapes — call sites don't branch on category.
+**Coupled materials**: `PyramidWeaponMatDef`, `CylinderWeaponMatDef`,
+and `ThrusterMatDef`. These are not in `MaterialRegistry`; each is
+referenced by its parent `ShapeDefinition.coupledMaterial` field
+(formerly `weaponMaterial`). `ShapeDefinition.ResolveMaterial(index,
+registry)` returns the coupled material for both Weapon and Utility
+shapes and the registry-indexed armour material for armour shapes —
+call sites don't branch on category.
 
 **Per-shape material memory.** `BuildManager` keeps a `Dictionary<int,
 int>` mapping shape index → last-armed material index. Switching to a
@@ -285,12 +299,14 @@ result.
 
 The construct's total mass is bounded and visibly affects flight feel.
 
-**Cap.** `BuildManager.massLimit = 100`. Attempting to place a cube
-that would push the total over the cap is rejected and the build UI
-shows a fading red message ("Too much mass!") for ~5 s. The alpha
-cube is included in the total. Prospective mass uses
-`ShapeDefinition.ResolveMaterial` so weapon shapes pull mass from
-their coupled `weaponMaterial`, not from the (irrelevant)
+**Cap.** The cap is `BuildManager.MassLimit` — a **computed property**
+returning the active `ShipClass`'s `MassCap` (Allrounder 100 / Tank
+180 / Scout 60); there is no serialized `massLimit` field. Attempting
+to place a cube that would push the total over the cap is rejected and
+the build UI shows a fading red message ("Too much mass!") for ~5 s.
+The alpha cube is included in the total. Prospective mass uses
+`ShapeDefinition.ResolveMaterial` so weapon and utility shapes pull
+mass from their coupled `coupledMaterial`, not from the (irrelevant)
 `MaterialRegistry` index.
 
 **Slowdown.** Since the Rigidbody refactor, mass affects flight feel
@@ -303,6 +319,59 @@ exponent scales applied torque by `mass^p` so heavy ships stay
 turnable, and a `maxAngularSpeed` cap keeps light ships from spinning
 out. A 10-mass ship feels nimble; a 100-mass ship is sluggish in both
 acceleration and turn — no special-case code, just physics.
+
+---
+
+## Ship Classes
+
+Every construct has a **ship class** that sets three build- and
+flight-level parameters. The class is a single `ShipClass` enum value:
+
+```csharp
+public enum ShipClass { Allrounder, Tank, Scout }
+```
+
+Each class maps to a small stats record exposing `AlphaHealthPoints`,
+`MassCap`, and `MovementMultiplier`:
+
+| Class        | Alpha HP | Mass cap | Movement multiplier |
+|--------------|----------|----------|---------------------|
+| `Allrounder` | 100      | 100      | 1.0                 |
+| `Tank`       | 200      | 180      | 0.7                 |
+| `Scout`      | 60       | 60       | 1.4                 |
+
+- **Picked** in BuildScene via `BuildShipClassController`'s middle-left
+  "Class" dropdown.
+- **Stored per save slot** — written to `ConstructSave.shipClass` by
+  name (see *Save / Load*); a v1 save with no class loads as
+  `Allrounder`.
+- **Applied in BuildScene** — the class sets the alpha cube's HP and is
+  the source of `BuildManager.MassLimit` (the mass cap).
+- **Applied in FlyScene** — the class sets the alpha cube's HP and
+  scales the construct's thrust and torque by `MovementMultiplier`, so
+  a Scout feels nimble and a Tank feels heavy beyond what its mass
+  alone would produce.
+
+---
+
+## Thruster / Boost
+
+A **Utility** shape category and a flight **boost** resource extend the
+build and flight loops. This section is a summary; the detailed design
+lives in `thruster_boost_spec.md` and `boost_overboost_tuning_spec.md`.
+
+- **Thruster cube** — `ShapeUtilityThruster`, the first `Utility`-category
+  shape: a cone that attaches by its `-Y` face only, coupled to
+  `ThrusterMatDef`. Placing thruster cubes marks the construct-local
+  axes the boost can amplify.
+- **Boost resource** — `FlyController` owns a 0–100 Boost meter. Holding
+  the `Boost` input (Left Ctrl) while commanding thrust along a
+  thrustered axis drains the meter and grants ×1.3 acceleration and a
+  ×1.3 max-speed ceiling on that axis. The meter regenerates when not
+  boosting; draining it fully triggers an **overboost lockout** that
+  holds regen low until the meter recovers, and the post-boost
+  max-speed ceiling decays back to normal. `FlyBoostBar` is the HUD
+  bar that shows it (see `FlyScene.unity`).
 
 ---
 
@@ -374,6 +443,7 @@ Scene contents:
 - `BuildManager` (with `CubePreview` and `BuildToolbarController` siblings).
 - `Main Camera` with `BuildCamera` (orbit camera).
 - `BuildIndicatorController` parents a small red arrow indicator above the cube with the highest local-Z so the player can see which face will lead in flight.
+- `BuildShipClassController` — the middle-left "Class" dropdown for choosing the construct's `ShipClass` (see *Ship Classes*).
 - Directional Light.
 - `UIBootstrap` instantiates the persistent `UICanvas` if not already alive.
 
@@ -390,12 +460,13 @@ Build-scene UI overlays (built at runtime by `BuildToolbarController`):
 
 - **Bottom-centre toolbar** — one button per shape, with a coloured corner swatch showing each shape's currently-armed material. Plus a **Delete** button.
   - Selecting an **armour** shape opens (or re-arms) its material flyout; hovering a shape button peeks the flyout open until pinned, clicking pins it. `M` toggles. Esc closes.
-  - Selecting a **weapon** shape suppresses the per-shape material flyout (weapon shapes have only their coupled `weaponMaterial`). `M` then toggles the **weapons flyout** — a single flyout that lists every weapon shape and lets the player pin it like the armour flyout.
-  - Digits `1`–`9` (no modifier) arm an **armour shape** by toolbar slot order; `Shift`+digit `1`–`9` arms the active armour shape's **material** by registry index. Weapons aren't reachable from the digit row — use the weapons flyout instead.
+  - Selecting a **non-armour** shape (weapon or utility) suppresses the per-shape material flyout — non-armour shapes have only their coupled `coupledMaterial`. `M` then toggles that shape's **category flyout**: a single flyout listing every shape in the category, pinned like the armour flyout. There is one such flyout per non-armour category — a **Weapons** flyout and a **Utilities** flyout — both built from the shared `CategoryFlyout` machinery.
+  - Digits `1`–`9` (no modifier) arm an **armour shape** by toolbar slot order; `Shift`+digit `1`–`9` arms the active armour shape's **material** by registry index. Non-armour shapes aren't reachable from the digit row — use their category flyout instead.
+- **Middle-left** — the `BuildShipClassController` "Class" dropdown.
 - **Top-left** — `Rotate: R/T` hint label.
 - **Top-centre** — fading red floating message slot (used for "Too much mass!").
 - **Bottom-left** — two stat readouts:
-  - `Mass: X / 100` (live, recomputed on `ConstructChanged`).
+  - `Mass: X / 100` (live, recomputed on `ConstructChanged`; the denominator is the active ship class's mass cap).
   - `HP: Y` (sum of all placed cubes' health, including alpha).
 
 Tools:
@@ -421,7 +492,7 @@ Scene contents:
 - `Main Camera` with `FlyCamera`.
 - `FlyShootingController` — owns the per-frame fire / weapon-selection dispatch.
 - `FlyCrashHandler` — `OnCollisionEnter`-based crash damage on the construct's Rigidbody. See **Combat** above.
-- `FlyHUD` GameObject — hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom weapon toolbar with reload bars), `FlySpeedIndicator` (bottom-left `Speed: NN.N u/s`), and `FlyHpIndicator` (bottom-left `HP: current / initial`).
+- `FlyHUD` GameObject — hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom weapon toolbar with reload bars), `FlySpeedIndicator` (bottom-left `Speed: NN.N u/s`), `FlyHpIndicator` (bottom-left `HP: current / initial`), and `FlyBoostBar` (Boost meter bar left of the crosshair, with a critical-zone red throb and an "Overboosted!" flash).
 - One `Ground` prefab instance at the origin (200×200 flat plane) and 20 `WorldTargetCube` prefab instances scattered in front of the spawn position — the basic flat-plain practice arena. Targets are tuned fragile (HP 30, AV 0) so the demo is actually destructible.
 - Directional Light.
 - `UIBootstrap` (idempotent — no-ops if `UIManager` is already alive).
@@ -432,6 +503,15 @@ Flight model:
 - 6-axis **thrust** applied via `Rigidbody.AddForce` in the construct's local frame; linear velocity is hard-clamped to `maxSpeed`.
 - **Pitch** / **roll** apply `AddRelativeTorque` (local axes); **Yaw** applies world-axis `AddTorque` (avoids roll coupling when pitched). Angular velocity is capped by `maxAngularSpeed`.
 - Mass affects flight through real physics: `F = ma` for translation, `τ = Iα` for rotation. Applied torque is scaled by `mass^rotationMassCompensation` so heavy ships stay turnable. `Rigidbody.linearDamping` / `angularDamping` provide decay — `angularDamping` is substantial so rotation comes to rest rather than drifting forever.
+- The active `ShipClass`'s `MovementMultiplier` scales applied thrust and torque, so a Scout handles nimbler and a Tank heavier than mass alone would dictate.
+
+Boost (see *Thruster / Boost* above and `thruster_boost_spec.md`):
+
+- Placeable **thruster cubes** (`ShapeUtilityThruster`) mark the construct-local axes the boost can amplify.
+- Holding **Left Ctrl** (the `Boost` input) while commanding thrust along a thrustered axis engages the boost.
+- `FlyController` owns a 0–100 **Boost** resource. While boosting it drains; otherwise it regenerates. While engaged the boosted axis gets ×1.3 acceleration and a ×1.3 max-speed ceiling.
+- Draining the meter to empty triggers an **overboost lockout** — regeneration is held low until the meter recovers. After boost ends the raised max-speed ceiling decays back to normal.
+- `FlyBoostBar` is the HUD bar showing the meter; `FlyController` exposes `BoostFraction` / `IsOverboosted` / `IsBoostCritical` for it.
 
 Camera:
 
@@ -479,6 +559,7 @@ shape's material by registry index).
 | `Look`     | Mouse delta                                                                                          | Free-look while LookHeld held.         |
 | `LookHeld` | RMB                                                                                                  | Gates `Look`.                          |
 | `Fire`     | LMB                                                                                                  | Held-down fire (per-weapon reload).    |
+| `Boost`    | Left Ctrl                                                                                            | Held; boosts thrustered axes.          |
 
 ESC, digits `1`–`9`, and mouse wheel are polled by
 `FlyShootingController` / `PauseMenu` outside the action map.
@@ -505,8 +586,8 @@ The project also adds a tag `AlphaCube` so the alpha cube is identifiable indepe
 
 A small file-logging facility runs alongside `Debug.Log`:
 
-- `LogBootstrapper` — `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`. Replaces `Debug.unityLogger.logHandler` with a `FileLogHandler`.
-- `FileLogHandler` — appends to a session-stamped file under `Logs/runtime-<timestamp>.log`. The default `UnityLogHandler` is preserved as a chain target so messages still appear in the Editor console.
+- `LogBootstrapper` — a `MonoBehaviour` on `UICanvas.prefab` (a `DontDestroyOnLoad` singleton, bootstrapped by `UIBootstrap` — *not* a `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` hook). Replaces `Debug.unityLogger.logHandler` with a `FileLogHandler`. It comes up with the first gameplay scene's `UICanvas`, so MainMenu / HangarSelect run without it.
+- `FileLogHandler` — appends to a session-stamped file at `Application.persistentDataPath/Logs/CubeFly_<timestamp>.log`. The default `UnityLogHandler` is preserved as a chain target so messages still appear in the Editor console.
 
 The `Logs/` directory is git-ignored. Code uses category tags
 (`UIManager`, `BuildManager`, `FlyController`, `FlyShooting`,

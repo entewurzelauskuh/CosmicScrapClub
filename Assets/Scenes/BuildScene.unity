@@ -604,7 +604,7 @@ MonoBehaviour:
   bottomMargin: 30
   fontSize: 22
   hintText: 'Rotate: R/T'
-  hintFontSize: 50
+  hintFontSize: 18
   hintAnchoredPosition: {x: 20, y: -20}
   hintSize: {x: 220, y: 32}
   floatingFontSize: 36

@@ -56,6 +56,14 @@ namespace CubeFly.Core
         // even if the validation rules have evolved between versions.
         static bool _loading;
 
+        // Flight-session snapshot. CaptureFlightSnapshot stores the
+        // construct when a Fly session begins; RestoreFlightSnapshot
+        // puts it back when the session ends, so in-flight cube
+        // destruction (CubeDamage → Remove) never leaks into the
+        // construct BuildScene re-enters. Null when no snapshot is held.
+        static List<Placement> _flightSnapshot;
+        static ShipClass _flightSnapshotShipClass;
+
         internal static readonly Vector3Int[] Neighbors =
         {
             new Vector3Int( 1, 0, 0),
@@ -210,6 +218,51 @@ namespace CubeFly.Core
             return false;
         }
 
+        // Face-aware flood-fill from the origin (the alpha cube). Returns
+        // the set of cells reachable from the origin across
+        // HasFaceConnection edges — the origin itself is always included.
+        // Any placed cell NOT in the returned set is "dangling": still in
+        // GameData but graph-disconnected from the alpha. Shared by
+        // BuildManager.RemoveDanglingCubes (delete-tool cleanup) and the
+        // FlyScene cube-death cascade so both judge connectivity by one
+        // rule.
+        public static HashSet<Vector3Int> GetCellsConnectedToOrigin(ShapeRegistry shapeRegistry)
+        {
+            HashSet<Vector3Int> visited = new HashSet<Vector3Int> { Vector3Int.zero };
+            Queue<Vector3Int> queue = new Queue<Vector3Int>();
+            queue.Enqueue(Vector3Int.zero);
+
+            while (queue.Count > 0)
+            {
+                Vector3Int curr = queue.Dequeue();
+
+                // Resolve the current cell's shape + rotation. The origin
+                // holds the alpha cube (six-faces-valid, no Placement
+                // record) — represented as a null shape, which
+                // HasFaceConnection reads as the alpha.
+                ShapeDefinition currShape = null;
+                Quaternion currRotation = Quaternion.identity;
+                if (curr != Vector3Int.zero)
+                {
+                    Placement p = GetPlacementAt(curr);
+                    currShape = shapeRegistry != null ? shapeRegistry.Get(p.ShapeIndex) : null;
+                    currRotation = p.Rotation;
+                }
+
+                for (int i = 0; i < Neighbors.Length; i++)
+                {
+                    Vector3Int dir = Neighbors[i];
+                    Vector3Int nb = curr + dir;
+                    if (visited.Contains(nb)) continue;
+                    if (!HasFaceConnection(curr, currShape, currRotation, dir, shapeRegistry))
+                        continue;
+                    visited.Add(nb);
+                    queue.Enqueue(nb);
+                }
+            }
+            return visited;
+        }
+
         public static Bounds GetConstructBounds()
         {
             Bounds bounds = new Bounds(Vector3.zero, Vector3.one);
@@ -230,6 +283,46 @@ namespace CubeFly.Core
             // here regardless of the previous slot's class.
             ActiveShipClass = ShipClass.Allrounder;
             Debug.unityLogger.Log(TAG, "GameData cleared.");
+        }
+
+        // Capture the current placements + ship class as the flight
+        // snapshot. Called by SceneSwitcher on the BuildScene → FlyScene
+        // transition: GameData is the pristine pre-flight construct at
+        // that moment.
+        public static void CaptureFlightSnapshot()
+        {
+            _flightSnapshot = new List<Placement>(_placedCubes);
+            _flightSnapshotShipClass = ActiveShipClass;
+            Debug.unityLogger.Log(TAG,
+                $"Flight snapshot captured: {_flightSnapshot.Count} placement(s).");
+        }
+
+        // Restore the construct from the flight snapshot, discarding any
+        // in-flight cube losses. Called by SceneSwitcher on the FlyScene
+        // → BuildScene transition. No-ops with a warning when no snapshot
+        // is held — leaving the construct as-is is safer than wiping it.
+        public static void RestoreFlightSnapshot()
+        {
+            if (_flightSnapshot == null)
+            {
+                Debug.unityLogger.LogWarning(TAG,
+                    "RestoreFlightSnapshot: no snapshot held — construct left as-is.");
+                return;
+            }
+
+            _placedCubes.Clear();
+            _byCell.Clear();
+            for (int i = 0; i < _flightSnapshot.Count; i++)
+            {
+                Placement p = _flightSnapshot[i];
+                _placedCubes.Add(p);
+                _byCell[p.Cell] = p;
+            }
+            ActiveShipClass = _flightSnapshotShipClass;
+
+            Debug.unityLogger.Log(TAG,
+                $"Flight snapshot restored: {_placedCubes.Count} placement(s).");
+            _flightSnapshot = null;
         }
 
         // Set the construct's ship class. Called by the BuildScene

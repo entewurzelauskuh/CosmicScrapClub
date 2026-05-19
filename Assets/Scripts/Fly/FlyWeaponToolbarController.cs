@@ -34,6 +34,18 @@ namespace CubeFly.Fly
         [Header("Corner swatch")]
         [SerializeField] Vector2 swatchSize = new Vector2(18f, 18f);
 
+        [Header("Death response")]
+        [Tooltip("Background color of a fully-dead weapon type's button.")]
+        [SerializeField] Color deadColor = new Color(0.32f, 0.32f, 0.34f, 0.9f);
+        [Tooltip("Color of the partial-death corner mark (the X glyph).")]
+        [SerializeField] Color deathMarkColor = new Color(0.95f, 0.2f, 0.2f, 1f);
+        [Tooltip("Size of the partial-death corner mark, in UI units.")]
+        [SerializeField] Vector2 deathMarkSize = new Vector2(16f, 16f);
+        [Tooltip("Period of the partial-death mark's alpha pulse, in seconds.")]
+        [SerializeField] float deathMarkPulseSeconds = 1f;
+        [Tooltip("Minimum alpha at the dim end of the partial-death mark pulse.")]
+        [SerializeField, Range(0f, 1f)] float deathMarkAlphaMin = 0.25f;
+
         const string TAG = "FlyWeaponToolbar";
 
         Canvas _canvas;
@@ -42,6 +54,7 @@ namespace CubeFly.Fly
         Image[] _buttonBackgrounds;
         Image[] _reloadBars;          // foreground fill (per-type colored)
         Image[] _swatches;
+        Text[] _deathMarks;           // partial-death X mark, per button
 
         static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
 
@@ -56,8 +69,7 @@ namespace CubeFly.Fly
                 return;
             }
 
-            shootingController.TypesChanged    += RebuildButtons;
-            shootingController.SelectedChanged += OnSelectedChanged;
+            shootingController.TypesChanged += RebuildButtons;
 
             // FlyController.Start may have already called RegisterWeapons
             // before us — query current state.
@@ -68,8 +80,7 @@ namespace CubeFly.Fly
         {
             if (shootingController != null)
             {
-                shootingController.TypesChanged    -= RebuildButtons;
-                shootingController.SelectedChanged -= OnSelectedChanged;
+                shootingController.TypesChanged -= RebuildButtons;
             }
         }
 
@@ -82,6 +93,7 @@ namespace CubeFly.Fly
                 if (_reloadBars[i] == null) continue;
                 _reloadBars[i].fillAmount = shootingController.Types[i].ReadyFraction;
             }
+            RefreshWeaponStates();
         }
 
         // ---------- UI construction ----------
@@ -121,6 +133,7 @@ namespace CubeFly.Fly
                 _buttonBackgrounds = null;
                 _reloadBars = null;
                 _swatches = null;
+                _deathMarks = null;
                 HideCanvas();
                 return;
             }
@@ -130,6 +143,7 @@ namespace CubeFly.Fly
             _buttonBackgrounds = new Image[count];
             _reloadBars = new Image[count];
             _swatches = new Image[count];
+            _deathMarks = new Text[count];
 
             float totalWidth = count * buttonSize.x + Mathf.Max(0, count - 1) * spacing;
             float startX = -totalWidth / 2f + buttonSize.x / 2f;
@@ -149,9 +163,11 @@ namespace CubeFly.Fly
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
                 brt.anchoredPosition = new Vector2(startX + i * (buttonSize.x + spacing), bottomMargin);
-                // Optional click-to-select — wired but commented behaviour:
-                // some users prefer keyboard + scroll only. Keep the
-                // listener so the buttons feel responsive in any case.
+                // RefreshWeaponStates owns button background color; switch
+                // off the Button's ColorTint transition so it doesn't
+                // fight the manual painting. interactable = false still
+                // blocks clicks regardless of transition mode.
+                btn.transition = Selectable.Transition.None;
                 btn.onClick.AddListener(() => shootingController.SetSelected(idx));
 
                 _buttons[i] = btn;
@@ -159,6 +175,9 @@ namespace CubeFly.Fly
 
                 // ---- Corner swatch ----
                 _swatches[i] = BuildSwatch(brt, swatchColor);
+
+                // ---- Partial-death corner mark ----
+                _deathMarks[i] = BuildDeathMark(brt);
 
                 // ---- Reload bar (background + foreground fill) ----
                 float barY = bottomMargin + buttonSize.y + reloadBarGap + reloadBarSize.y / 2f;
@@ -168,7 +187,7 @@ namespace CubeFly.Fly
                 _reloadBars[i] = BuildReloadRect(_canvasRoot, "ReloadBarFg" + i, reloadBarSize, barCenter, swatchColor, isFill: true);
             }
 
-            ApplySelectedHighlight(shootingController.SelectedTypeIndex);
+            RefreshWeaponStates();
             Debug.unityLogger.Log(TAG, $"Toolbar rebuilt with {count} weapon type(s).");
         }
 
@@ -208,19 +227,67 @@ namespace CubeFly.Fly
             return img;
         }
 
-        // ---------- Event-driven refreshes ----------
+        // ---------- Death-response construction + per-frame refresh ----------
 
-        void OnSelectedChanged(int idx) => ApplySelectedHighlight(idx);
-
-        void ApplySelectedHighlight(int idx)
+        // Build the partial-death X mark for a button — a bold red glyph
+        // anchored to the button's bottom-right corner (mirroring the
+        // top-right swatch). Disabled by default; RefreshWeaponStates
+        // enables it while the type is partially dead.
+        Text BuildDeathMark(RectTransform buttonRT)
         {
-            if (_buttonBackgrounds == null) return;
-            for (int i = 0; i < _buttonBackgrounds.Length; i++)
+            Text mark = UIStyle.BuildLabel(
+                buttonRT, "✕", Mathf.RoundToInt(deathMarkSize.y), FontStyle.Bold);
+            RectTransform rt = (RectTransform)mark.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = new Vector2(-4f, 4f);
+            rt.sizeDelta = deathMarkSize;
+            mark.color = deathMarkColor;
+            mark.enabled = false;
+            return mark;
+        }
+
+        // Per-frame weapon-state refresh — sole owner of button
+        // interactability, background color, and the partial-death mark.
+        // Background priority: dead > selected > idle.
+        void RefreshWeaponStates()
+        {
+            if (_buttons == null) return;
+            int selected = shootingController.SelectedTypeIndex;
+            for (int i = 0; i < _buttons.Length; i++)
             {
-                if (_buttonBackgrounds[i] == null) continue;
-                _buttonBackgrounds[i].color = (i == idx)
-                    ? SelectedTypeColor
-                    : UIStyle.BackgroundIdle;
+                // One Instances scan per group per frame — GetDeadState
+                // derives both flags from a single AliveCount walk.
+                shootingController.Types[i].GetDeadState(
+                    out bool fullyDead, out bool partiallyDead);
+
+                if (_buttons[i] != null)
+                    _buttons[i].interactable = !fullyDead;
+
+                if (_buttonBackgrounds[i] != null)
+                {
+                    Color bg;
+                    if (fullyDead)          bg = deadColor;
+                    else if (i == selected) bg = SelectedTypeColor;
+                    else                    bg = UIStyle.BackgroundIdle;
+                    _buttonBackgrounds[i].color = bg;
+                }
+
+                if (_deathMarks[i] != null)
+                {
+                    _deathMarks[i].enabled = partiallyDead;
+                    if (partiallyDead)
+                    {
+                        // Slow sine alpha pulse between deathMarkAlphaMin
+                        // and 1, driven by unscaled time so it keeps
+                        // pulsing while the game is paused.
+                        float period = Mathf.Max(0.01f, deathMarkPulseSeconds);
+                        float phase = 0.5f + 0.5f *
+                            Mathf.Sin(Time.unscaledTime * (2f * Mathf.PI / period));
+                        Color c = deathMarkColor;
+                        c.a = Mathf.Lerp(deathMarkAlphaMin, 1f, phase);
+                        _deathMarks[i].color = c;
+                    }
+                }
             }
         }
     }

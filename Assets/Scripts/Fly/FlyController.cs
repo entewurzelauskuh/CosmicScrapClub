@@ -200,12 +200,69 @@ namespace CubeFly.Fly
 
         void OnDestroy() => _input?.Dispose();
 
-        // A cube died in flight (CubeDeath.CubeDied). It is already gone
-        // from GameData and detached from the construct, so re-resolving
-        // the Rigidbody now recomputes mass + the mass-derived flight
-        // factors for the lighter ship (Unity rebuilds the inertia tensor
-        // from the shrunken compound collider when rb.mass is set).
-        void OnCubeDied() => ResolveRigidbody();
+        // A cube died in flight (CubeDeath.CubeDied). The dead cube is
+        // already gone from GameData and detached from the construct.
+        // First cascade-destroy any cubes the death left disconnected
+        // from the alpha, then re-resolve the Rigidbody once so mass +
+        // the mass-derived flight factors reflect the final, lighter
+        // construct (Unity rebuilds the inertia tensor from the shrunken
+        // compound collider when rb.mass is set).
+        void OnCubeDied()
+        {
+            CascadeDestroyDisconnectedCubes();
+            ResolveRigidbody();
+        }
+
+        // Flight-side mirror of BuildManager's delete-tool cleanup: when a
+        // cube death leaves other cubes with no face-path back to the
+        // alpha, those orphans are destroyed too. Orphans are killed via
+        // CubeDeath.BeginDeath directly (not CubeDamage), so this does NOT
+        // re-raise CubeDied — a single flood-fill already finds every
+        // orphan transitively.
+        void CascadeDestroyDisconnectedCubes()
+        {
+            HashSet<Vector3Int> connected = GameData.GetCellsConnectedToOrigin(shapeRegistry);
+
+            // Collect orphan cells before mutating GameData.
+            List<Vector3Int> orphans = new List<Vector3Int>();
+            for (int i = 0; i < GameData.PlacedCubes.Count; i++)
+            {
+                Vector3Int cell = GameData.PlacedCubes[i].Cell;
+                if (!connected.Contains(cell)) orphans.Add(cell);
+            }
+            if (orphans.Count == 0) return;
+
+            // Map each orphan cell to its live cube GameObject. Cubes
+            // already dying are reparented out of `construct` by
+            // CubeDeath, so GetComponentsInChildren only sees live ones.
+            Dictionary<Vector3Int, GameObject> cellToCube = new Dictionary<Vector3Int, GameObject>();
+            PlacedCubeData[] placedDatas = construct.GetComponentsInChildren<PlacedCubeData>();
+            for (int i = 0; i < placedDatas.Length; i++)
+                cellToCube[placedDatas[i].cell] = placedDatas[i].gameObject;
+
+            Vector3 outwardOrigin = construct.position;
+            for (int i = 0; i < orphans.Count; i++)
+            {
+                Vector3Int cell = orphans[i];
+                GameData.Remove(cell);
+
+                if (!cellToCube.TryGetValue(cell, out GameObject cube) || cube == null)
+                    continue;
+
+                // Zero HP so any liveness poll (e.g. the weapon toolbar)
+                // sees the orphan as dead immediately, not only after its
+                // ~2 s death drift.
+                CubeStats stats = cube.GetComponent<CubeStats>();
+                if (stats != null) stats.healthPoints = 0f;
+
+                CubeDeath death = cube.GetComponent<CubeDeath>()
+                               ?? cube.AddComponent<CubeDeath>();
+                death.BeginDeath(outwardOrigin);
+            }
+
+            Debug.unityLogger.Log(TAG,
+                $"Cascade: {orphans.Count} cube(s) disconnected by a cube death — destroyed.");
+        }
 
         // Editor-only: keep designer-tunable values in their valid
         // range. criticalBoostFraction must stay in [0,1] — a value

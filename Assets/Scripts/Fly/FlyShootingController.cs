@@ -102,13 +102,30 @@ namespace CubeFly.Fly
 
         void Update()
         {
-            // Pause + UI gating, same pattern as BuildManager.
+            // Pause + weapon-presence gating.
             if (PauseMenu.Instance != null && PauseMenu.Instance.IsOpen) return;
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
             if (!HasWeapons) return;
+
+            // Auto-switch off a fully-dead selected type. Runs before the
+            // pointer-over-UI gate — a weapon dying must move selection
+            // regardless of where the cursor is.
+            AutoSwitchOffDeadType();
+
+            // UI gating — selection/fire input only when not over the HUD.
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
 
             HandleSelectionInputs();
             HandleFireInput();
+        }
+
+        // If the selected type is fully dead, move selection to the
+        // nearest live type. No-op when the selection is live or when no
+        // live type remains (the player simply cannot fire).
+        void AutoSwitchOffDeadType()
+        {
+            WeaponTypeGroup selected = SelectedType;
+            if (selected == null || !selected.IsFullyDead) return;
+            CycleSelected(1);
         }
 
         void HandleSelectionInputs()
@@ -159,24 +176,40 @@ namespace CubeFly.Fly
             for (int i = 0; i < active.Instances.Count; i++)
             {
                 WeaponBehavior w = active.Instances[i];
-                if (w != null) w.TryFire(target);
+                if (w != null && w.IsAlive) w.TryFire(target);
             }
         }
 
         public void SetSelected(int i)
         {
             if (i < 0 || i >= _types.Count) return;
+            // Cannot select a fully-dead type. Centralises the rule for
+            // digit keys and button clicks; CycleSelected and auto-switch
+            // always pass a live index, so the guard never blocks them.
+            if (_types[i].IsFullyDead) return;
             if (i == _selectedTypeIndex) return;
             _selectedTypeIndex = i;
             Debug.unityLogger.Log(TAG, $"Selected weapon type index {i} ({_types[i].Shape.displayName}).");
             SelectedChanged?.Invoke(_selectedTypeIndex);
         }
 
+        // Step selection by `delta`, skipping past fully-dead types to the
+        // next live one. Scans up to Types.Count steps; if no live type
+        // exists, selection is left unchanged.
         public void CycleSelected(int delta)
         {
             if (_types.Count == 0) return;
-            int next = (_selectedTypeIndex + delta + _types.Count) % _types.Count;
-            SetSelected(next);
+            int step = delta >= 0 ? 1 : -1;
+            int next = _selectedTypeIndex;
+            for (int scanned = 0; scanned < _types.Count; scanned++)
+            {
+                next = (next + step + _types.Count) % _types.Count;
+                if (!_types[next].IsFullyDead)
+                {
+                    SetSelected(next);
+                    return;
+                }
+            }
         }
     }
 
@@ -204,6 +237,48 @@ namespace CubeFly.Fly
                 if (r <= 0f) return 1f;
                 return 1f - Mathf.Clamp01(CooldownRemaining / r);
             }
+        }
+
+        // Instances still alive — non-null (excludes Unity-destroyed
+        // cubes) and IsAlive (excludes cubes mid death-drift at 0 HP).
+        // O(n); prefer GetDeadState when both dead-state flags are needed.
+        public int AliveCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < Instances.Count; i++)
+                {
+                    WeaponBehavior w = Instances[i];
+                    if (w != null && w.IsAlive) n++;
+                }
+                return n;
+            }
+        }
+
+        // Both dead-state flags from a SINGLE AliveCount scan. The weapon
+        // toolbar polls liveness every frame for every group, so deriving
+        // both flags together keeps that to one Instances walk per group
+        // per frame instead of one walk per flag read.
+        public void GetDeadState(out bool fullyDead, out bool partiallyDead)
+        {
+            int alive = AliveCount;
+            fullyDead = alive == 0;
+            partiallyDead = Instances.Count > 1 && alive > 0 && alive < Instances.Count;
+        }
+
+        // Every instance of this type is dead. A group always has >=1
+        // instance (RegisterWeapons only creates a group for a member).
+        public bool IsFullyDead
+        {
+            get { GetDeadState(out bool fullyDead, out _); return fullyDead; }
+        }
+
+        // Some but not all instances are dead — only meaningful for a
+        // multi-instance type.
+        public bool IsPartiallyDead
+        {
+            get { GetDeadState(out _, out bool partiallyDead); return partiallyDead; }
         }
     }
 }

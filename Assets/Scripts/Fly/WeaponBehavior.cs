@@ -37,7 +37,27 @@ namespace CubeFly.Fly
         public float CooldownRemaining => _cooldown;
         public bool CanFire => _cooldown <= 0f;
 
+        // True while this weapon cube is alive (HP > 0). Polled by
+        // FlyShootingController (fire gate) and FlyWeaponToolbarController
+        // (button state). The sibling CubeStats is resolved once and
+        // cached — the construct is rigid for a Fly session — mirroring
+        // ThrusterBehavior.LocalThrustAxis's lazy cache.
+        public bool IsAlive
+        {
+            get
+            {
+                if (!_statsResolved)
+                {
+                    _stats = GetComponent<CubeStats>();
+                    _statsResolved = true;
+                }
+                return _stats != null && _stats.healthPoints > 0f;
+            }
+        }
+
         float _cooldown;
+        CubeStats _stats;
+        bool _statsResolved;
 
         protected virtual void Update()
         {

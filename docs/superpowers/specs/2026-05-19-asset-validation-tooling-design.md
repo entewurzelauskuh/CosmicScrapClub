@@ -69,7 +69,10 @@ later justifies it.
   `Editor` from runtime builds, so editor-only code lives here even though
   no asmdef split is in place.
 - New file: `Assets/Scripts/Editor/RegistryValidator.cs`. Namespace
-  `CubeFly.Editor`.
+  `CubeFly.EditorTools` — *not* `CubeFly.Editor`, because that name
+  would shadow `UnityEditor.Editor` for any other file in the
+  `CubeFly.*` hierarchy (`DuneGroundGeneratorEditor.cs` refers to
+  `Editor` unqualified).
 - Menu path: `Tools/CubeFly/Validate Registries`.
 - Single internal static class; one public entry point invoked by the menu
   item; small private helpers per check group.

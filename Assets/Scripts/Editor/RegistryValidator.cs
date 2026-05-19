@@ -1,35 +1,3 @@
-# Registry Validation Tooling Implementation Plan
-
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
-**Goal:** Ship an on-demand editor tool (`Tools/CubeFly/Validate Registries`) that validates `ShapeRegistry`, `MaterialRegistry`, every shape's prefab, and every coupled material — reporting findings to the Unity console with an end-of-run summary dialog.
-
-**Architecture:** Single static C# class in a new `Assets/Scripts/Editor/` folder (auto-excluded from runtime builds by Unity convention). Discovery uses `AssetDatabase.FindAssets("t:Type")` so asset paths aren't hard-coded. Each check produces a tagged `Debug.unityLogger` line with the offending asset as `context` so Console pings the right asset on click.
-
-**Tech Stack:** Unity 6.3 LTS, MonoBehaviour C#, Unity `AssetDatabase` + `EditorUtility` + `MenuItem`. No external libraries.
-
-**Design spec:** `docs/superpowers/specs/2026-05-19-asset-validation-tooling-design.md`.
-
-**Branch:** `feat/asset-validation-tooling` (already created, off `main`; the ROADMAP commit `6d5c829` and the design-spec commit `6164ffe` are already on it).
-
-**Testing note:** This project has **no automated test framework** (F5/asmdef split is roadmapped). Verification is the Unity compile-check (`refresh_unity` + `read_console`) plus the manual hand-injection run in Task 2.
-
-**Working-tree note:** `Assets/Materials/BulletMat.mat`, `ProjectSettings/Packages/com.unity.probuilder/Settings.json`, and the untracked `CODEBASE_REVIEW_AUDIT.txt` are pre-existing unrelated changes. **Never stage them.** Every commit below stages only its named files.
-
----
-
-## Task 1: Implement `RegistryValidator.cs`
-
-**Files:**
-- Create: `Assets/Scripts/Editor/RegistryValidator.cs`
-
-The file is built in five chunks: a compiling skeleton with empty stubs, then four stubs are filled in (one per check category). The skeleton compiles on its own — each subsequent step adds a method body and any private helpers below it.
-
-- [ ] **Step 1: Write the file skeleton**
-
-Create `Assets/Scripts/Editor/RegistryValidator.cs` with this content (the four `CheckXxx` stubs are intentionally empty — subsequent steps fill them in):
-
-```csharp
 using System.Collections.Generic;
 using CubeFly.Build;
 using CubeFly.Core;
@@ -126,33 +94,6 @@ namespace CubeFly.EditorTools
 
         // ---------- Check stubs (filled in by subsequent steps) ----------
 
-        // Filled in by Step 2.
-        static void CheckRequiredLayers() { }
-
-        // Filled in by Step 3.
-        static void CheckShapeRegistry(ShapeRegistry registry) { }
-
-        // Filled in by Step 4.
-        static void CheckMaterialRegistry(MaterialRegistry registry) { }
-
-        // Filled in by Step 5.
-        static void CheckCoupledMaterials(ShapeRegistry shapeRegistry, MaterialRegistry materialRegistry) { }
-    }
-}
-```
-
-- [ ] **Step 2: Fill in `CheckRequiredLayers`**
-
-In `Assets/Scripts/Editor/RegistryValidator.cs`, replace this block:
-
-```csharp
-        // Filled in by Step 2.
-        static void CheckRequiredLayers() { }
-```
-
-with:
-
-```csharp
         // Verify the layers BuildManager filters on / the AlphaCube uses
         // are defined in Project Settings → Tags and Layers. Missing
         // layers don't break the build (BuildManager.ResolveLayerMasks
@@ -170,20 +111,7 @@ with:
             if (LayerMask.NameToLayer(layerName) < 0)
                 ReportError($"Required layer '{layerName}' is not defined in Project Settings → Tags and Layers.", null);
         }
-```
 
-- [ ] **Step 3: Fill in `CheckShapeRegistry` + per-shape helpers**
-
-In `Assets/Scripts/Editor/RegistryValidator.cs`, replace this block:
-
-```csharp
-        // Filled in by Step 3.
-        static void CheckShapeRegistry(ShapeRegistry registry) { }
-```
-
-with:
-
-```csharp
         // Walks every ShapeDefinition in the registry. Registry-level
         // concerns (non-empty list, no nulls, unique displayName) are
         // handled here; per-shape detail is in CheckShapeDefinition.
@@ -285,20 +213,7 @@ with:
             // If expectedLayer < 0, CheckRequiredLayers already reported
             // the missing layer — no point repeating it per shape.
         }
-```
 
-- [ ] **Step 4: Fill in `CheckMaterialRegistry` + per-material helpers**
-
-In `Assets/Scripts/Editor/RegistryValidator.cs`, replace this block:
-
-```csharp
-        // Filled in by Step 4.
-        static void CheckMaterialRegistry(MaterialRegistry registry) { }
-```
-
-with:
-
-```csharp
         // Walks every MaterialDefinition in the armour pool. Registry-
         // level concerns (non-empty list, no nulls, unique displayName)
         // are handled here; per-material detail is in
@@ -365,20 +280,7 @@ with:
                 ReportWarning($"Material '{material.displayName}': {fieldName} is negative ({value}).", material);
             }
         }
-```
 
-- [ ] **Step 5: Fill in `CheckCoupledMaterials`**
-
-In `Assets/Scripts/Editor/RegistryValidator.cs`, replace this block:
-
-```csharp
-        // Filled in by Step 5.
-        static void CheckCoupledMaterials(ShapeRegistry shapeRegistry, MaterialRegistry materialRegistry) { }
-```
-
-with:
-
-```csharp
         // For each non-armour shape, run the per-MaterialDefinition
         // checks against its coupledMaterial and warn if the coupled
         // material leaked into the armour MaterialRegistry pool.
@@ -420,142 +322,5 @@ with:
                 }
             }
         }
-```
-
-- [ ] **Step 6: Compile-verify**
-
-Run `refresh_unity` (mode `force`, scope `all`, compile `request`, `wait_for_ready` true). Then poll `mcpforunity://editor/state` until `is_compiling` is false. Then `read_console` with `types: ["error", "warning"]`, `filter_text: "Assets/Scripts"`.
-
-Expected: zero entries from `Assets/Scripts`. MCP-bridge "Client handler exited" / "Cannot access a disposed object" lines from `Packages/com.coplaydev.unity-mcp` are not errors and are filtered out by the `Assets/Scripts` filter.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add Assets/Scripts/Editor/RegistryValidator.cs
-git commit -m "$(cat <<'EOF'
-Add registry validation editor tool
-
-Tools/CubeFly/Validate Registries runs on demand, checks the
-ShapeRegistry / MaterialRegistry / their prefabs / coupled
-materials / required layers, and reports findings to the Console
-with an end-of-run summary dialog.
-
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-## Task 2: Manual verification
-
-**No code.** Run the tool from the Unity Editor.
-
-- [ ] **Step 1: Clean run**
-
-In Unity, click **Tools → CubeFly → Validate Registries**.
-
-Expected Console (filtered to `RegistryValidator`):
-- A single info line: `RegistryValidator: Validation complete: 0 error(s), 0 warning(s), 5 shape(s), 4 armour material(s), 3 coupled material(s) checked.` (Counts: 5 shapes = Cube + Slope + WeaponPyramid + WeaponCylinder + UtilityThruster. 4 armour materials = A/B/C/D. 3 coupled materials = PyramidWeaponMatDef + CylinderWeaponMatDef + ThrusterMatDef.)
-
-Expected dialog: title "Registry Validation", body "All checks passed.", single OK button.
-
-If any finding appears on the clean state, **that is the value of shipping this tool** — investigate and fix the surfaced issue rather than the tool.
-
-- [ ] **Step 2: Hand-inject failure modes**
-
-Confirm each branch fires once. Restore each change after observing the finding.
-
-**A. Empty displayName**
-- In the Project window, open `Assets/Shapes/ShapeCube.asset`.
-- In Inspector, clear the `Display Name` field (leave blank). Save (Ctrl/Cmd+S).
-- Run the menu item. Expected: one error `RegistryValidator: Shape 'ShapeCube' has an empty displayName.`
-- Restore the field to `Cube`. Save.
-
-**B. Missing CubeStats**
-- Open the `Assets/Prefabs/PlacedCube.prefab` in Prefab mode.
-- Remove the `CubeStats` component from the root GameObject. Save the prefab.
-- Run the menu item. Expected: one error `RegistryValidator: Shape 'Cube': prefab 'PlacedCube' has no CubeStats component.`
-- Undo / restore the `CubeStats` component (use Unity's Undo or re-add and re-enter the original values: healthPoints 100, armourValue 10, mass 1). Save.
-
-**C. All face flags false**
-- Open `Assets/Shapes/ShapeCube.asset` in the Inspector.
-- Uncheck all six face flags (faceNegX/PosX/NegY/PosY/NegZ/PosZ). Save.
-- Run the menu item. Expected: one warning `RegistryValidator: Shape 'Cube' has no valid attachment face (all face flags false).`
-- Restore all six face flags to true. Save.
-
-**D. Duplicate displayName**
-- Open `Assets/Shapes/ShapeSlope.asset` in Inspector.
-- Change its `Display Name` from `Slope` to `Cube`. Save.
-- Run the menu item. Expected: one error `RegistryValidator: Duplicate shape displayName 'Cube'.`
-- Restore the displayName to `Slope`. Save.
-
-- [ ] **Step 3: Confirm restoration**
-
-Run the menu item one final time. Expected: "All checks passed." dialog and the clean summary line. If anything is still flagged, restore the offending change before continuing.
-
----
-
-## Task 3: Push branch + open PR
-
-After Task 2 confirms the tool works.
-
-- [ ] **Step 1: Push the branch**
-
-```bash
-git push -u origin feat/asset-validation-tooling
-```
-
-- [ ] **Step 2: Open the PR**
-
-```bash
-gh pr create --title "Asset-validation tooling (F10) + roadmap deferrals" --body "$(cat <<'EOF'
-## Summary
-- **F10 — Asset-validation tooling:** new on-demand editor tool at `Tools/CubeFly/Validate Registries`. Checks `ShapeRegistry`, `MaterialRegistry`, every shape's spawn prefab, every coupled `MaterialDefinition`, and the required gameplay layers (`PlacedCube`, `AlphaCube`, `PreviewCube`). Findings go to the Console with the offending asset as click-context; a summary dialog reports the outcome.
-- **ROADMAP update:** the audit's other deferred items (F5 tests/asmdefs, F6 ConstructModel, F7 BuildToolbar split, F8 HUD consolidation, plus architecture recs for HitContext, input centralisation, thruster system, docs-as-contract) move into a new **Architecture & infrastructure** subsection under *Later*, each with its trigger condition noted.
-
-Design: `docs/superpowers/specs/2026-05-19-asset-validation-tooling-design.md`.
-
-## Test plan
-- [x] Clean run on the current state → "All checks passed."
-- [x] Hand-injected failures fire exactly once each (empty displayName, missing CubeStats, all face flags false, duplicate displayName).
-- [x] Compile clean, no console errors outside the tool's own `RegistryValidator` lines.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-EOF
-)"
-```
-
-- [ ] **Step 3: Request Copilot review**
-
-```bash
-PR=$(gh pr view --json number -q .number)
-gh api repos/entewurzelauskuh/CosmicScrapClub/pulls/$PR/requested_reviewers -X POST -f "reviewers[]=Copilot"
-```
-
----
-
-## Self-review
-
-**Spec coverage** — every section of the design spec maps to a task:
-- Discovery via `AssetDatabase.FindAssets("t:Type")` → Task 1 Step 1 (`FindSoleAsset<T>`).
-- Required layers check → Task 1 Step 2.
-- ShapeRegistry / ShapeDefinition / prefab-component / layer / coupled / face-flag checks → Task 1 Step 3.
-- MaterialRegistry / per-MaterialDefinition (armour pool) checks → Task 1 Step 4.
-- Coupled-material checks (per-MD plus leak warning) → Task 1 Step 5.
-- Severity rules (error vs warning) → consistently applied via `ReportError` / `ReportWarning` in every step.
-- Output (per-finding log with context, summary line, dialog) → Task 1 Step 1.
-- File location `Assets/Scripts/Editor/RegistryValidator.cs` → Task 1 Step 1.
-- Verification (clean run + four hand-injected failure modes) → Task 2.
-- Spec's "out of scope" exclusions (EditMode tests, alpha cube, scene/bootstrap, orphan prefabs, auto-run) — no tasks, by design.
-
-**Placeholder scan** — no TBD/TODO; every step contains complete code; exact commands with expected output.
-
-**Type consistency** — names used consistently across steps:
-- `TAG = "RegistryValidator"` referenced in `ReportError`/`ReportWarning` and the summary log.
-- Counter fields `_errors`, `_warnings`, `_shapesChecked`, `_armourMaterialsChecked`, `_coupledMaterialsChecked` — defined in Step 1, incremented in Steps 3 and 4, read in Step 1's summary.
-- `FindSoleAsset<T>(string typeLabel)` — defined Step 1, called Step 1 for both registries.
-- `ReportError(string, UnityEngine.Object)` / `ReportWarning(string, UnityEngine.Object)` — defined Step 1, used throughout Steps 2–5.
-- Top-level check methods (`CheckRequiredLayers`, `CheckShapeRegistry`, `CheckMaterialRegistry`, `CheckCoupledMaterials`) — stubbed Step 1, called from Step 1's orchestrator, filled in Steps 2–5.
-- Helpers (`CheckLayer`, `CheckShapeDefinition`, `CheckPrefabComponents`, `CheckMaterialDefinition`, `CheckStat`) — introduced alongside their callers in Steps 2, 3, 4.
-- `CheckMaterialDefinition(MaterialDefinition, bool partOfArmourPool)` signature used identically by both call sites (Step 4 armour-pool path, Step 5 coupled path).
+    }
+}

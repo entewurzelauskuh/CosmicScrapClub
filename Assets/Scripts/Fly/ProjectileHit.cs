@@ -12,13 +12,16 @@ namespace CubeFly.Fly
     // and there's nothing here that benefits from being a MonoBehaviour.
     public static class ProjectileHit
     {
-        // Allocation-amortising buffer for RaycastNonAlloc. 8 is plenty —
-        // a single sweep over a one-frame step typically intersects at most
-        // 1-2 cubes; 8 covers the pathological "fire straight along a row
-        // of cubes" case without ever GC-allocating. RaycastNonAlloc
+        // Allocation-amortising buffer for RaycastNonAlloc. Sized
+        // generously: RaycastNonAlloc returns an UNORDERED subset when the
+        // path intersects more colliders than the buffer holds, so a
+        // too-small buffer can silently drop the real target in favour of
+        // nearer self-cube hits. 64 comfortably exceeds any plausible
+        // construct cube count along a single one-frame sweep; TrySweep
+        // logs a warning if the buffer ever fills anyway. RaycastNonAlloc
         // doesn't guarantee distance order, so we sort the populated
         // prefix in place via the insertion sort below.
-        static readonly RaycastHit[] s_HitBuffer = new RaycastHit[8];
+        static readonly RaycastHit[] s_HitBuffer = new RaycastHit[64];
 
         // Sweep from `origin` along `direction` for `distance` units. If a
         // collider on `mask` is intersected and is NOT a child of
@@ -33,11 +36,15 @@ namespace CubeFly.Fly
 
             int n = Physics.RaycastNonAlloc(origin, direction, s_HitBuffer, distance, mask);
             if (n == 0) return false;
+            if (n == s_HitBuffer.Length)
+                Debug.unityLogger.LogWarning("ProjectileHit",
+                    $"Sweep filled the {s_HitBuffer.Length}-hit buffer — RaycastNonAlloc may have " +
+                    "dropped colliders, so a valid target could be missed. Enlarge s_HitBuffer.");
 
-            // Insertion sort by distance — n ≤ s_HitBuffer.Length = 8, so
-            // the O(n²) worst case is bounded at 64 compares; no allocation
-            // overhead vs Array.Sort's IComparer machinery, and the code is
-            // legible at a glance.
+            // Insertion sort by distance — n ≤ s_HitBuffer.Length = 64, so
+            // the O(n²) worst case stays small; no allocation overhead vs
+            // Array.Sort's IComparer machinery, and the code is legible at
+            // a glance.
             for (int i = 1; i < n; i++)
             {
                 RaycastHit current = s_HitBuffer[i];

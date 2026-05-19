@@ -6,7 +6,7 @@ A living planning doc. What works today, what we're building next, and where the
 
 ## Vision
 
-Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, and (soon) reactors / shields / thrusters, then fly it. You can already place shapes, save / load three constructs, fly a physics-driven construct that bounces off the world, shoot bullets and rockets, register hits, blow cubes off targets, take kinetic damage when you crash, and lose the run when your anchor cube dies. The next chunk of work gives ships meaningfully different classes and lays in the power / shield / energy-weapon foundation.
+Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, and thrusters — and (soon) reactors / shields — then fly it. You can already place shapes, save / load three constructs, fly a physics-driven construct that bounces off the world, shoot bullets and rockets, register hits, blow cubes off targets, take kinetic damage when you crash, boost with thruster cubes, and lose the run when your anchor cube dies. The next chunk of work lays in the power / shield / energy-weapon foundation.
 
 It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DOTS), pure C# everywhere, and the docs are kept honest so you can read [`full_architecture.md`](full_architecture.md) and immediately know which file does what. If you've been wanting to mess around in a Unity codebase that's neither toy-sized nor incomprehensible, this might be the project for you.
 
@@ -14,7 +14,7 @@ It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DO
 
 ## Where we are today
 
-Read [`cube_fly_spec.md`](cube_fly_spec.md) for the canonical product spec and [`full_architecture.md`](full_architecture.md) for the file-by-file implementation map. In a sentence: four scenes (`MainMenu → HangarSelect → BuildScene ⇄ FlyScene`), three save slots, ESC pause overlay, a decoupled Shape × Material build system (Cube / Slope / Pyramid weapon / Cylinder weapon × four armour materials), per-cube HP / Armour / Mass stats, symmetric face-validity placement rules, Rigidbody-driven 6-axis flight with real bouncing off the world and an adaptive third-person camera, a screen-space crosshair, two functioning weapons (bullets + rockets) selected from a toolbar with digit keys and mouse-wheel cycling, Speed + HP HUD readouts, a basic 200×200 world map seeded with 20 target dummies, projectile hit registration with armour-aware damage, an outward-drift cube destruction animation, kinetic crash damage on collision, and an end-of-run condition when the alpha cube dies.
+Read [`cube_fly_spec.md`](cube_fly_spec.md) for the canonical product spec and [`full_architecture.md`](full_architecture.md) for the file-by-file implementation map. In a sentence: four scenes (`MainMenu → HangarSelect → BuildScene ⇄ FlyScene`), three save slots, three ship classes (Allrounder / Tank / Scout) chosen per slot, ESC pause overlay, a decoupled Shape × Material build system (Cube / Slope / Pyramid weapon / Cylinder weapon / Thruster utility × four armour materials), per-cube HP / Armour / Mass stats, symmetric face-validity placement rules, Rigidbody-driven 6-axis flight with real bouncing off the world and an adaptive third-person camera, a Left-Ctrl boost mechanic fed by thruster cubes, a screen-space crosshair, two functioning weapons (bullets + rockets) selected from a toolbar with digit keys and mouse-wheel cycling, Speed + HP + Boost HUD readouts, a basic 200×200 world map seeded with 20 target dummies, projectile hit registration with armour-aware damage, an outward-drift cube destruction animation, kinetic crash damage on collision, and an end-of-run condition when the alpha cube dies.
 
 ### Shipped since the last roadmap pass
 
@@ -26,16 +26,14 @@ Read [`cube_fly_spec.md`](cube_fly_spec.md) for the canonical product spec and [
 - Rigidbody-driven construct — the construct is now a non-kinematic `Rigidbody` compound body. Physics-based flight (`AddForce` / `AddTorque`), real bouncing off the ground and world cubes, `OnCollisionEnter`-based crash damage charged to the contact-point cube. Adaptive third-person camera. Speed + HP HUD readouts.
 - Ship classes — Allrounder / Tank / Scout, chosen via a dropdown in BuildScene and stored per save slot. Each class sets the alpha cube's HP, the build mass cap, and a movement multiplier (`ShipClass` / `ShipClasses`).
 - Minimum responsiveness floor — above `maxResponsivenessMass`, applied thrust and torque scale up by `mass / cap`, so linear acceleration and turn rate flatten out instead of falling toward zero and the heaviest Tank build still flies (`FlyController.ResolveRigidbody`).
+- Thruster cube — a placeable Utility cone shape and a new Utilities toolbar category (`ShapeUtilityThruster` / `PlacedThruster` / `ThrusterMatDef`). Marks the construct-local axes the boost can amplify.
+- Boost mechanic — Left-Ctrl boost backed by a 0–100 Boost resource with an overboost lockout (`ThrusterBehavior`); per-axis ×1.3 acceleration + ×1.3 max-speed while engaged, with a `FlyBoostBar` HUD bar that throbs red in the critical zone.
 
 ---
 
 ## Up Next
 
-In running order. Ship classes, the combat-damage loop and the Rigidbody foundation are done; from here it's the thruster cube, then the Power & Energy block, then the energy weapon.
-
-### Flight & Movement
-
-- **Thruster cube** — a non-weapon subsystem. **Boosts acceleration in the direction opposite its placement face** (the convention matches the cylinder weapon: the placement face is what attaches to the construct, the opposite face is the "boost face"). So placing a thruster on the back of the ship with the placement face pointing forward gives you a *frontal* boost. Stacks per-direction: more thrusters facing the same way = faster acceleration toward that direction. Doesn't change `maxSpeed`, only how quickly the ship reaches it. Post-Rigidbody refactor, this just adds force in the boost direction.
+In running order. Ship classes, the thruster / boost mechanic, the combat-damage loop and the Rigidbody foundation are done; from here it's the Power & Energy block, then the energy weapon.
 
 ### Power & Energy
 

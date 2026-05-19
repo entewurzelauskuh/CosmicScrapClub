@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CubeFly.Build;
 using CubeFly.Core;
 using CubeFly.Input;
 using UnityEngine;
@@ -185,9 +186,26 @@ namespace CubeFly.Fly
             Debug.unityLogger.Log(TAG, "FlyController initialised.");
         }
 
-        void OnEnable() => _input.Fly.Enable();
-        void OnDisable() => _input.Fly.Disable();
+        void OnEnable()
+        {
+            _input.Fly.Enable();
+            CubeDeath.CubeDied += OnCubeDied;
+        }
+
+        void OnDisable()
+        {
+            _input.Fly.Disable();
+            CubeDeath.CubeDied -= OnCubeDied;
+        }
+
         void OnDestroy() => _input?.Dispose();
+
+        // A cube died in flight (CubeDeath.CubeDied). It is already gone
+        // from GameData and detached from the construct, so re-resolving
+        // the Rigidbody now recomputes mass + the mass-derived flight
+        // factors for the lighter ship (Unity rebuilds the inertia tensor
+        // from the shrunken compound collider when rb.mass is set).
+        void OnCubeDied() => ResolveRigidbody();
 
         // Editor-only: keep designer-tunable values in their valid
         // range. criticalBoostFraction must stay in [0,1] — a value
@@ -275,7 +293,7 @@ namespace CubeFly.Fly
                           * overCap;
 
             Debug.unityLogger.Log(TAG,
-                $"Rigidbody armed. Total mass: {totalMass:F1} (rb.mass: {_rb.mass:F1}). " +
+                $"Rigidbody mass resolved. Total mass: {totalMass:F1} (rb.mass: {_rb.mass:F1}). " +
                 $"Ship class {GameData.ActiveShipClass} → movement ×{movementMultiplier:F2}. " +
                 $"linearForceFactor={_linearForceFactor:F2}, torqueFactor={_torqueFactor:F2} " +
                 $"(overCap ×{overCap:F2}, compensation exp={rotationMassCompensation:F2}). " +
@@ -331,10 +349,20 @@ namespace CubeFly.Fly
                 // Apply the orientation chosen at build-time so each cube
                 // keeps its placed pose relative to the construct.
                 go.transform.localRotation = p.Rotation;
+
+                // Stamp the placement's grid cell onto the cube. The
+                // flight damage pipeline (CubeDamage) reads
+                // PlacedCubeData.cell to drop the right GameData entry
+                // when this cube dies — without this it always removes
+                // cell (0,0,0) (a no-op), so the construct's mass never
+                // updates. BuildManager does the same stamp at placement.
+                PlacedCubeData placedData = go.GetComponent<PlacedCubeData>();
+                if (placedData != null) placedData.cell = p.Cell;
+
                 // ResolveMaterial picks the right MaterialDefinition for
                 // the placement's shape category — armour pulls from
-                // the registry by index, weapons return their coupled
-                // weaponMaterial.
+                // the registry by index, non-armour shapes (weapon /
+                // utility) return their coupledMaterial.
                 MaterialDefinition mdef = shape.ResolveMaterial(p.MaterialIndex, materialRegistry);
                 mdef?.ApplyTo(go);
 

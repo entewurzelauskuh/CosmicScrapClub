@@ -56,6 +56,14 @@ namespace CubeFly.Core
         // even if the validation rules have evolved between versions.
         static bool _loading;
 
+        // Flight-session snapshot. CaptureFlightSnapshot stores the
+        // construct when a Fly session begins; RestoreFlightSnapshot
+        // puts it back when the session ends, so in-flight cube
+        // destruction (CubeDamage → Remove) never leaks into the
+        // construct BuildScene re-enters. Null when no snapshot is held.
+        static List<Placement> _flightSnapshot;
+        static ShipClass _flightSnapshotShipClass;
+
         internal static readonly Vector3Int[] Neighbors =
         {
             new Vector3Int( 1, 0, 0),
@@ -230,6 +238,46 @@ namespace CubeFly.Core
             // here regardless of the previous slot's class.
             ActiveShipClass = ShipClass.Allrounder;
             Debug.unityLogger.Log(TAG, "GameData cleared.");
+        }
+
+        // Capture the current placements + ship class as the flight
+        // snapshot. Called by SceneSwitcher on the BuildScene → FlyScene
+        // transition: GameData is the pristine pre-flight construct at
+        // that moment.
+        public static void CaptureFlightSnapshot()
+        {
+            _flightSnapshot = new List<Placement>(_placedCubes);
+            _flightSnapshotShipClass = ActiveShipClass;
+            Debug.unityLogger.Log(TAG,
+                $"Flight snapshot captured: {_flightSnapshot.Count} placement(s).");
+        }
+
+        // Restore the construct from the flight snapshot, discarding any
+        // in-flight cube losses. Called by SceneSwitcher on the FlyScene
+        // → BuildScene transition. No-ops with a warning when no snapshot
+        // is held — leaving the construct as-is is safer than wiping it.
+        public static void RestoreFlightSnapshot()
+        {
+            if (_flightSnapshot == null)
+            {
+                Debug.unityLogger.LogWarning(TAG,
+                    "RestoreFlightSnapshot: no snapshot held — construct left as-is.");
+                return;
+            }
+
+            _placedCubes.Clear();
+            _byCell.Clear();
+            for (int i = 0; i < _flightSnapshot.Count; i++)
+            {
+                Placement p = _flightSnapshot[i];
+                _placedCubes.Add(p);
+                _byCell[p.Cell] = p;
+            }
+            ActiveShipClass = _flightSnapshotShipClass;
+
+            Debug.unityLogger.Log(TAG,
+                $"Flight snapshot restored: {_placedCubes.Count} placement(s).");
+            _flightSnapshot = null;
         }
 
         // Set the construct's ship class. Called by the BuildScene

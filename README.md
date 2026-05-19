@@ -14,22 +14,26 @@ The companion documents are:
 - **[`cube_fly_spec.md`](cube_fly_spec.md)** — what the project is and what it does (the canonical product spec).
 - **[`full_architecture.md`](full_architecture.md)** — how it is implemented (file-by-file architecture map).
 - **[`weapon_shooting_spec.md`](weapon_shooting_spec.md)** — deep dive on the Fly-mode shooting system (weapons, projectiles, crosshair).
+- **[`ROADMAP.md`](ROADMAP.md)** — what is shipped and what is planned next.
+- **[`thruster_boost_spec.md`](thruster_boost_spec.md)** / **[`boost_overboost_tuning_spec.md`](boost_overboost_tuning_spec.md)** — design specs for the thruster cube and its boost mechanic.
 
 ---
 
 ## What's In Here
 
-- **Shape × Material decoupled.** Two orthogonal axes: a `ShapeRegistry` (Cube, Slope, Pyramid weapon, Cylinder weapon) and a `MaterialRegistry` (A / B / C / D). Each placement records both indices. Adding a new shape or a new armour material is a data-only change.
+- **Shape × Material decoupled.** Two orthogonal axes: a `ShapeRegistry` (Cube, Slope, Pyramid weapon, Cylinder weapon, Thruster utility) and a `MaterialRegistry` (A / B / C / D). Each placement records both indices. Adding a new shape or a new armour material is a data-only change.
 - **Slope shape with face-validity.** Slopes only attach where they actually have a real surface — the cut-away faces refuse adjacency. Both shape and neighbour are checked, so a slope's hypotenuse can't pretend to be a square face.
 - **Weapon shapes.** Pyramid (machine gun, fires bullets) and Cylinder (rocket launcher, fires two-phase rockets). Weapon shapes carry their own coupled material; the regular material flyout is suppressed for them.
 - **90°-stepped per-placement rotation.** `R` rotates around Z, `T` around X. Each placement remembers its placed pose.
 - **Delete tool.** Non-allocating red `MaterialPropertyBlock` hover tint plus an automatic flood-fill cleanup of any cube disconnected from the alpha cube.
-- **Mass budget (cap 100).** Every placed cube has `HP / Armour / Mass` placeholder stats sourced from its `MaterialDefinition`. Going over the cap rejects the placement and shows a fading red message. In flight, the construct's total mass is the `Rigidbody.mass`, so heavier ships accelerate and turn slower through real physics (`F = ma`, `τ = Iα`).
-- **Live `Mass: X / 100` and `HP: Y`** readouts in the bottom-left of the build UI.
+- **Ship classes.** Allrounder / Tank / Scout, chosen from a dropdown in BuildScene and stored per save slot. Each sets the alpha cube's HP, the construct mass cap, and a flight movement multiplier (Allrounder 100 HP / 100 cap / ×1.0, Tank 200 / 180 / ×0.7, Scout 60 / 60 / ×1.4).
+- **Mass budget (cap set by ship class).** Every placed cube has `HP / Armour / Mass` placeholder stats sourced from its `MaterialDefinition`. Going over the active class's cap rejects the placement and shows a fading red message. In flight, the construct's total mass is the `Rigidbody.mass`, so heavier ships accelerate and turn slower through real physics (`F = ma`, `τ = Iα`).
+- **Live `Mass: X / cap` and `HP: Y`** readouts in the bottom-left of the build UI (the cap is the active ship class's).
 - **Red arrow indicator** that auto-reparents to the frontmost cube so you can tell which way the ship is pointed.
 - **Save / load to 3 slots.** The hangar slot picker shows cube count, mass, HP, and "last edited N ago" per slot. BuildScene autosaves to the armed slot on every construct change (debounced 0.25 s). Atomic on-disk writes via `File.Replace` with a rename-to-bak fallback for runtimes that don't support it.
 - **ESC pause overlay.** Self-bootstrapping DDOL singleton. ESC pauses anywhere in BuildScene / FlyScene; `Menu` returns to Main Menu, `Back to Desktop` quits.
 - **Rigidbody-driven flight.** The construct is a non-kinematic `Rigidbody` with the cube colliders forming a compound body. 6-axis thrust via `AddForce`, pitch / yaw / roll via `AddTorque`. Mass affects flight through real physics — heavier ships accelerate and turn slower. The ship physically bounces off the ground and world cubes instead of phasing through them.
+- **Thruster cube & boost.** A placeable Utility cone thruster (the third toolbar category). Holding **Left Ctrl** while commanding thrust along a thrustered axis boosts that axis — ×1.3 acceleration and ×1.3 max-speed — draining a 0–100 Boost meter; emptying it triggers an overboost lockout until the meter recovers. A `FlyBoostBar` HUD bar (with a red critical-zone throb) shows the meter.
 - **Adaptive third-person camera.** RMB free-look with snap-back; the follow speed scales with the construct's angular velocity so the camera stays glued during sharp turns.
 - **HUD readouts.** Bottom-left of the Fly screen shows live `Speed` and `HP` (current / initial).
 - **Shooting (Fly mode).** LMB fires every weapon of the currently selected type. Digits 1–9 and mouse wheel cycle the active type. A screen-space crosshair projects `construct.forward * 100` so the on-screen reticle and the actual aim agree.
@@ -38,7 +42,7 @@ The companion documents are:
 - **Crash damage.** `OnCollisionEnter` on the construct's Rigidbody applies kinetic damage scaled to the normal-component impact speed. Both sides of the collision take damage. Bypasses armour because armour mitigates penetration, not raw kinetic energy.
 - **End-of-run.** When the alpha cube (the construct's anchor) reaches 0 HP, a "Construct Destroyed" overlay shows and the run ends back at the main menu.
 - **Basic world map.** 200×200 ground plane plus 20 rusty-orange target dummies in `FlyScene` so you have something to fly around, crash into, and shoot at.
-- **File logging** to `Logs/runtime-<timestamp>.log` alongside the Editor console.
+- **File logging** to `Application.persistentDataPath/Logs/CubeFly_<timestamp>.log` alongside the Editor console.
 
 The project is intentionally MonoBehaviour-driven (no DOTS / ECS) — it is small enough that data-oriented patterns would be overkill.
 
@@ -143,6 +147,7 @@ much mass!" message at the top of the screen.
 | `↑` / `↓` | Pitch nose up / down (local X). |
 | `←` / `→` | Yaw left / right (world Y, so it stays intuitive when pitched). |
 | `Q` / `E` | Roll anti-clockwise / clockwise (local Z). |
+| `Left Ctrl` (held) | Boost — on axes with a contributing thruster cube, ×1.3 acceleration and ×1.3 max-speed while the Boost meter holds out. |
 | RMB (held) + mouse | Free-look. Releasing snaps the camera back behind the ship. |
 | **LMB (held)** | **Fire** every weapon of the active weapon type. Per-weapon reload throttles the rate. |
 | **Digits `1`–`9`** | Select weapon type by index in the bottom toolbar. |
@@ -175,32 +180,33 @@ beneath it can be clicked.
 ```
 Assets/
   Scenes/         MainMenu, HangarSelect, BuildScene, FlyScene (+ template's SampleScene, unused)
-  Scripts/Core/   GameData, ConstructSave, CubeStats, CubeDeath,
+  Scripts/Core/   GameData, ConstructSave, ShipClass, CubeStats, CubeDeath,
                   ShapeDefinition, ShapeRegistry,
-                  MaterialDefinition, MaterialRegistry, SaveManager, PauseMenu,
+                  MaterialDefinition, MaterialRegistry, SaveManager, PauseMenu, GameOverMenu,
                   PrimitiveMeshes, PrismMeshAuthor, PyramidMeshAuthor, CylinderMeshAuthor,
-                  UIManager, UIStyle, UIBootstrap, SceneSwitcher,
+                  ThrusterMeshAuthor, UIManager, UIStyle, UIBootstrap, SceneSwitcher,
                   FileLogHandler, LogBootstrapper
   Scripts/Build/  BuildManager, CubePreview, BuildCamera, BuildToolbarController,
+                  CategoryFlyout, BuildShipClassController,
                   BuildIndicatorController, PlacedCubeData
   Scripts/Fly/    FlyController, FlyCamera, FlyCrosshair,
                   FlyShootingController, FlyWeaponToolbarController,
-                  FlyCrashHandler, FlySpeedIndicator, FlyHpIndicator,
+                  FlyCrashHandler, FlySpeedIndicator, FlyHpIndicator, FlyBoostBar,
                   CubeDamage, ProjectileHit,
-                  WeaponBehavior, PyramidWeapon, CylinderWeapon,
+                  WeaponBehavior, ThrusterBehavior, PyramidWeapon, CylinderWeapon,
                   Bullet, Rocket
   Scripts/HangarSelect/ HangarSelectController
   Scripts/MainMenu/     MainMenuController
   Shapes/         ShapeRegistry + ShapeCube, ShapeSlope,
-                  ShapeWeaponPyramid, ShapeWeaponCylinder
+                  ShapeWeaponPyramid, ShapeWeaponCylinder, ShapeUtilityThruster
   Materials/Defs/ MaterialRegistry + MaterialA/B/C/D,
-                  PyramidWeaponMatDef, CylinderWeaponMatDef
+                  PyramidWeaponMatDef, CylinderWeaponMatDef, ThrusterMatDef
   Materials/      Per-prefab URP/Lit materials (AlphaCube, Placed*, Preview,
-                  Bullet, Rocket, weapon-shape, AlphaCubeIndicator,
+                  Bullet, Rocket, weapon-shape, ThrusterMat, AlphaCubeIndicator,
                   Ground, WorldTargetCube)
   PhysicMaterials/ GroundPhysMat, WorldTargetCubePhysMat (bounce / friction)
   Prefabs/        AlphaCube, PlacedCube[A–D], PlacedPrism, PlacedPyramid,
-                  PlacedCylinder, PreviewCube, AlphaCubeIndicator,
+                  PlacedCylinder, PlacedThruster, PreviewCube, AlphaCubeIndicator,
                   Ground, WorldTargetCube
   Prefabs/Projectiles/ Bullet, Rocket
   Input/          CubeFlyInputActions (.inputactions + hand-rolled C# wrapper)

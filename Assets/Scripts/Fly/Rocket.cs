@@ -78,7 +78,7 @@ namespace CubeFly.Fly
             if (ProjectileHit.TrySweep(from, dir, step, _hitLayerMask, _firingConstruct,
                     out RaycastHit hit))
             {
-                ProjectileHit.ApplyAndLog(hit, _damage, TAG);
+                ProjectileHit.ApplyAndLog(hit, _damage, _firingConstruct, TAG);
                 Destroy(gameObject);
                 return;
             }

@@ -5,17 +5,19 @@ using UnityEngine;
 namespace CubeFly.Fly
 {
     // Shared damage-application pipeline. ANY damage source in the Fly
-    // scene (projectiles, crash impacts, future AI weapons, …) routes
-    // through here so the four steps below stay consistent across
-    // sources:
+    // scene (projectiles, crash impacts, future AI weapons, …)
+    // constructs a HitContext and routes through here so the four steps
+    // below stay consistent across sources:
     //
     //   1. Apply damage via CubeStats.TakeDamage (armour-aware) OR
-    //      CubeStats.TakeRawDamage (armour-bypass for kinetic impacts).
-    //   2. Log the hit with the source's tag.
+    //      CubeStats.TakeRawDamage (HitFlags.BypassArmour, for kinetic
+    //      impacts and future armour-piercing weapons).
+    //   2. Log the hit with context.SourceTag, including the
+    //      DamageType for diagnostics.
     //   3. If HP reached zero AND the cube isn't the alpha (end-of-run
     //      owns that case), remove its GameData entry (only relevant for
     //      player-construct cubes that carry a PlacedCubeData) and
-    //      kick off the CubeDeath animation.
+    //      kick off the CubeDeath animation toward context.OutwardOrigin.
     //   4. Return the actual HP lost so callers can chain logic on it.
     //
     // The alpha-skip is duplicated on CubeDeath itself as belt-and-braces:
@@ -23,31 +25,32 @@ namespace CubeFly.Fly
     // won't accidentally animate the alpha away.
     public static class CubeDamage
     {
-        public static float ApplyAndLog(CubeStats stats, float incoming,
-            Vector3 outwardOrigin, string sourceTag, bool ignoreArmour = false)
+        public static float ApplyAndLog(in HitContext context)
         {
+            CubeStats stats = context.Target;
             if (stats == null) return 0f;
 
             float hpBefore = stats.healthPoints;
-            float applied = ignoreArmour
-                ? stats.TakeRawDamage(incoming)
-                : stats.TakeDamage(incoming);
+            bool bypassArmour = (context.Flags & HitFlags.BypassArmour) != 0;
+            float applied = bypassArmour
+                ? stats.TakeRawDamage(context.Amount)
+                : stats.TakeDamage(context.Amount);
 
             // Different log format depending on whether armour is in play —
             // logging "AV 10" for a kinetic hit that bypasses AV would be
             // actively misleading.
-            if (ignoreArmour)
+            if (bypassArmour)
             {
-                Debug.unityLogger.Log(sourceTag,
+                Debug.unityLogger.Log(context.SourceTag,
                     $"Hit '{stats.name}' for {applied:F1} damage " +
-                    $"(raw {incoming:F1}, armour bypassed). " +
+                    $"(raw {context.Amount:F1}, type {context.Type}, armour bypassed). " +
                     $"HP: {hpBefore:F1} → {stats.healthPoints:F1}.");
             }
             else
             {
-                Debug.unityLogger.Log(sourceTag,
+                Debug.unityLogger.Log(context.SourceTag,
                     $"Hit '{stats.name}' for {applied:F1} damage " +
-                    $"(raw {incoming:F1}, AV {stats.armourValue:F1}). " +
+                    $"(raw {context.Amount:F1}, type {context.Type}, AV {stats.armourValue:F1}). " +
                     $"HP: {hpBefore:F1} → {stats.healthPoints:F1}.");
             }
 
@@ -79,7 +82,7 @@ namespace CubeFly.Fly
 
             CubeDeath death = stats.GetComponent<CubeDeath>()
                            ?? stats.gameObject.AddComponent<CubeDeath>();
-            death.BeginDeath(outwardOrigin);
+            death.BeginDeath(context.OutwardOrigin);
 
             // Notify the flight controller to recompute construct mass —
             // only for genuine construct cubes, so destroying world

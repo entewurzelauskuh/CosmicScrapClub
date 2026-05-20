@@ -84,7 +84,8 @@ namespace CubeFly.Fly
         // application, and the maybe-die branch). No-ops when the hit
         // object has no CubeStats — which shouldn't happen for the
         // layers we mask against, but is defensive.
-        public static void ApplyAndLog(RaycastHit hit, float damage, string projectileTag)
+        public static void ApplyAndLog(RaycastHit hit, float damage,
+            Transform firingConstruct, string projectileTag)
         {
             // GetComponentInParent searches the current GameObject AND walks
             // up through parents, so a single call covers both the
@@ -103,7 +104,19 @@ namespace CubeFly.Fly
             Vector3 outwardOrigin = stats.transform.parent != null
                 ? stats.transform.parent.position
                 : stats.transform.position;
-            CubeDamage.ApplyAndLog(stats, damage, outwardOrigin, projectileTag);
+
+            HitContext context = new HitContext(
+                target: stats,
+                amount: damage,
+                type: DamageType.Projectile,
+                flags: HitFlags.None,
+                point: hit.point,
+                normal: hit.normal,
+                impulse: Vector3.zero,
+                outwardOrigin: outwardOrigin,
+                sourceConstruct: firingConstruct,
+                sourceTag: projectileTag);
+            CubeDamage.ApplyAndLog(in context);
         }
     }
 }

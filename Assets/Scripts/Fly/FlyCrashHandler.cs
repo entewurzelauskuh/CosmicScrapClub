@@ -19,9 +19,9 @@ namespace CubeFly.Fly
     // not the raw magnitude. A high-speed glancing blow shouldn't deal
     // head-on damage; only the velocity going INTO the surface matters.
     //
-    // Damage is routed through CubeDamage.ApplyAndLog with
-    // ignoreArmour: true (kinetic impact bypasses armour, same
-    // rationale as FlyCrashDetector's behaviour before).
+    // Damage is routed through CubeDamage.ApplyAndLog with a HitContext
+    // carrying HitFlags.BypassArmour (kinetic impact bypasses armour,
+    // same rationale as FlyCrashDetector's behaviour before).
     //
     // Both sides of the collision take damage: the contact cube on the
     // ship AND the other side if it carries CubeStats. World target
@@ -66,7 +66,18 @@ namespace CubeFly.Fly
             CubeStats ourCube = ResolveCubeStats(contact.thisCollider);
             if (ourCube != null)
             {
-                CubeDamage.ApplyAndLog(ourCube, damage, outwardOrigin, TAG, ignoreArmour: true);
+                HitContext ourHit = new HitContext(
+                    target: ourCube,
+                    amount: damage,
+                    type: DamageType.Kinetic,
+                    flags: HitFlags.BypassArmour,
+                    point: contact.point,
+                    normal: contact.normal,
+                    impulse: Vector3.zero,
+                    outwardOrigin: outwardOrigin,
+                    sourceConstruct: null,
+                    sourceTag: TAG);
+                CubeDamage.ApplyAndLog(in ourHit);
             }
 
             // Their side — could be a WorldTargetCube (has CubeStats)
@@ -74,7 +85,18 @@ namespace CubeFly.Fly
             CubeStats theirCube = ResolveCubeStats(collision.collider);
             if (theirCube != null)
             {
-                CubeDamage.ApplyAndLog(theirCube, damage, outwardOrigin, TAG, ignoreArmour: true);
+                HitContext theirHit = new HitContext(
+                    target: theirCube,
+                    amount: damage,
+                    type: DamageType.Kinetic,
+                    flags: HitFlags.BypassArmour,
+                    point: contact.point,
+                    normal: contact.normal,
+                    impulse: Vector3.zero,
+                    outwardOrigin: outwardOrigin,
+                    sourceConstruct: null,
+                    sourceTag: TAG);
+                CubeDamage.ApplyAndLog(in theirHit);
             }
 
             Debug.unityLogger.Log(TAG,

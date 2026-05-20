@@ -193,22 +193,22 @@ namespace CubeFly.EditorTools
             GameObject prefab = shape.prefab;
 
             if (prefab.GetComponent<CubeStats>() == null)
-                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' has no CubeStats component.", shape);
+                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' has no CubeStats component.", prefab);
 
             if (prefab.GetComponentInChildren<Collider>(includeInactive: true) == null)
-                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' has no Collider (placement raycasts need one).", shape);
+                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' has no Collider (placement raycasts need one).", prefab);
 
             if (prefab.GetComponentInChildren<Renderer>(includeInactive: true) == null)
-                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' has no Renderer.", shape);
+                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' has no Renderer.", prefab);
 
             if (prefab.GetComponent<PlacedCubeData>() == null)
-                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' has no PlacedCubeData component.", shape);
+                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' has no PlacedCubeData component.", prefab);
 
             int expectedLayer = LayerMask.NameToLayer("PlacedCube");
             if (expectedLayer >= 0 && prefab.layer != expectedLayer)
             {
                 string actual = LayerMask.LayerToName(prefab.layer);
-                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' is on layer '{actual}', expected 'PlacedCube'.", shape);
+                ReportError($"Shape '{shape.displayName}': prefab '{prefab.name}' is on layer '{actual}', expected 'PlacedCube'.", prefab);
             }
             // If expectedLayer < 0, CheckRequiredLayers already reported
             // the missing layer — no point repeating it per shape.

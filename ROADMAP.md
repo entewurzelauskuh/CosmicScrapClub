@@ -18,6 +18,8 @@ Read [`docs/cube_fly_spec.md`](docs/cube_fly_spec.md) for the canonical product 
 
 ### Shipped since the last roadmap pass
 
+- **HUD / canvas consolidation (F8)** — 10+ self-bootstrapped runtime canvases collapsed into three shared HUD roots: `PersistentHud` (DDOL, lazy-created, sortingOrder 200), `FlyHud` (FlyScene-attached, sortingOrder 100, `[DefaultExecutionOrder(-500)]`), and `BuildHud` (BuildScene-attached, same). Every HUD script now parents its UI under `FooHud.Instance.Root`; future HUD additions (shield bar, laser heat bar) no longer need their own canvas + EventSystem + sortingOrder bookkeeping. `UIBootstrap` and the two `Assets/UI/` prefabs are deleted; `LogBootstrapper` self-bootstraps `BeforeSceneLoad` like the other persistent UI scripts.
+- **HitContext refactor** — `DamageRequest` / `HitContext` now carries source, target, amount, `DamageType` (`Projectile` / `Energy` / `Kinetic`), `HitFlags` (`None` / `BypassArmour`), surface point + normal, and reserved fields for impulse / outward-origin. Threaded through `CubeDamage.ApplyAndLog`, `Bullet`, `Rocket`, `FlyCrashHandler`, `CubeStats`. The phase-2 shield system reads `Type` directly — no call-site changes needed when shields land.
 - Projectile hit registration — swept raycasts on `Bullet` and `Rocket`, self-construct filtering, armour-aware damage via `CubeStats.TakeDamage`.
 - Basic world map — 200×200 ground plane plus 20 hand-placed rusty-orange `WorldTargetCube` dummies in `FlyScene`.
 - Cube destruction & death animation — at-zero-HP cubes detach, disable colliders, drift outward at ~2 u/s for 2 s, then despawn.
@@ -33,55 +35,43 @@ Read [`docs/cube_fly_spec.md`](docs/cube_fly_spec.md) for the canonical product 
 
 ## Up Next
 
-In running order. The next stretch is foundation infra (HitContext + HUD), then the Power & Energy block + its first energy weapon (Laser), then a polish pass (VFX + settings), and finally an experimental merge of the long-standing desert map work. Docs are re-synced at the close-out of each phase.
+In running order. Phase 1 (HitContext + HUD consolidation + docs sync) is done; next up is the Power & Energy block + its first energy weapon (Laser), then a polish pass (VFX + settings), and finally an experimental merge of the long-standing desert map work. Docs are re-synced at the close-out of each phase.
 
-### 1. HitContext refactor
-
-Introduce a `DamageRequest` / `HitContext` (source, target, amount, type, impulse, point, normal, flags) and thread it through the damage pipeline — `CubeDamage.ApplyAndLog`, `Bullet`, `Rocket`, `FlyCrashHandler`, `CubeStats`. A clean damage-type concept is the prerequisite for the shield work in phase 2: shields care about projectile-vs-energy, splash falloff cares about point + normal, future enemies care about source. (Audit arch-rec 7.)
-
-### 2. HUD / canvas consolidation (F8)
-
-Collapse the many self-bootstrapped canvases (corner UI, pause, game over, build toolbar, ship-class dropdown, crosshair, weapon toolbar, speed, HP, boost) into one HUD root per mode — or a shared bootstrapper — that owns sorting / scaling / theming / EventSystem ownership. Sets up the new shield bar and laser heat bar (phase 2) cleanly instead of as more one-off canvases. (Audit F8 + arch-rec 6.)
-
-### 3. Docs sync — phase 1 close-out
-
-Refresh `README.md`, `ROADMAP.md`, `docs/full_architecture.md`, `docs/cube_fly_spec.md` to reflect HitContext + the new HUD architecture. Add a short HitContext design note under `docs/` if the model is rich enough to warrant one.
-
-### 4. Power & Energy
+### 1. Power & Energy
 
 The big foundation block. Three damage-source types, two energy producers/consumers, a shield that interacts with both. Builds compose: dropping a reactor in your ship unlocks energy weapons and shields; losing reactors degrades them in a predictable order.
 
-- **Damage types** — every weapon declares itself as either **projectile** (current bullets and rockets) or **energy** (forthcoming). The damage type travels with the projectile / beam (via the `HitContext` introduced in phase 1) so shields can react to it. The existing `CubeStats.TakeRawDamage` covers the third type (kinetic / crash damage) and gives us a template for how the type system gets wired in.
+- **Damage types** — every weapon declares itself as either **projectile** (current bullets and rockets) or **energy** (forthcoming). The damage type travels with the projectile / beam (via the `HitContext` landed in phase 1) so shields can react to it. The existing `CubeStats.TakeRawDamage` covers the third type (kinetic / crash damage) and gives us a template for how the type system gets wired in.
 - **Reactor cube** — produces a fixed amount of power per tick. Energy weapons and shields *consume* power; armour and projectile weapons don't. Construct's total power is `sum(reactors.output) - sum(consumers.draw)`; if it goes negative, consumers shut off in priority order (see below).
 - **Shield generator cube** — heavy (mass 10), draws power. Each shield cube contributes **+50 shield points** to a single shared shield pool covering the whole construct. Additive, no cap — limited by the mass budget. Shields absorb damage *before* HP. **−10% damage from projectile sources, +10% damage from energy sources** (so a shield is a counter to projectile weapons and a vulnerability against energy ones). Shield points regenerate slowly back up to max after **5 seconds without taking damage**.
 - **Power-loss cascade** — when reactors are destroyed and the construct goes power-negative, the priority is **energy weapons stop first, then shields stop**.
 
-### 5. Laser Weapon
+### 2. Laser Weapon
 
 The first energy-type weapon, and the testbed for the damage-type system. Depends on **Power & Energy** above.
 
 - **Behaviour** — Hold LMB, continuous beam fires in **one direction** (the cube's barrel axis, same placement-face convention as the cylinder weapon). No reload, no per-shot cooldown.
 - **Heat mechanic** — A heat value tracks 0–100. Firing increases heat fast. At 100, the laser stops firing and **"Overheated!" flashes three times** somewhere prominent (probably under the crosshair). Heat then drops slowly back toward 0. If the player releases LMB *before* hitting 100, heat drops at a faster rate. So short controlled bursts are sustainable; sustained beam isn't.
-- **HUD** — a heat progress bar **below the crosshair**, visible only while the laser is the selected weapon type.
+- **HUD** — a heat progress bar **below the crosshair**, attached as a new child of `FlyHud.Instance.Root`. Visible only while the laser is the selected weapon type.
 - **Energy-typed damage** — full +10% damage against shields, no special interaction with HP. Pairs naturally with the projectile-vs-energy split above.
 
-### 6. Docs sync — phase 2 close-out
+### 3. Docs sync — phase 2 close-out
 
 Refresh `README.md`, `ROADMAP.md`, `docs/full_architecture.md`, `docs/cube_fly_spec.md` to reflect the Power & Energy block + Laser. Add a `docs/power_and_energy_spec.md` (or similar) capturing the full reactor / shield / laser model.
 
-### 7. Extended VFX pass
+### 4. Extended VFX pass
 
 Engine trails, muzzle flashes, projectile trails, explosion / death particles, hit sparks. Cheap polish, big perceived-quality win. Mostly URP particles plus a couple of shader graphs — no new gameplay systems.
 
-### 8. Settings menu
+### 5. Settings menu
 
 Functional — volume, FOV, mouse sensitivity, key rebinding. The Main Menu's `Settings` button currently logs and does nothing; this fills it in.
 
-### 9. Docs sync — phase 3 close-out
+### 6. Docs sync — phase 3 close-out
 
 Refresh `README.md`, `ROADMAP.md`, `docs/full_architecture.md`, `docs/cube_fly_spec.md` to reflect the VFX pass + settings menu. Audit the docs index in `README.md`'s companion-docs list and trim anything that's outlived its usefulness.
 
-### 10. Desert-map FlyScene experiment
+### 7. Desert-map FlyScene experiment
 
 After everything above lands. Try merging the long-standing desert map work (see [`docs/desert_level_spec.md`](docs/desert_level_spec.md) and `Assets/Scripts/Desert/`) into the live FlyScene on an experimental branch — replacing or supplementing the current 200×200 ground plane + 20 dummy cubes with the dune terrain + formations. The construct's flight logic should already work in the desert (it's just colliders + Rigidbody); the experiment is whether the existing desert assets compose cleanly with the current FlyScene HUD, world spawns, and physics, and whether the resulting feel is what the desert spec promised. Tagged **experimental** — outcome could be ship, iterate, or shelve.
 

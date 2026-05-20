@@ -22,7 +22,6 @@ namespace CubeFly.Fly
         [SerializeField] Vector2 size = new Vector2(280f, 40f);
         [SerializeField] int fontSize = 22;
 
-        Canvas _canvas;
         Text _label;
 
         // Cached at Start. Null-tolerant: if the construct has no
@@ -62,12 +61,7 @@ namespace CubeFly.Fly
 
         void BuildUI()
         {
-            UIStyle.EnsureEventSystem();
-            // sortingOrder 130 sits between FlyWeaponToolbar (120) and
-            // FlyCrosshair (110). Doesn't matter much because the label
-            // sits in a corner with no other UI overlap.
-            _canvas = UIStyle.BuildScreenSpaceCanvas("FlySpeedCanvas", sortingOrder: 130);
-            RectTransform canvasRoot = (RectTransform)_canvas.transform;
+            RectTransform canvasRoot = FlyHud.Instance.Root;
 
             _label = UIStyle.BuildLabel(canvasRoot, "Speed: 0.0 u/s", fontSize: fontSize);
             _label.alignment = TextAnchor.MiddleLeft;

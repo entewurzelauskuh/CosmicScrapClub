@@ -261,11 +261,7 @@ namespace CubeFly.Build
 
         void BuildToolbar()
         {
-            UIStyle.EnsureEventSystem();
-            // Sit just under the persistent corner-button canvas (sortingOrder
-            // 100). Both share the screen but never overlap visually.
-            Canvas canvas = UIStyle.BuildScreenSpaceCanvas("BuildToolbarCanvas", sortingOrder: 90);
-            RectTransform root = (RectTransform)canvas.transform;
+            RectTransform root = BuildHud.Instance.Root;
             _canvasRect = root;
 
             // Top-left rotation hint.

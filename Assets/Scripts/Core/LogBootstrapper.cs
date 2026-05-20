@@ -4,9 +4,12 @@ using UnityEngine;
 
 namespace CubeFly.Core
 {
-    // Owns the FileLogHandler for the lifetime of a play session. Lives on the
-    // UICanvas prefab next to UIManager, so the existing UIBootstrap mechanism
-    // also bootstraps logging — no separate scene wiring needed.
+    // Owns the FileLogHandler for the lifetime of a play session.
+    // Self-bootstraps via [RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]
+    // — same pattern as UIManager / PauseMenu / GameOverMenu after the
+    // HUD-consolidation refactor (PR #41). Previously it lived on the
+    // UICanvas prefab; that prefab is gone, so the script now spawns its
+    // own DDOL host before any scene loads.
     public class LogBootstrapper : MonoBehaviour
     {
         public static LogBootstrapper Instance { get; private set; }
@@ -14,6 +17,14 @@ namespace CubeFly.Core
         const string TAG = "LogBootstrapper";
 
         FileLogHandler _fileLogHandler;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Bootstrap()
+        {
+            if (Instance != null) return;
+            GameObject go = new GameObject("LogBootstrapper");
+            go.AddComponent<LogBootstrapper>();
+        }
 
         void Awake()
         {

@@ -80,7 +80,6 @@ namespace CubeFly.Core
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
-            UIStyle.EnsureEventSystem();
             BuildUI();
             HideUI();
 
@@ -210,33 +209,28 @@ namespace CubeFly.Core
 
         void BuildUI()
         {
-            // Sit above UIManager (sortingOrder 100) and BuildToolbar
-            // (sortingOrder 90).
-            Canvas canvas = UIStyle.BuildScreenSpaceCanvas("PauseMenuCanvas", sortingOrder: 300);
-            _root = canvas.gameObject;
-            // UIStyle creates the canvas as a free-standing root
-            // GameObject. Re-parent it under this DDOL singleton so
-            // the canvas inherits DontDestroyOnLoad — otherwise the
-            // first scene transition destroys the UI behind our back
-            // and SetActive(true) silently no-ops on a dead reference.
-            // worldPositionStays:false keeps the screen-space-overlay
-            // canvas sized to the screen.
-            _root.transform.SetParent(transform, worldPositionStays: false);
-            RectTransform root = (RectTransform)canvas.transform;
-
-            // Full-screen dim background that also catches clicks so
-            // nothing under the overlay can be reached.
-            GameObject bgGO = new GameObject("Dim",
+            // Build the pause panel directly under the shared persistent
+            // canvas. The full-screen dim is the panel root; it inherits
+            // PersistentHud's DontDestroyOnLoad and sortingOrder (200)
+            // for free — no canvas, no reparenting trick needed.
+            GameObject panelGO = new GameObject("PauseMenuPanel",
                 typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            bgGO.transform.SetParent(root, false);
-            RectTransform bgRT = (RectTransform)bgGO.transform;
-            bgRT.anchorMin = Vector2.zero;
-            bgRT.anchorMax = Vector2.one;
-            bgRT.offsetMin = Vector2.zero;
-            bgRT.offsetMax = Vector2.zero;
-            Image bgImage = bgGO.GetComponent<Image>();
+            panelGO.transform.SetParent(PersistentHud.Instance.Root, false);
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0) panelGO.layer = uiLayer;
+            _root = panelGO;
+
+            RectTransform root = (RectTransform)panelGO.transform;
+            root.anchorMin = Vector2.zero;
+            root.anchorMax = Vector2.one;
+            root.offsetMin = Vector2.zero;
+            root.offsetMax = Vector2.zero;
+
+            // The panel's own Image is the full-screen dim — also catches
+            // clicks so nothing under the overlay can be reached.
+            Image bgImage = panelGO.GetComponent<Image>();
             bgImage.color = new Color(0f, 0f, 0f, 0.70f);
-            bgImage.raycastTarget = true; // intercept clicks under the overlay
+            bgImage.raycastTarget = true;
 
             // Title.
             Text title = UIStyle.BuildLabel(root, "Paused", fontSize: 96, style: FontStyle.Bold);

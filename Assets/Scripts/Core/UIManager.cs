@@ -4,24 +4,35 @@ using UnityEngine.UI;
 
 namespace CubeFly.Core
 {
-    [RequireComponent(typeof(Canvas))]
+    // The corner scene-switch button + per-scene visibility / labelling.
+    // Lives in PersistentHud's canvas so it survives scene transitions
+    // without its own canvas / DontDestroyOnLoad bookkeeping.
     public class UIManager : MonoBehaviour
     {
         public static UIManager Instance { get; private set; }
 
-        [SerializeField] Button sceneSwitchButton;
-        [SerializeField] Text buttonLabel;
+        Button _sceneSwitchButton;
+        Text _buttonLabel;
 
         const string BuildSceneName        = "BuildScene";
         const string FlySceneName          = "FlyScene";
         const string HangarSelectSceneName = "HangarSelect";
         const string TAG = "UIManager";
 
-        Canvas _canvas;
+        // Self-bootstrap mirrors PauseMenu / GameOverMenu. UIBootstrap.cs
+        // (and the UICanvas.prefab it instantiated) used to handle this;
+        // both are deleted in this commit.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Bootstrap()
+        {
+            if (Instance != null) return;
+            GameObject go = new GameObject("UIManager");
+            go.AddComponent<UIManager>();
+        }
 
         void Awake()
         {
-            if (Instance != null)
+            if (Instance != null && Instance != this)
             {
                 Debug.unityLogger.LogWarning(TAG, "UIManager duplicate destroyed.");
                 Destroy(gameObject);
@@ -31,16 +42,12 @@ namespace CubeFly.Core
             DontDestroyOnLoad(gameObject);
             SceneManager.sceneLoaded += OnSceneLoaded;
 
-            _canvas = GetComponent<Canvas>();
+            BuildButton();
 
-            UIStyle.EnsureEventSystem();
-            if (sceneSwitchButton == null || buttonLabel == null)
-                BuildButton();
+            _sceneSwitchButton.onClick.RemoveListener(SceneSwitcher.Toggle);
+            _sceneSwitchButton.onClick.AddListener(SceneSwitcher.Toggle);
 
-            sceneSwitchButton.onClick.RemoveListener(SceneSwitcher.Toggle);
-            sceneSwitchButton.onClick.AddListener(SceneSwitcher.Toggle);
-
-            Debug.unityLogger.Log(TAG, "UIManager initialised. Canvas live.");
+            Debug.unityLogger.Log(TAG, "UIManager initialised. Corner button live in PersistentHud.");
         }
 
         void OnDestroy()
@@ -54,70 +61,54 @@ namespace CubeFly.Core
         {
             OnSceneStateChanged(scene);
             Debug.unityLogger.Log(TAG,
-                $"Scene loaded: {scene.name}. Button label set to '{(buttonLabel != null ? buttonLabel.text : "<null>")}'");
+                $"Scene loaded: {scene.name}. Button label set to '{(_buttonLabel != null ? _buttonLabel.text : "<null>")}'");
         }
 
         // Per-scene visibility + label. The corner button only makes sense
-        // during gameplay; on the Main Menu and HangarSelect (slot picker)
-        // the canvas is hidden so each owns its full screen. The check is
-        // an explicit allowlist rather than a deny-list so future scenes
-        // (HangarSelect, settings menus) default to "hide me".
+        // on the BuildScene ("Fly!"); FlyScene uses the ESC pause menu's
+        // Hangar button instead (UX batch 2026-05-20). MainMenu and
+        // HangarSelect own their full screen and don't need it.
+        // Reference HangarSelectSceneName so the intent stays greppable.
         void OnSceneStateChanged(Scene scene)
         {
             UpdateLabel(scene);
-            bool inGameplay = scene.name == BuildSceneName || scene.name == FlySceneName;
-            // Reference the HangarSelect constant so the intent is greppable
-            // from the .cs file even though the boolean already evaluates
-            // to false there.
             _ = HangarSelectSceneName;
-            if (_canvas != null) _canvas.enabled = inGameplay;
 
-            // Reset the corner button to interactable on every scene
-            // change. The BuildScene "Fly!" button starts clickable and
-            // gets gated by BuildManager if the construct is over its
-            // mass budget. sceneLoaded fires before BuildManager.Start,
-            // so BuildManager re-evaluates the gate right after this
-            // reset.
-            //
-            // FlyScene hides the corner button entirely — the Hangar
-            // action lives in the ESC pause menu there (UX batch
-            // 2026-05-20).
-            if (sceneSwitchButton != null)
+            if (_sceneSwitchButton != null)
             {
-                sceneSwitchButton.interactable = true;
-                sceneSwitchButton.gameObject.SetActive(scene.name == BuildSceneName);
+                _sceneSwitchButton.interactable = true;
+                _sceneSwitchButton.gameObject.SetActive(scene.name == BuildSceneName);
             }
         }
 
         // Enable / disable the corner scene-switch button. BuildManager
         // calls this to gate the "Fly!" button while the construct
-        // exceeds the active ship class's mass cap — the player can go
-        // over budget by switching to a lower-cap class, and shouldn't
-        // be able to fly an over-budget construct.
+        // exceeds the active ship class's mass cap.
         public void SetSceneSwitchInteractable(bool interactable)
         {
-            if (sceneSwitchButton != null) sceneSwitchButton.interactable = interactable;
+            if (_sceneSwitchButton != null) _sceneSwitchButton.interactable = interactable;
         }
 
         void UpdateLabel(Scene scene)
         {
-            if (buttonLabel == null) return;
-            buttonLabel.text = scene.name == BuildSceneName ? "Fly!" : "Hangar";
+            if (_buttonLabel == null) return;
+            _buttonLabel.text = scene.name == BuildSceneName ? "Fly!" : "Hangar";
         }
 
-        // Build the corner button using the shared style so it matches the
-        // Main Menu buttons exactly.
+        // Build the corner button under PersistentHud's shared canvas.
+        // PersistentHud.Instance triggers the canvas's lazy creation if
+        // we're the first persistent UI script to Awake.
         void BuildButton()
         {
             (Button button, Text label) = UIStyle.BuildLabeledButton(
-                transform, "Fly!", new Vector2(220f, 64f), fontSize: 28);
+                PersistentHud.Instance.Root, "Fly!", new Vector2(220f, 64f), fontSize: 28);
 
             RectTransform brt = (RectTransform)button.transform;
             brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(1f, 1f);
             brt.anchoredPosition = new Vector2(-20f, -20f);
 
-            sceneSwitchButton = button;
-            buttonLabel = label;
+            _sceneSwitchButton = button;
+            _buttonLabel = label;
         }
     }
 }

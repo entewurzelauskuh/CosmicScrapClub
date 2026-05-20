@@ -62,7 +62,6 @@ namespace CubeFly.Fly
         [Tooltip("Low point of the alpha throb while critical; the high point is 1.")]
         [SerializeField] float criticalAlphaMin = 0.55f;
 
-        Canvas _canvas;
         RectTransform _frame;    // bar background; localScale throbs while critical
         RectTransform _fill;     // grows bottom-up with BoostFraction
         Image _fillImage;
@@ -170,12 +169,7 @@ namespace CubeFly.Fly
 
         void BuildUI()
         {
-            UIStyle.EnsureEventSystem();
-            // sortingOrder 115 sits just above FlyCrosshair (110) and
-            // below FlyWeaponToolbar (120) — the bar reads on top of the
-            // reticle without occluding the toolbar.
-            _canvas = UIStyle.BuildScreenSpaceCanvas("FlyBoostBarCanvas", sortingOrder: 115);
-            RectTransform canvasRoot = (RectTransform)_canvas.transform;
+            RectTransform canvasRoot = FlyHud.Instance.Root;
             int uiLayer = LayerMask.NameToLayer("UI");
 
             // Frame — the bar's background, centred on screen then

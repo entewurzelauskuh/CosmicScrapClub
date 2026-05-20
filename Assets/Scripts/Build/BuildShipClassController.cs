@@ -23,7 +23,6 @@ namespace CubeFly.Build
         [SerializeField] Vector2 dropdownSize = new Vector2(200f, 36f);
         [SerializeField] int fontSize = 20;
 
-        Canvas _canvas;
         Dropdown _dropdown;
 
         // Enum values cached once. Options are added to the dropdown in
@@ -74,12 +73,7 @@ namespace CubeFly.Build
 
         void BuildUI()
         {
-            UIStyle.EnsureEventSystem();
-            // sortingOrder 95: above the build toolbar (90), below the
-            // persistent corner UI (100). The Dropdown bumps its own
-            // sorting when the option list opens.
-            _canvas = UIStyle.BuildScreenSpaceCanvas("BuildShipClassCanvas", sortingOrder: 95);
-            RectTransform root = (RectTransform)_canvas.transform;
+            RectTransform root = BuildHud.Instance.Root;
 
             // Anchored / pivoted middle-left so anchoredPosition reads
             // as an offset from the screen's left edge at vertical centre.

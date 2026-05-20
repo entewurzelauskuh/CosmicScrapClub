@@ -32,7 +32,6 @@ namespace CubeFly.Fly
         [SerializeField] Vector2 size = new Vector2(280f, 40f);
         [SerializeField] int fontSize = 22;
 
-        Canvas _canvas;
         Text _label;
         Transform _construct;
         float _maxHp;
@@ -86,9 +85,7 @@ namespace CubeFly.Fly
 
         void BuildUI()
         {
-            UIStyle.EnsureEventSystem();
-            _canvas = UIStyle.BuildScreenSpaceCanvas("FlyHpCanvas", sortingOrder: 130);
-            RectTransform canvasRoot = (RectTransform)_canvas.transform;
+            RectTransform canvasRoot = FlyHud.Instance.Root;
 
             _label = UIStyle.BuildLabel(canvasRoot, "HP: -- / --", fontSize: fontSize);
             _label.alignment = TextAnchor.MiddleLeft;

@@ -36,7 +36,6 @@ namespace CubeFly.Fly
         [Tooltip("Gap (px) between the center dot edge and the start of each arm.")]
         [SerializeField] float armGap = 2f;
 
-        Canvas _canvas;
         RectTransform _root;
 
         const string TAG = "FlyCrosshair";
@@ -82,9 +81,7 @@ namespace CubeFly.Fly
 
         void BuildUI()
         {
-            UIStyle.EnsureEventSystem();
-            _canvas = UIStyle.BuildScreenSpaceCanvas("FlyCrosshairCanvas", sortingOrder: 110);
-            RectTransform canvasRoot = (RectTransform)_canvas.transform;
+            RectTransform canvasRoot = FlyHud.Instance.Root;
 
             // Root rect — pivot at center so the "+" reticle is
             // visually symmetric around the projected aim point. On

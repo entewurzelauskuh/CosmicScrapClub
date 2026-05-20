@@ -1,6 +1,6 @@
 # Thruster Cube & Boost — Design Spec
 
-Planning doc for the **Thruster cube** feature (`ROADMAP.md` → *Flight &
+Planning doc for the **Thruster cube** feature (`../ROADMAP.md` → *Flight &
 Movement*). Companion to `weapon_shooting_spec.md` — a feature deep-dive,
 not the canonical product spec (`cube_fly_spec.md`).
 

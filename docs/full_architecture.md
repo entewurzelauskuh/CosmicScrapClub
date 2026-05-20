@@ -8,7 +8,7 @@ data is held in-memory by a static `GameData` class and persisted to
 disk per slot by `SaveManager`.
 
 The canonical product spec lives in `cube_fly_spec.md`. Onboarding /
-controls / how to run lives in `README.md`. The Fly-mode shooting
+controls / how to run lives in `../README.md`. The Fly-mode shooting
 system has its own deep-dive at `weapon_shooting_spec.md`. This
 document is the implementation map.
 
@@ -140,10 +140,20 @@ defensive fallback to "all layers minus Ignore Raycast and PreviewCube".
 ```
 <project root>/
 ├── README.md                         How to clone / open / play.
-├── cube_fly_spec.md                  Canonical product spec.
-├── full_architecture.md              This document.
-├── weapon_shooting_spec.md           Fly-mode shooting system deep dive.
+├── ROADMAP.md                        Live planning doc (what's shipped, what's next).
 ├── .gitignore                        Unity caches / generated / IDE / agent / Saves.
+├── docs/
+│   ├── cube_fly_spec.md              Canonical product spec.
+│   ├── full_architecture.md          This document.
+│   ├── weapon_shooting_spec.md       Fly-mode shooting system deep dive.
+│   ├── weapon_death_hud_spec.md      Weapon-toolbar response to weapon-cube death.
+│   ├── thruster_boost_spec.md        Thruster cube + boost mechanic design.
+│   ├── boost_overboost_tuning_spec.md   Boost / overboost tuning notes.
+│   ├── desert_level_spec.md          Experimental desert level (see ROADMAP item 10).
+│   ├── CODEBASE_REVIEW_AUDIT.txt     2026-05-17 codebase audit (historical artifact).
+│   └── superpowers/                  Per-feature brainstorm specs + execution plans.
+│       ├── specs/
+│       └── plans/
 ├── Saves/                            (Editor / project dev — git-ignored)
 │   └── slot0.json / slot1.json / slot2.json
 ├── Assets/
@@ -159,6 +169,7 @@ defensive fallback to "all layers minus Ignore Raycast and PreviewCube".
 │   │   ├── Fly/                      FlyScene-only behaviours (shooting, crash detection, damage pipeline).
 │   │   ├── HangarSelect/             Slot-picker scene controller.
 │   │   ├── MainMenu/                 MainMenu-only behaviours.
+│   │   ├── Desert/                   Desert-level evaluation work (see ROADMAP item 10).
 │   │   └── Editor/                   Editor-only tooling (excluded from runtime builds).
 │   ├── Shapes/                       ShapeRegistry + per-shape SOs.
 │   ├── Materials/

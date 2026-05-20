@@ -11,11 +11,11 @@ hangar selector, build a cube ship, then fly it — and shoot.
 
 The companion documents are:
 
-- **[`cube_fly_spec.md`](cube_fly_spec.md)** — what the project is and what it does (the canonical product spec).
-- **[`full_architecture.md`](full_architecture.md)** — how it is implemented (file-by-file architecture map).
-- **[`weapon_shooting_spec.md`](weapon_shooting_spec.md)** — deep dive on the Fly-mode shooting system (weapons, projectiles, crosshair).
+- **[`docs/cube_fly_spec.md`](docs/cube_fly_spec.md)** — what the project is and what it does (the canonical product spec).
+- **[`docs/full_architecture.md`](docs/full_architecture.md)** — how it is implemented (file-by-file architecture map).
+- **[`docs/weapon_shooting_spec.md`](docs/weapon_shooting_spec.md)** — deep dive on the Fly-mode shooting system (weapons, projectiles, crosshair).
 - **[`ROADMAP.md`](ROADMAP.md)** — what is shipped and what is planned next.
-- **[`thruster_boost_spec.md`](thruster_boost_spec.md)** / **[`boost_overboost_tuning_spec.md`](boost_overboost_tuning_spec.md)** — design specs for the thruster cube and its boost mechanic.
+- **[`docs/thruster_boost_spec.md`](docs/thruster_boost_spec.md)** / **[`docs/boost_overboost_tuning_spec.md`](docs/boost_overboost_tuning_spec.md)** — design specs for the thruster cube and its boost mechanic.
 
 ---
 
@@ -219,7 +219,7 @@ Saves/            Per-slot ConstructSave JSON in Editor / project dev (git-ignor
                   Built players use Application.persistentDataPath/saves/ instead.
 ```
 
-See [`full_architecture.md`](full_architecture.md) for the file-by-file
+See [`docs/full_architecture.md`](docs/full_architecture.md) for the file-by-file
 breakdown.
 
 ---

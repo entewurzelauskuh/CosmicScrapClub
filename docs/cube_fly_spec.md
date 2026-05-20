@@ -15,8 +15,8 @@ persisted to disk per slot.
 This document is the single canonical spec. Companion docs:
 
 - `full_architecture.md` — implementation-level architecture overview.
-- `README.md` — clone / open / run instructions and a controls cheat-sheet.
-- `ROADMAP.md` — what's shipped, what's next, where the project is headed.
+- `../README.md` — clone / open / run instructions and a controls cheat-sheet.
+- `../ROADMAP.md` — what's shipped, what's next, where the project is headed.
 - `weapon_shooting_spec.md` — deep dive on the Fly-mode shooting
   system (weapons, projectiles, crosshair, dispatch).
 - `thruster_boost_spec.md` — deep dive on the thruster cube and the

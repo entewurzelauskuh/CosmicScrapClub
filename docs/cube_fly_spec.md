@@ -379,30 +379,38 @@ lives in `thruster_boost_spec.md` and `boost_overboost_tuning_spec.md`.
 
 Three damage sources are wired today: bullets from `PyramidWeapon`,
 rockets from `CylinderWeapon`, and kinetic crashes from
-`FlyCrashHandler`. All three route through a single
-`CubeFly.Fly.CubeDamage.ApplyAndLog` pipeline that handles the damage
-math, logging, and (on fatal hits) the death animation and cleanup.
+`FlyCrashHandler`. All three build a `CubeFly.Core.HitContext` and
+route it through a single `CubeFly.Fly.CubeDamage.ApplyAndLog(in HitContext)`
+pipeline that handles the damage math, logging, and (on fatal hits) the
+death animation and cleanup. `HitContext` carries the target cube, raw
+amount, `DamageType` (`Projectile` / `Energy` / `Kinetic`), `HitFlags`
+(`None` / `BypassArmour`), surface point + normal, `OutwardOrigin` (the
+death-drift bias point `CubeDeath` reads), source-construct transform,
+log tag, and a reserved `Impulse` field for future knockback. The
+struct is the integration seam for the phase-2 shield system — shields
+will read `Type` to apply their projectile/energy modifiers and
+`Point` / `Normal` for splash falloff.
 
 ### Damage routing
 
-- **Projectile damage** (bullets, rockets, future energy weapons) — uses `CubeStats.TakeDamage(raw)`. Armour absorbs sub-armour hits: `effective = max(0, raw − armourValue)`. A 1-damage bullet against an AV-10 cube does nothing; a 20-damage rocket against the same cube does 10.
-- **Kinetic damage** (crashes; future explosion concussion, melee, etc.) — uses `CubeStats.TakeRawDamage(raw)`. Skips armour entirely. The rationale is that armour mitigates penetration, not raw kinetic energy: a steel plate stops a bullet, not a 35 u/s collision into a wall.
-- The roadmap's upcoming **damage-type system** (projectile vs energy vs kinetic) generalises this two-method split into a single `DamageType` enum that shields can react to differently. The two-method shape today gives us the wiring without locking in the enum.
+- **Projectile damage** (bullets, rockets; energy weapons land in phase 2) — `HitContext` with `Type = DamageType.Projectile` or `Energy`, `Flags = HitFlags.None`. `CubeDamage.ApplyAndLog` routes to `CubeStats.TakeDamage(raw)`. Armour absorbs sub-armour hits: `effective = max(0, raw − armourValue)`. A 1-damage bullet against an AV-10 cube does nothing; a 20-damage rocket against the same cube does 10.
+- **Kinetic damage** (crashes; future explosion concussion, melee, etc.) — `HitContext` with `Type = DamageType.Kinetic`, `Flags = HitFlags.BypassArmour`. `CubeDamage.ApplyAndLog` routes to `CubeStats.TakeRawDamage(raw)`. Skips armour entirely. The rationale is that armour mitigates penetration, not raw kinetic energy: a steel plate stops a bullet, not a 35 u/s collision into a wall.
+- The phase-2 **shield system** layers on top of the same `DamageType` enum: shields take −10% from `Projectile` and +10% from `Energy`. No code change to the call sites — shields read `HitContext.Type` directly.
 
 ### Hit registration
 
 - `Bullet` and `Rocket` do **per-frame swept raycasts** in their `Update` (not Unity triggers) so they don't tunnel through cubes. At the default bullet speed of 80 u/s a projectile travels ~1.33 units per 60 fps frame — wider than a 1-unit cube — so trigger-based detection would intermittently miss. The raycast covers from the previous frame's projectile position to the current one.
 - Self-construct hits are filtered: the firing weapon hands its construct `Transform` to the projectile at `Launch`, and any hit whose collider is a descendant of that transform is skipped. Treats Unity's "destroyed object" sentinel as not-self so in-flight projectiles outlive their firing cube.
-- On a non-self hit, the projectile resolves the hit object's `CubeStats` (via `GetComponentInParent`) and routes through `CubeDamage.ApplyAndLog` with `ignoreArmour: false`, then `Destroy`s itself.
+- On a non-self hit, the projectile resolves the hit object's `CubeStats` (via `GetComponentInParent`), constructs a `HitContext` with `DamageType.Projectile` + `HitFlags.None` + the swept-ray hit point and normal, routes it through `CubeDamage.ApplyAndLog`, then `Destroy`s itself.
 
 ### Crash damage
 
 - `FlyCrashHandler` is a component on `CubeConstruct` (the construct's `Rigidbody` owner). Unity's `OnCollisionEnter` fires here for the construct's compound collider whenever it strikes external geometry. Internal cube-to-cube contacts within the same rigid body don't generate collision events, so no self-hit filter is needed.
 - **Impact speed** is the normal component of `collision.relativeVelocity` — `Abs(Dot(relativeVelocity, contactNormal))`. A high-speed glancing blow has a small normal component and does little damage; a head-on hit dumps the full speed.
-- **Damage formula**: `clamp(normalImpactSpeed × 0.3, 1, 10)`. Below 3 u/s, no damage at all (landing gently doesn't punish). At `FlyController`'s `maxSpeed` of 37.5 u/s the formula caps at 10. Routes through `CubeDamage.ApplyAndLog` with `ignoreArmour: true`.
+- **Damage formula**: `clamp(normalImpactSpeed × 0.3, 1, 10)`. Below 3 u/s, no damage at all (landing gently doesn't punish). At `FlyController`'s `maxSpeed` of 37.5 u/s the formula caps at 10. Routes through `CubeDamage.ApplyAndLog` with a `HitContext` carrying `DamageType.Kinetic` + `HitFlags.BypassArmour`.
 - **Both sides take damage**: the construct's contact-point cube (`ContactPoint.thisCollider`) AND the other collider if it carries `CubeStats`. So crashing into a `WorldTargetCube` damages both the ship and the target.
 - **Entry-only** by nature: `OnCollisionEnter` fires once per contact, so sliding / scraping along a surface registers one damage event, not one per frame.
-- Crash damage is **kinetic** — `ignoreArmour: true` — so armour doesn't mitigate it (a steel plate stops a bullet, not a wall).
+- Crash damage is **kinetic** — `HitFlags.BypassArmour` — so armour doesn't mitigate it (a steel plate stops a bullet, not a wall).
 
 ### Cube death
 
@@ -423,7 +431,7 @@ When a structural cube is destroyed in flight, child cubes that should logically
 ### `MainMenu.unity`
 
 - Three buttons stacked centre-screen: **Hangar**, **Settings**, **Exit**.
-- The persistent UICanvas is hidden while this scene is active (`UIManager.OnSceneStateChanged`).
+- The persistent corner button is hidden while this scene is active (`UIManager.OnSceneStateChanged` toggles its GameObject inside `PersistentHud`'s shared canvas).
 - Clicking **Hangar** loads `HangarSelect` (not BuildScene directly). **Settings** is a placeholder hook. **Exit** quits the application (or stops Editor play mode).
 
 ### `HangarSelect.unity`
@@ -444,8 +452,8 @@ Scene contents:
 - `Main Camera` with `BuildCamera` (orbit camera).
 - `BuildIndicatorController` parents a small red arrow indicator above the cube with the highest local-Z so the player can see which face will lead in flight.
 - `BuildShipClassController` — the middle-left "Class" dropdown for choosing the construct's `ShipClass` (see *Ship Classes*).
+- `BuildHUD` GameObject — carries the `BuildHud` component (the BuildScene-attached shared UI canvas at `sortingOrder 100`) and also hosts `BuildToolbarController` + `BuildShipClassController`. Both controllers parent their UI tree under `BuildHud.Instance.Root`.
 - Directional Light.
-- `UIBootstrap` instantiates the persistent `UICanvas` if not already alive.
 
 Runtime spawns:
 
@@ -492,10 +500,9 @@ Scene contents:
 - `Main Camera` with `FlyCamera`.
 - `FlyShootingController` — owns the per-frame fire / weapon-selection dispatch.
 - `FlyCrashHandler` — `OnCollisionEnter`-based crash damage on the construct's Rigidbody. See **Combat** above.
-- `FlyHUD` GameObject — hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom weapon toolbar with reload bars), `FlySpeedIndicator` (bottom-left `Speed: NN.N u/s`), `FlyHpIndicator` (bottom-left `HP: current / initial`), and `FlyBoostBar` (Boost meter bar left of the crosshair, with a critical-zone red throb and an "Overboosted!" flash).
+- `FlyHUD` GameObject — carries the `FlyHud` component (the FlyScene-attached shared UI canvas at `sortingOrder 100`) and also hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom weapon toolbar with reload bars), `FlySpeedIndicator` (bottom-left `Speed: NN.N u/s`), `FlyHpIndicator` (bottom-left `HP: current / initial`), and `FlyBoostBar` (Boost meter bar left of the crosshair, with a critical-zone red throb and an "Overboosted!" flash). Every HUD script parents its UI tree under `FlyHud.Instance.Root`.
 - One `Ground` prefab instance at the origin (200×200 flat plane) and 20 `WorldTargetCube` prefab instances scattered in front of the spawn position — the basic flat-plain practice arena. Targets are tuned fragile (HP 30, AV 0) so the demo is actually destructible.
 - Directional Light.
-- `UIBootstrap` (idempotent — no-ops if `UIManager` is already alive).
 
 Flight model:
 
@@ -586,7 +593,7 @@ The project also adds a tag `AlphaCube` so the alpha cube is identifiable indepe
 
 A small file-logging facility runs alongside `Debug.Log`:
 
-- `LogBootstrapper` — a `MonoBehaviour` on `UICanvas.prefab` (a `DontDestroyOnLoad` singleton, bootstrapped by `UIBootstrap` — *not* a `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` hook). Replaces `Debug.unityLogger.logHandler` with a `FileLogHandler`. It comes up with the first gameplay scene's `UICanvas`, so MainMenu / HangarSelect run without it.
+- `LogBootstrapper` — a DDOL `MonoBehaviour` singleton that self-bootstraps via `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`. Replaces `Debug.unityLogger.logHandler` with a `FileLogHandler` before any scene loads, so MainMenu / HangarSelect also write to the session log.
 - `FileLogHandler` — appends to a session-stamped file at `Application.persistentDataPath/Logs/CubeFly_<timestamp>.log`. The default `UnityLogHandler` is preserved as a chain target so messages still appear in the Editor console.
 
 The `Logs/` directory is git-ignored. Code uses category tags
@@ -700,9 +707,16 @@ wiring required.
   build manager and fly shooting controller poll
   `WasPerformedThisFrame()` / `IsPressed()` in `Update` instead, so the
   UI hit-test runs on the right thread.
-- **Scene bootstrapping.** Each gameplay scene contains a `UIBootstrap`
-  that is idempotent: it instantiates `UICanvas` only if
-  `UIManager.Instance == null`. Pressing Play directly on `BuildScene`
-  or `FlyScene` is supported. `PauseMenu` is even simpler — it
-  bootstraps from a `RuntimeInitializeOnLoadMethod`, so it's alive
-  before any scene loads.
+- **Scene bootstrapping.** All persistent UI bootstraps from
+  `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` — `UIManager`,
+  `PauseMenu`, `GameOverMenu`, and `LogBootstrapper` each spawn their
+  DDOL singleton before any scene loads. `PersistentHud` is lazy-created
+  on first access (whichever of those scripts Awakes first triggers
+  `PersistentHud.Instance.Root`), giving every persistent UI element a
+  shared screen-space-overlay canvas at `sortingOrder 200`. Pressing
+  Play directly on `BuildScene` or `FlyScene` is fully supported — no
+  per-scene bootstrap GameObject required (the legacy `UIBootstrap` is
+  gone). The per-scene `FlyHud` / `BuildHud` canvases are attached to
+  their `FlyHUD` / `BuildHUD` GameObjects with
+  `[DefaultExecutionOrder(-500)]` so they Awake before the HUD scripts
+  that parent UI under `FooHud.Instance.Root`.

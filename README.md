@@ -85,11 +85,15 @@ cd "<repo-folder>"
 The build settings have `MainMenu` registered as the first scene
 (index 0), so pressing **Play** anywhere drops you into the menu.
 
-You can also press Play directly on `BuildScene` or `FlyScene` — both
-gameplay scenes contain a `UIBootstrap` that lazily instantiates the
-persistent UI on entry. BuildScene entered this way has no armed save
-slot (`GameData.ActiveSlot = -1`); autosave is disabled and a warning
-is logged. To exercise the save path, start from `MainMenu` and walk
+You can also press Play directly on `BuildScene` or `FlyScene` — four
+of the persistent UI scripts (`UIManager`, `PauseMenu`, `GameOverMenu`,
+`LogBootstrapper`) self-bootstrap via `RuntimeInitializeOnLoadMethod`
+before any scene loads, and the shared `PersistentHud` canvas is
+lazy-created on first `Instance` access by whichever of the four
+Awakes first. Direct-Play works regardless of the entry scene.
+BuildScene entered this way has no armed save slot
+(`GameData.ActiveSlot = -1`); autosave is disabled and a warning is
+logged. To exercise the save path, start from `MainMenu` and walk
 through the slot picker.
 
 ---
@@ -184,12 +188,12 @@ Assets/
                   ShapeDefinition, ShapeRegistry,
                   MaterialDefinition, MaterialRegistry, SaveManager, PauseMenu, GameOverMenu,
                   PrimitiveMeshes, PrismMeshAuthor, PyramidMeshAuthor, CylinderMeshAuthor,
-                  ThrusterMeshAuthor, UIManager, UIStyle, UIBootstrap, SceneSwitcher,
-                  FileLogHandler, LogBootstrapper
-  Scripts/Build/  BuildManager, CubePreview, BuildCamera, BuildToolbarController,
+                  ThrusterMeshAuthor, UIManager, UIStyle, PersistentHud, SceneSwitcher,
+                  HitContext, FileLogHandler, LogBootstrapper
+  Scripts/Build/  BuildManager, BuildHud, CubePreview, BuildCamera, BuildToolbarController,
                   CategoryFlyout, BuildShipClassController,
                   BuildIndicatorController, PlacedCubeData
-  Scripts/Fly/    FlyController, FlyCamera, FlyCrosshair,
+  Scripts/Fly/    FlyController, FlyCamera, FlyHud, FlyCrosshair,
                   FlyShootingController, FlyWeaponToolbarController,
                   FlyCrashHandler, FlySpeedIndicator, FlyHpIndicator, FlyBoostBar,
                   CubeDamage, ProjectileHit,
@@ -210,7 +214,6 @@ Assets/
                   Ground, WorldTargetCube
   Prefabs/Projectiles/ Bullet, Rocket
   Input/          CubeFlyInputActions (.inputactions + hand-rolled C# wrapper)
-  UI/             UICanvas, UIBootstrap prefabs
   Settings/       URP render-pipeline assets
 ProjectSettings/  Layers (PlacedCube/AlphaCube/PreviewCube), build list, New Input System on
 Packages/         manifest.json + lockfile (the MCP package's source is git-ignored)

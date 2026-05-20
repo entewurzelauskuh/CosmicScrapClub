@@ -36,35 +36,46 @@ document is the implementation map.
 │MainMenu│ │   HangarSelect    │ │       BuildScene          │ │       FlyScene        │
 │Main-   │ │ HangarSelect-     │ │ • BuildManager            │ │ • FlyController       │
 │Menu-   │ │   Controller      │ │   - shape/material        │ │ • FlyCamera           │
-│Cntrlr  │ │ (slot picker UI;  │ │     registries            │ │ • FlyCrosshair        │
-│        │ │  reads SaveManager│ │   - autosave coroutine    │ │ • FlyShooting-        │
-│        │ │  metadata; routes │ │ • CubePreview (composite) │ │   Controller          │
-│        │ │  with ActiveSlot  │ │ • BuildCamera             │ │ • FlyWeaponToolbar-   │
-│        │ │  armed)           │ │ • BuildIndicator-         │ │   Controller          │
-│        │ │                   │ │     Controller            │ │ • CubeConstruct GO    │
-│        │ │                   │ │ • BuildToolbarController  │ │   (Rigidbody +        │
-│        │ │                   │ │ • UIBootstrap             │ │    FlyCrashHandler)   │
-│        │ │                   │ │                           │ │ • Weapon instances:   │
-│        │ │                   │ │                           │ │   PyramidWeapon /     │
-│        │ │                   │ │                           │ │   CylinderWeapon      │
-│        │ │                   │ │                           │ │ • Projectile spawns:  │
-│        │ │                   │ │                           │ │   Bullet, Rocket      │
+│Cntrlr  │ │ (slot picker UI;  │ │     registries            │ │ • FlyShooting-        │
+│        │ │  reads SaveManager│ │   - autosave coroutine    │ │   Controller          │
+│        │ │  metadata; routes │ │ • CubePreview (composite) │ │ • CubeConstruct GO    │
+│        │ │  with ActiveSlot  │ │ • BuildCamera             │ │   (Rigidbody +        │
+│        │ │  armed)           │ │ • BuildIndicator-         │ │    FlyCrashHandler)   │
+│        │ │                   │ │     Controller            │ │ • Weapon instances:   │
+│        │ │                   │ │ • BuildHUD GameObject:    │ │   PyramidWeapon /     │
+│        │ │                   │ │   - BuildHud canvas       │ │   CylinderWeapon      │
+│        │ │                   │ │   - BuildToolbar-         │ │ • Projectile spawns:  │
+│        │ │                   │ │     Controller            │ │   Bullet, Rocket      │
+│        │ │                   │ │   - BuildShipClass-       │ │ • FlyHUD GameObject:  │
+│        │ │                   │ │     Controller            │ │   - FlyHud canvas     │
+│        │ │                   │ │                           │ │   - FlyCrosshair      │
+│        │ │                   │ │                           │ │   - FlyWeaponToolbar- │
+│        │ │                   │ │                           │ │     Controller        │
+│        │ │                   │ │                           │ │   - FlySpeedIndicator │
+│        │ │                   │ │                           │ │   - FlyHpIndicator    │
+│        │ │                   │ │                           │ │   - FlyBoostBar       │
 │        │ │                   │ │                           │ │ • World scenery:      │
 │        │ │                   │ │                           │ │   Ground +            │
 │        │ │                   │ │                           │ │   WorldTargetCube×20  │
-│        │ │                   │ │                           │ │ • UIBootstrap         │
 └────────┘ └───────────────────┘ └──────────┬────────────────┘ └──────────┬────────────┘
                                             │                             │
                                             └────────┬────────────────────┘
                                                      │
-                                ┌────────────────────┴────────────────┐
-                                │ DontDestroyOnLoad singletons        │
-                                │ • UIManager — corner button         │
-                                │   (hidden on MainMenu+HangarSelect, │
-                                │    label flips Fly!↔Hangar)         │
-                                │ • PauseMenu — ESC overlay           │
-                                │   (self-bootstraps before any scene)│
-                                └─────────────────────────────────────┘
+                                ┌────────────────────┴────────────────────┐
+                                │ DontDestroyOnLoad singletons            │
+                                │ • PersistentHud — shared canvas         │
+                                │   (lazy-created on first Instance       │
+                                │    access; sortingOrder 200)            │
+                                │ • UIManager — corner button             │
+                                │   (hidden on MainMenu+HangarSelect+Fly, │
+                                │    label flips Fly!↔Hangar)             │
+                                │ • PauseMenu — ESC overlay               │
+                                │ • GameOverMenu — Construct Destroyed    │
+                                │ • LogBootstrapper — file logger         │
+                                │ (the lower four self-bootstrap          │
+                                │  BeforeSceneLoad; the first of them to  │
+                                │  Awake triggers PersistentHud.Create)   │
+                                └─────────────────────────────────────────┘
 
            ┌────────────────────────────────────────────────────┐
            │ ScriptableObject content (decoupled axes)          │
@@ -89,8 +100,8 @@ document is the implementation map.
 
            ┌────────────────────────────────────────────────────┐
            │ Logging                                            │
-           │ • LogBootstrapper (MonoBehaviour on                │
-           │   UICanvas.prefab)                                 │
+           │ • LogBootstrapper (DDOL singleton, self-           │
+           │   bootstraps BeforeSceneLoad)                      │
            │ • FileLogHandler →                                 │
            │   persistentDataPath/Logs/CubeFly_*.log            │
            └────────────────────────────────────────────────────┘
@@ -98,13 +109,16 @@ document is the implementation map.
 
 **Persistence model.** `GameData` is a *static* C# class — its data
 naturally survives `SceneManager.LoadScene` for the lifetime of the
-play session, with no `DontDestroyOnLoad` needed. The persistent UI
-uses `DontDestroyOnLoad` on a single `UIManager` singleton; `PauseMenu`
-and `GameOverMenu` are two further DDOL singletons bootstrapped from
-`BeforeSceneLoad`. `LogBootstrapper` is also a DDOL `MonoBehaviour`
-(on `UICanvas.prefab`), but — unlike `PauseMenu` and `GameOverMenu` — it is *not* a
-`BeforeSceneLoad` static; it comes up with the first gameplay scene's
-`UICanvas`.
+play session, with no `DontDestroyOnLoad` needed. The persistent UI is
+five `DontDestroyOnLoad` singletons; four of them self-bootstrap from
+`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` — `UIManager`
+(corner scene-switch button), `PauseMenu` (ESC overlay), `GameOverMenu`
+("Construct Destroyed" overlay), and `LogBootstrapper` (file logger).
+The fifth, `PersistentHud`, is a shared screen-space-overlay canvas at
+`sortingOrder 200` that hosts the corner button + pause panel +
+game-over panel; it's **lazy-created** on first `Instance` access,
+triggered by whichever of the four `BeforeSceneLoad` singletons Awakes
+first and calls `PersistentHud.Instance.Root` to parent its UI.
 
 **On-disk saves** are handled separately by `SaveManager` (atomic
 `File.Replace` with fallback) reading/writing `ConstructSave` JSON. The
@@ -198,8 +212,8 @@ defensive fallback to "all layers minus Ignore Raycast and PreviewCube".
 |---|---|
 | `Assets/Scenes/MainMenu.unity` | First scene loaded. Hosts `MainMenuController` (builds title + 3 buttons in code), Main Camera, Directional Light. The `UIManager` corner button is hidden here. Clicking **Hangar** loads `HangarSelect` (not `BuildScene` directly). |
 | `Assets/Scenes/HangarSelect.unity` | Save-slot picker. Hosts `HangarSelectController` (builds 3 slot cards + Cancel button in code, reads metadata via `SaveManager.ReadAllSlotMetadata`), Main Camera, Directional Light. The `UIManager` corner button is hidden here. On primary-click, arms `GameData.ActiveSlot`, calls `GameData.Clear()` (empty slot) or `GameData.LoadFromSave(...)` (filled slot), then loads `BuildScene`. ESC cancels back to MainMenu. |
-| `Assets/Scenes/BuildScene.unity` | Hangar. Hosts `BuildManager` (with `CubePreview`, `BuildToolbarController`, `BuildIndicatorController`), `Main Camera` with `BuildCamera`, Directional Light, `UIBootstrap`. AlphaCube and the composite preview are spawned at runtime. Autosaves on `ConstructChanged` (0.25 s debounce). |
-| `Assets/Scenes/FlyScene.unity` | Flight. Hosts `UIBootstrap`, `CubeConstruct` (positioned at `(0, 10, 0)`; carries a non-kinematic `Rigidbody` + `FlyCrashHandler`), `FlyController` with a `FlyShootingController` sibling, `FlyHUD` (hosting `FlyCrosshair`, `FlyWeaponToolbarController`, `FlySpeedIndicator`, `FlyHpIndicator`, `FlyBoostBar`), `Main Camera` with `FlyCamera`, Directional Light. Also a `Ground` prefab instance at the origin and 20 `WorldTargetCube` instances as the basic flat-plain practice arena. |
+| `Assets/Scenes/BuildScene.unity` | Hangar. Hosts `BuildManager` (with `CubePreview`, `BuildIndicatorController`), `Main Camera` with `BuildCamera`, Directional Light, and a `BuildHUD` GameObject carrying `BuildHud` (shared canvas, `sortingOrder 100`, `[DefaultExecutionOrder(-500)]`), `BuildToolbarController`, and `BuildShipClassController`. AlphaCube and the composite preview are spawned at runtime. Autosaves on `ConstructChanged` (0.25 s debounce). |
+| `Assets/Scenes/FlyScene.unity` | Flight. Hosts `CubeConstruct` (positioned at `(0, 10, 0)`; carries a non-kinematic `Rigidbody` + `FlyCrashHandler`), `FlyController` with a `FlyShootingController` sibling, `Main Camera` with `FlyCamera`, Directional Light, and a `FlyHUD` GameObject carrying `FlyHud` (shared canvas, `sortingOrder 100`, `[DefaultExecutionOrder(-500)]`), `FlyCrosshair`, `FlyWeaponToolbarController`, `FlySpeedIndicator`, `FlyHpIndicator`, and `FlyBoostBar`. Also a `Ground` prefab instance at the origin and 20 `WorldTargetCube` instances as the basic flat-plain practice arena. |
 
 Registered in `ProjectSettings/EditorBuildSettings.asset` at indices
 0 / 1 / 2 / 3 respectively.
@@ -220,19 +234,20 @@ Registered in `ProjectSettings/EditorBuildSettings.asset` at indices
 | `Scripts/Core/ShapeRegistry.cs` | `ScriptableObject` | Ordered array of `ShapeDefinition` indexed by `Placement.ShapeIndex`. Also provides `FindIndexByName` for the save layer's name-based resolution. |
 | `Scripts/Core/MaterialDefinition.cs` | `ScriptableObject` | Visual material + (HP, AV, mass) stats. `ApplyTo(GameObject)` walks all `Renderer`s and writes the material, then writes stats into the spawned `CubeStats`. `SwatchColor` powers the toolbar's corner badges. |
 | `Scripts/Core/MaterialRegistry.cs` | `ScriptableObject` | Ordered array of `MaterialDefinition` for armour shapes. `FindIndexByName` for save layer parity. Weapon-shape materials live on the shape SO, not in here. |
-| `Scripts/Core/PauseMenu.cs` | DDOL singleton, `[DefaultExecutionOrder(-1000)]` | ESC pause overlay for BuildScene + FlyScene. Self-bootstraps via `RuntimeInitializeOnLoadMethod(BeforeSceneLoad)`. Two buttons (`Menu` / `Back to Desktop`); ESC closes (acts as Resume). Sets `Time.timeScale = 0` while open; restores the previous value on close. `IsOpen` and `EscConsumedThisFrame` are read by other scripts to gate gameplay input and avoid double-handling. |
-| `Scripts/Core/GameOverMenu.cs` | DDOL singleton, `[DefaultExecutionOrder(-1000)]` | End-of-run overlay for FlyScene. Self-bootstraps via `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` so every play session has exactly one instance — no scene wiring. `TriggerGameOver` (called by `CubeDamage` when the alpha cube dies) shows a "Construct Destroyed" panel, freezes `Time.timeScale`, and offers a single Return-to-main-menu button. Idempotent — repeated fatal hits on a 0-HP alpha don't re-trigger. |
+| `Scripts/Core/PauseMenu.cs` | DDOL singleton, `[DefaultExecutionOrder(-1000)]` | ESC pause overlay for BuildScene + FlyScene. Self-bootstraps via `RuntimeInitializeOnLoadMethod(BeforeSceneLoad)`. Three buttons (`Hangar` / `Menu` / `Back to Desktop`; Hangar is only visible in FlyScene); ESC closes (acts as Resume). Sets `Time.timeScale = 0` while open; restores the previous value on close. `IsOpen` and `EscConsumedThisFrame` are read by other scripts to gate gameplay input and avoid double-handling. Builds the pause panel under `PersistentHud.Instance.Root` — no own canvas. |
+| `Scripts/Core/GameOverMenu.cs` | DDOL singleton, `[DefaultExecutionOrder(-1000)]` | End-of-run overlay for FlyScene. Self-bootstraps via `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` so every play session has exactly one instance — no scene wiring. `TriggerGameOver` (called by `CubeDamage.ApplyAndLog` when the alpha cube dies) shows a "Construct Destroyed" panel, freezes `Time.timeScale`, and offers a single Return-to-main-menu button. Idempotent — repeated fatal hits on a 0-HP alpha don't re-trigger. Builds the panel under `PersistentHud.Instance.Root` — no own canvas. |
 | `Scripts/Core/PrimitiveMeshes.cs` | static class | Lazily-built shared meshes for shapes that aren't built-in primitives: `TriangularPrism`, `SquarePyramid`, `HollowCylinder` (32-segment, smooth walls, flat ±Y annuli), `Cone`. Designed to fit a 1×1×1 cell so adjacency / collider behavior matches the cube primitive. |
 | `Scripts/Core/PrismMeshAuthor.cs` | `MonoBehaviour` | Assigns `PrimitiveMeshes.TriangularPrism` to the `MeshFilter` (and `MeshCollider` if present) **only when those slots are empty**, so an authored / imported mesh wired into the prefab is never overwritten. (The shipped `PlacedPrism.prefab` has a prism mesh prewired, so this component is currently a fallback / no-op there.) |
 | `Scripts/Core/PyramidMeshAuthor.cs` | `MonoBehaviour` | Same pattern for `PrimitiveMeshes.SquarePyramid`. (`PlacedPyramid.prefab` likewise has its mesh prewired; this is a fallback.) |
 | `Scripts/Core/CylinderMeshAuthor.cs` | `MonoBehaviour` | Same pattern for `PrimitiveMeshes.HollowCylinder`. `PlacedCylinder.prefab` ships with an empty `MeshFilter.sharedMesh`, so this component is the **primary** source of the cylinder mesh at runtime. |
 | `Scripts/Core/ThrusterMeshAuthor.cs` | `MonoBehaviour` | Same pattern for `PrimitiveMeshes.Cone` — assigns the cone mesh to an empty `MeshFilter` (and `MeshCollider` if present) slot, never overwriting a prewired mesh. Mirror of the Prism / Pyramid / Cylinder mesh authors. |
-| `Scripts/Core/UIManager.cs` | DDOL singleton | Persistent canvas + corner button. Subscribes to `SceneManager.sceneLoaded`; flips label between `Fly!` / `Hangar`; hides the canvas on MainMenu and HangarSelect (allowlist-style — future utility scenes default to hidden). |
-| `Scripts/Core/UIStyle.cs` | static helpers | Shared UI builders: `BuildScreenSpaceCanvas`, `EnsureEventSystem` (DDOL-aware), `BuildLabeledButton`, `BuildLabel`. Uses legacy `UI.Text` + `LegacyRuntime.ttf`. Exposes shared colour constants (`BackgroundIdle`, etc.) used by toolbars. |
-| `Scripts/Core/UIBootstrap.cs` | `MonoBehaviour` | One-shot `Awake` that instantiates `UICanvas` if `UIManager.Instance == null`. One per gameplay scene so either can be entered directly via Play. |
+| `Scripts/Core/UIManager.cs` | DDOL singleton, self-bootstraps `BeforeSceneLoad` | The corner scene-switch button inside `PersistentHud`'s shared canvas. Subscribes to `SceneManager.sceneLoaded`; flips label between `Fly!` / `Hangar`; hides its button GameObject on every scene except BuildScene (FlyScene routes scene-switch through the pause-menu Hangar button; MainMenu / HangarSelect own their full screen). Builds the button under `PersistentHud.Instance.Root` — no own canvas. |
+| `Scripts/Core/PersistentHud.cs` | DDOL singleton, lazy-created | Shared screen-space-overlay canvas for every persistent UI element (`UIManager`'s corner button, `PauseMenu`'s panel, `GameOverMenu`'s panel). `Canvas` + `GraphicRaycaster` + `CanvasScaler` at `sortingOrder 200`. `Instance` getter triggers `Create()` on first access — whichever persistent UI script Awakes first pulls the canvas into existence. |
+| `Scripts/Core/UIStyle.cs` | static helpers | Shared UI builders: `BuildScreenSpaceCanvas`, `EnsureEventSystem` (DDOL-aware), `BuildLabeledButton`, `BuildLabel`, `BuildDropdown`. Uses legacy `UI.Text` + `LegacyRuntime.ttf`. Exposes shared colour constants (`BackgroundIdle`, etc.) used by toolbars. The post-HUD-consolidation HUD scripts (e.g. `FlyCrosshair`) call `BuildLabel` directly under a shared root rather than building their own canvas via `BuildScreenSpaceCanvas`. |
 | `Scripts/Core/SceneSwitcher.cs` | static class | Single `Toggle()` method that flips BuildScene ↔ FlyScene. Wired by `UIManager`'s corner button. Not used by the MainMenu → HangarSelect → BuildScene path. |
+| `Scripts/Core/HitContext.cs` | `readonly struct` + enums | Per-hit metadata carried from damage source to `CubeDamage.ApplyAndLog`. Holds `Target`, `Amount`, `DamageType` (`Projectile` / `Energy` / `Kinetic`), `HitFlags` (`None` / `BypassArmour`), surface `Point` + `Normal`, `OutwardOrigin` (the death-drift bias point `CubeDeath` reads), a reserved `Impulse` field for future knockback, the source-construct `Transform`, and a log tag. Single point of integration for the phase-2 shield system's projectile-vs-energy modifiers. |
 | `Scripts/Core/FileLogHandler.cs` | `ILogHandler` | Append-only file logger. Wraps the default Unity log handler so messages still hit the Editor console. |
-| `Scripts/Core/LogBootstrapper.cs` | `MonoBehaviour` (DDOL singleton on `UICanvas.prefab`, bootstrapped by `UIBootstrap`) | Swaps `Debug.unityLogger.logHandler` for a `FileLogHandler` writing to `Application.persistentDataPath/Logs/CubeFly_<timestamp>.log`. Comes up with the first gameplay scene's `UICanvas` — not a `BeforeSceneLoad` static. |
+| `Scripts/Core/LogBootstrapper.cs` | DDOL singleton, self-bootstraps `BeforeSceneLoad` | Swaps `Debug.unityLogger.logHandler` for a `FileLogHandler` writing to `Application.persistentDataPath/Logs/CubeFly_<timestamp>.log`. Spawns its own DDOL host before any scene loads, so MainMenu / HangarSelect also write to the session log. |
 
 ---
 
@@ -243,9 +258,10 @@ Registered in `ProjectSettings/EditorBuildSettings.asset` at indices
 | `Scripts/Build/BuildManager.cs` | `MonoBehaviour` | Owns the build-scene state machine: active shape index, per-shape material memory dict, active rotation, active tool (`BuildTool.Place` / `BuildTool.Delete`), spawn registry, mass-budget check. `MassLimit` is a **computed property** reading the active `ShipClass`'s `MassCap` (no serialized constant); `OnShipClassChanged` re-applies the new class's alpha HP. Subscribes to `Build.Place` / `Build.RotateZ` / `Build.RotateX`. Handles delete-tool red `MaterialPropertyBlock` hover and post-delete flood-fill. Spawns the alpha cube at scene start. Owns the autosave coroutine (0.25 s debounce on `ConstructChanged`; flushes on `OnDestroy`). Fires `CurrentShapeChanged`, `CurrentMaterialChanged(shape, material)`, `CurrentToolChanged`, `CurrentRotationChanged`, `ConstructChanged`. |
 | `Scripts/Build/CubePreview.cs` | `MonoBehaviour` | Owns a runtime-spawned **composite** ghost: an outer translucent unit-cube (cell-bounds visualiser, world-axis aligned) plus an inner shape-prefab instance scaled to 0.7 (shows the actual shape being placed). The inner mesh rotates with `R/T`; the outer cube doesn't (rotating it would just flicker without changing which cell is occupied). Each `Update` raycasts through the cursor against `PlacedCube`/`AlphaCube`, nudges the hit by `hit.normal * 0.01f` before `RoundToInt`, runs `GameData.IsValidAttachment` for face-validity, shows/hides based on the result. Valid placements clear the bounds-cube tint (default green); invalid placements tint it red via `MaterialPropertyBlock`. Hidden when the active tool is not `Place`. |
 | `Scripts/Build/BuildCamera.cs` | `MonoBehaviour` | Orbit camera (right-mouse drag rotates azimuth/elevation, scroll wheel zooms). Elevation clamped ±80°. |
-| `Scripts/Build/BuildToolbarController.cs` | `MonoBehaviour` | Builds the build-scene UI overlays at runtime: bottom shape toolbar (one button per shape with a corner swatch showing the armed material, plus a Delete button), per-shape material flyout for armour shapes and a separate flyout for each non-armour category — weapon **and** utility shapes — via the `CategoryFlyout` machinery (all peek-on-hover, click-to-pin, `M` toggles the one for the active shape's category, Esc closes), top-left `Rotate: R/T` hint, top-centre fading floating message ("Too much mass!"), bottom-left `Mass: X / 100` and `HP: Y` stat labels (refreshed on `ConstructChanged`). Polls digits `1`–`9` (no modifier) to arm an **armour shape** by on-screen toolbar slot order — non-armour shapes aren't reachable from the digit row — and `Shift`+digit `1`–`9` to arm the active armour shape's **material** by registry index. |
+| `Scripts/Build/BuildHud.cs` | scene-attached singleton, `[DefaultExecutionOrder(-500)]` | The BuildScene-local shared UI canvas. Lives on the `BuildHUD` GameObject in `BuildScene.unity` (same GameObject that hosts `BuildToolbarController` + `BuildShipClassController`). Awake adds `Canvas` (ScreenSpaceOverlay, `sortingOrder 100`) + `GraphicRaycaster` + `CanvasScaler` programmatically. `BuildHud.Instance.Root` is the parent every BuildScene HUD script attaches its UI tree under. |
+| `Scripts/Build/BuildToolbarController.cs` | `MonoBehaviour` | Builds the build-scene UI overlays under `BuildHud.Instance.Root` at runtime: bottom shape toolbar (one button per shape with a corner swatch showing the armed material, plus a Delete button), per-shape material flyout for armour shapes and a separate flyout for each non-armour category — weapon **and** utility shapes — via the `CategoryFlyout` machinery (click / right-click / `M` to pin, Esc closes, auto-close 3 s after the cursor leaves), top-left `Rotate: R/T` hint, top-centre fading floating message ("Too much mass!"), bottom-left `Mass: X / 100` and `HP: Y` stat labels (refreshed on `ConstructChanged`). Polls digits `1`–`9` (no modifier) to arm an **armour shape** by on-screen toolbar slot order — non-armour shapes aren't reachable from the digit row — and `Shift`+digit `1`–`9` to arm the active armour shape's **material** by registry index. |
 | `Scripts/Build/BuildIndicatorController.cs` | `MonoBehaviour` | Reparents a small red arrow prefab to the cube with the highest local-Z so the player can see the ship's "front". Resets the indicator's world rotation to identity each frame so the arrow stays world-aligned even when its parent cube is rotated. |
-| `Scripts/Build/BuildShipClassController.cs` | `MonoBehaviour` | The middle-left "Class" picker dropdown. Lets the player choose the construct's `ShipClass` (Allrounder / Tank / Scout); on change, calls `GameData.SetShipClass` and `BuildManager.OnShipClassChanged` so the new class's alpha HP and mass cap take effect (and the change autosaves with the slot). |
+| `Scripts/Build/BuildShipClassController.cs` | `MonoBehaviour` | The middle-left "Class" picker dropdown, built under `BuildHud.Instance.Root`. Lets the player choose the construct's `ShipClass` (Allrounder / Tank / Scout); on change, calls `GameData.SetShipClass` and `BuildManager.OnShipClassChanged` so the new class's alpha HP and mass cap take effect (and the change autosaves with the slot). |
 | `Scripts/Build/CategoryFlyout.cs` | plain C# class | Reusable non-armour toolbar category — one instance per non-armour `ShapeCategory` (Weapons, Utilities). Builds and owns a peek-on-hover / click-to-pin flyout listing every shape in its category. Extracted so `BuildToolbarController` drives Weapons and Utilities through identical machinery. |
 | `Scripts/Build/PlacedCubeData.cs` | `MonoBehaviour` | Trivial data carrier: stores the `Vector3Int cell` of a placed shape so removal raycasts can identify which grid cell to delete. |
 
@@ -256,16 +272,17 @@ Registered in `ProjectSettings/EditorBuildSettings.asset` at indices
 | File | Type | Responsibility |
 |---|---|---|
 | `Scripts/Fly/FlyController.cs` | `MonoBehaviour` | On `Start`, instantiates AlphaCube + every `GameData.PlacedCubes` entry as children of the referenced `construct` Transform; resolves each placement's `ShapeDefinition` prefab, applies the `MaterialDefinition` via `ApplyTo`, collects any `WeaponBehavior` for the shooting controller, and collects spawned thruster cubes into `_spawnedThrusters` (their `ThrusterBehavior.LocalThrustAxis` values tell Boost which axes are thrustered). `ResolveRigidbody` then configures the construct's `Rigidbody` (gravity off, continuous collision detection, `maxAngularVelocity` cap) and sets `rb.mass` from the summed cube masses so Unity computes the inertia tensor from the actual compound collider. Reads `Fly.Thrust` / `Pitch` / `Yaw` / `Roll` / `Boost` in `Update` (zeroed while `PauseMenu.IsOpen`); in `FixedUpdate` applies `AddForce` for thrust (clamped to `maxSpeed`), `AddRelativeTorque` for pitch/roll and world-axis `AddTorque` for yaw. Torque is scaled by `mass^rotationMassCompensation` so heavy ships aren't unturnable, and thrust/torque also take the active `ShipClass`'s movement multiplier. Owns a 0–100 **Boost** resource (Left-Ctrl `Boost` action; drains at 40/s while boosting, regens at 15/s — 6/s while overboosted; an overboost latch locks regen until the meter recovers); while boosting along a thrustered axis it grants per-axis ×1.3 thrust and a ×1.3 max-speed ceiling that decays back after release. Exposes `BoostFraction` / `IsOverboosted` / `IsBoostCritical` for the HUD. |
-| `Scripts/Fly/FlyCrashHandler.cs` | `MonoBehaviour`, `[RequireComponent(typeof(Rigidbody))]` | Crash damage for the player construct. Lives on `CubeConstruct` (the Rigidbody owner) so `OnCollisionEnter` fires here for the compound collider; internal cube-to-cube contacts within the same body don't generate events, so no self-hit filter is needed. Impact speed is the normal component of `collision.relativeVelocity` (glancing blows do little, head-on hits do full). Damage is `clamp(normalImpactSpeed * 0.3, 1, 10)` above 3 u/s, routed through `CubeDamage.ApplyAndLog` with `ignoreArmour: true`. Applies to BOTH sides of the collision — the construct's contact cube AND the other collider if it carries `CubeStats` (so world target cubes take crash damage too). Replaced the pre-Rigidbody swept-BoxCast `FlyCrashDetector`. |
-| `Scripts/Fly/CubeDamage.cs` | static class | Shared damage-application pipeline routed to by every damage source in Fly mode. Takes a `CubeStats`, the incoming damage, an outward-bias origin (for the death-drift direction), the source's log tag, and an `ignoreArmour` bool. Calls `TakeDamage` or `TakeRawDamage` as appropriate, logs the hit with source-specific wording (`AV NN` vs `armour bypassed`), and on fatal hits handles the alpha-skip + `GameData.Remove` (for player-construct cubes carrying `PlacedCubeData`) + `AddComponent<CubeDeath>` + `BeginDeath` wiring in one place. |
-| `Scripts/Fly/ProjectileHit.cs` | static class | Shared hit-detection helper for `Bullet` and `Rocket`. `TrySweep` runs `Physics.RaycastNonAlloc` against a static 8-element buffer (insertion-sorted by distance) with self-construct filtering. `ApplyAndLog` resolves the hit collider's `CubeStats` (via `GetComponentInParent`), computes the death-drift origin from the parent transform, and delegates to `CubeDamage.ApplyAndLog`. |
+| `Scripts/Fly/FlyCrashHandler.cs` | `MonoBehaviour`, `[RequireComponent(typeof(Rigidbody))]` | Crash damage for the player construct. Lives on `CubeConstruct` (the Rigidbody owner) so `OnCollisionEnter` fires here for the compound collider; internal cube-to-cube contacts within the same body don't generate events, so no self-hit filter is needed. Impact speed is the normal component of `collision.relativeVelocity` (glancing blows do little, head-on hits do full). Damage is `clamp(normalImpactSpeed * 0.3, 1, 10)` above 3 u/s, packaged into a `HitContext` with `DamageType.Kinetic` + `HitFlags.BypassArmour` and routed through `CubeDamage.ApplyAndLog`. Applies to BOTH sides of the collision — the construct's contact cube AND the other collider if it carries `CubeStats` (so world target cubes take crash damage too). Replaced the pre-Rigidbody swept-BoxCast `FlyCrashDetector`. |
+| `Scripts/Fly/CubeDamage.cs` | static class | Shared damage-application pipeline routed to by every damage source in Fly mode. Single entry point: `ApplyAndLog(in HitContext)` — the struct carries target, raw amount, `DamageType`, `HitFlags`, surface point/normal, source-construct transform, and log tag. Reads `HitFlags.BypassArmour` to choose `TakeRawDamage` (kinetic / crash) vs `TakeDamage` (projectile / energy with armour mitigation). Logs the hit with source-specific wording (`AV NN` vs `armour bypassed`). On fatal hits handles the alpha-skip (calling `GameOverMenu.TriggerGameOver`) + `GameData.Remove` (for player-construct cubes carrying `PlacedCubeData`) + `AddComponent<CubeDeath>` + `BeginDeath` wiring in one place. |
+| `Scripts/Fly/ProjectileHit.cs` | static class | Shared hit-detection helper for `Bullet` and `Rocket`. `TrySweep` runs `Physics.RaycastNonAlloc` against a static 8-element buffer (insertion-sorted by distance) with self-construct filtering. `ApplyAndLog` resolves the hit collider's `CubeStats` (via `GetComponentInParent`), computes the death-drift origin from the parent transform, builds a `HitContext` (with `DamageType.Projectile` + `HitFlags.None` + the swept-ray hit point and normal), and delegates to `CubeDamage.ApplyAndLog`. |
 | `Scripts/Fly/FlyCamera.cs` | `MonoBehaviour` | One-shot dynamic offset on `Start` from `GameData.GetConstructBounds()` (clamped 5–50 units). `LateUpdate` ship-stuck follow with RMB free-look gate (`Fly.LookHeld`) and snap-back blend on release. Follow speed is **adaptive**: `followSpeed + construct.angularVelocity.magnitude * angularFollowBoost`, so the camera stays glued during fast turns instead of lagging behind. While `PauseMenu.IsOpen`, behaves as if RMB were released — frees the cursor (so menu buttons are reachable) and lets the orbit offset relax to neutral. The body follow is naturally frozen by `Time.timeScale = 0`. |
-| `Scripts/Fly/FlyCrosshair.cs` | `MonoBehaviour`, `[DefaultExecutionOrder(100)]` | Screen-space reticle (centre dot + four arms) that projects `construct.position + construct.forward * aimRange` to screen space each LateUpdate. Runs after `FlyCamera`'s LateUpdate so the camera transform is final by the time the projection happens. The same value is what `FlyShootingController` passes as the aim target so on-screen reticle and actual aim agree. Hidden when the projected point is behind the camera. Skipped while `PauseMenu.IsOpen` (last computed position holds). |
+| `Scripts/Fly/FlyHud.cs` | scene-attached singleton, `[DefaultExecutionOrder(-500)]` | The FlyScene-local shared UI canvas. Lives on the `FlyHUD` GameObject in `FlyScene.unity` (same GameObject that hosts every Fly HUD script). Awake adds `Canvas` (ScreenSpaceOverlay, `sortingOrder 100`) + `GraphicRaycaster` + `CanvasScaler` programmatically. `FlyHud.Instance.Root` is the parent every Fly HUD script attaches its UI tree under. |
+| `Scripts/Fly/FlyCrosshair.cs` | `MonoBehaviour`, `[DefaultExecutionOrder(100)]` | Screen-space reticle (centre dot + four arms) built under `FlyHud.Instance.Root`. Projects `construct.position + construct.forward * aimRange` to screen space each LateUpdate. Runs after `FlyCamera`'s LateUpdate so the camera transform is final by the time the projection happens. The same value is what `FlyShootingController` passes as the aim target so on-screen reticle and actual aim agree. Hidden when the projected point is behind the camera. Skipped while `PauseMenu.IsOpen` (last computed position holds). |
 | `Scripts/Fly/FlyShootingController.cs` | `MonoBehaviour` | Owns the list of weapons grouped by `ShapeDefinition` (`WeaponTypeGroup` instances), the currently-selected type index, and all shoot-related input polling: Fire (LMB via `Fly.Fire`), digits 1–9 (direct select), mouse wheel (cycle, edge-detected). Each frame Fire is held, calls `TryFire(crosshairWorldTarget)` on every weapon of the selected type. Fires `TypesChanged` and `SelectedChanged` events for the toolbar UI. Skipped while `PauseMenu.IsOpen` or pointer is over UI. |
-| `Scripts/Fly/FlyWeaponToolbarController.cs` | `MonoBehaviour` | Bottom-of-screen weapon toolbar UI built in code: one button per distinct weapon type with a corner swatch (matching the weapon's `coupledMaterial.SwatchColor`) and a thin reload bar above. Subscribes to `TypesChanged` (rebuild) and `SelectedChanged` (highlight); per-frame updates each reload bar's `fillAmount` from `WeaponTypeGroup.ReadyFraction`. Hidden entirely when the construct has no weapons. |
-| `Scripts/Fly/FlySpeedIndicator.cs` | `MonoBehaviour` | Bottom-left HUD label, `Speed: NN.N u/s`, read each `Update` from the construct's `Rigidbody.linearVelocity.magnitude`. Builds its own screen-space-overlay canvas via `UIStyle`. |
-| `Scripts/Fly/FlyHpIndicator.cs` | `MonoBehaviour`, `[DefaultExecutionOrder(100)]` | Bottom-left HUD label above the speed readout, `HP: current / initial`. Sums `CubeStats.healthPoints` across the construct's cube children each `Update`; the initial total is snapshotted at `Start` (execution order forced after `FlyController.Start` so the cubes exist). Cubes that have died and detached fall out of the sum naturally. |
-| `Scripts/Fly/FlyBoostBar.cs` | `MonoBehaviour` | Boost HUD bar to the left of the crosshair. Reads `FlyController.BoostFraction` to fill the bar each frame; throbs red in the critical zone (`IsBoostCritical`) and flashes an "Overboosted!" message while `IsOverboosted`. |
+| `Scripts/Fly/FlyWeaponToolbarController.cs` | `MonoBehaviour` | Bottom-of-screen weapon toolbar UI built under a dedicated `_container` child of `FlyHud.Instance.Root` (the container lets the toolbar `SetActive(false)` when the construct has no weapons without disabling the whole HUD canvas). One button per distinct weapon type with a corner swatch (matching the weapon's `coupledMaterial.SwatchColor`) and a width-based reload bar above. Subscribes to `TypesChanged` (rebuild). Per-frame updates each reload bar's width from `WeaponTypeGroup.ReadyFraction` (which routes through `FirstAliveInstance` so a dead Instances[0] during partial death doesn't fake "always reloaded"); paints fully-dead buttons grey with a static red ✕ glyph and partially-dead buttons with a pulsing ✕. |
+| `Scripts/Fly/FlySpeedIndicator.cs` | `MonoBehaviour` | Bottom-left HUD label, `Speed: NN.N u/s`, read each `Update` from the construct's `Rigidbody.linearVelocity.magnitude`. Built under `FlyHud.Instance.Root`. |
+| `Scripts/Fly/FlyHpIndicator.cs` | `MonoBehaviour`, `[DefaultExecutionOrder(100)]` | Bottom-left HUD label above the speed readout, `HP: current / initial`. Sums `CubeStats.healthPoints` across the construct's cube children each `Update`; the initial total is snapshotted at `Start` (execution order forced after `FlyController.Start` so the cubes exist). Cubes that have died and detached fall out of the sum naturally. Built under `FlyHud.Instance.Root`. |
+| `Scripts/Fly/FlyBoostBar.cs` | `MonoBehaviour` | Boost HUD bar to the left of the crosshair, built under `FlyHud.Instance.Root`. Reads `FlyController.BoostFraction` to fill the bar each frame; throbs red in the critical zone (`IsBoostCritical`) and flashes an "Overboosted!" message while `IsOverboosted`. |
 | `Scripts/Fly/WeaponBehavior.cs` | abstract `MonoBehaviour` | Base for any weapon-cube. Owns the reload cooldown (ticking down in `Update` regardless of selection) and `TryFire(crosshairWorldTarget)` public entry point. Subclasses implement `protected abstract void Fire(Vector3 target)`. Construct and Shape references are wired by `FlyController.BuildConstruct` after instantiation. |
 | `Scripts/Fly/ThrusterBehavior.cs` | `MonoBehaviour` | Passive descriptor on `PlacedThruster.prefab`. Carries no per-frame logic — it exposes `LocalThrustAxis` (the construct-local axis the thruster boosts along, derived from its placement face) so `FlyController` knows which axes Boost should amplify. |
 | `Scripts/Fly/PyramidWeapon.cs` | `WeaponBehavior` subclass | Machine-gun-style. Spawn position = pyramid's apex (`transform.TransformPoint((0, 0.5, 0))`). Aim rule: if the tip direction (`transform.up`) aligns with `Construct.forward` (dot > 0.7 = cos 45°), fire at the shared crosshair world target; otherwise fire along the tip direction. 90°-stepped placements give an exact ±1 / 0 dot, so the threshold cleanly bins "frontal" vs "off-axis". `Bullet.Launch` is called with `(origin, direction, Construct, damage)` so the bullet can run self-hit prevention and snapshot the weapon's damage value. |
@@ -392,15 +409,21 @@ uses `displayName` instead of the index, so reordering doesn't invalidate existi
 
 ## UI
 
-| File | Role |
-|---|---|
-| `Assets/UI/UICanvas.prefab` | Canvas (Screen Space Overlay) + CanvasScaler (1920×1080) + GraphicRaycaster + `UIManager`. The corner button is built at runtime by `UIManager.BuildButton` so the prefab carries no font dependency. |
-| `Assets/UI/UIBootstrap.prefab` | Trivial GameObject hosting `UIBootstrap` with a serialized reference to `UICanvas`. One instance lives in each gameplay scene. |
+Every UI surface in the project is built **in code**. The HUD-consolidation
+PR (#41) collapsed the legacy `UICanvas.prefab` / `UIBootstrap.prefab`
+chain into three shared HUD root MonoBehaviours, each owning a single
+`Canvas` + `GraphicRaycaster` + `CanvasScaler` configured programmatically:
 
-`MainMenu`, `HangarSelect`, the build toolbar, the pause overlay, the
-fly weapon toolbar, and the fly crosshair all build their UI **in
-code** via `UIStyle.BuildScreenSpaceCanvas` and friends — no per-scene
-canvas prefabs needed.
+| Root | Lifetime | sortingOrder | Hosts |
+|---|---|---|---|
+| `PersistentHud` | DDOL, lazy-created on first `Instance` access | 200 | Corner button (`UIManager`), pause panel (`PauseMenu`), Construct Destroyed panel (`GameOverMenu`). |
+| `FlyHud` | Scene-attached on `FlyHUD` GameObject (FlyScene), `[DefaultExecutionOrder(-500)]` | 100 | Crosshair, weapon toolbar, speed / HP labels, boost bar. |
+| `BuildHud` | Scene-attached on `BuildHUD` GameObject (BuildScene), `[DefaultExecutionOrder(-500)]` | 100 | Build toolbar (shape buttons + flyouts + Delete + stat labels), ship-class dropdown. |
+
+`MainMenu` and `HangarSelect` each own their own full-screen canvas
+(built in their controller's `Awake` via `UIStyle.BuildScreenSpaceCanvas`)
+— they're not fragmented across multiple HUD elements, so the
+shared-root pattern would be churn there.
 
 ---
 
@@ -418,15 +441,16 @@ canvas prefabs needed.
 ## Lifecycle Walkthroughs
 
 **Cold start.**
-`PauseMenu.Bootstrap` and `GameOverMenu.Bootstrap` (both
-`BeforeSceneLoad`) spawn their DDOL singletons before any scene loads.
-`MainMenu.unity` loads. `MainMenuController.Awake` calls
-`UIStyle.EnsureEventSystem` and builds the title + three buttons. The
-persistent `UIManager` does not yet exist; the corner button is absent
-on the menu by design. `LogBootstrapper` is a `MonoBehaviour` on
-`UICanvas.prefab`, so the file logger does not come up until the first
-gameplay scene's `UIBootstrap` instantiates the canvas — MainMenu and
-HangarSelect run without it.
+`UIManager.Bootstrap`, `PauseMenu.Bootstrap`, `GameOverMenu.Bootstrap`,
+and `LogBootstrapper.Bootstrap` (all `BeforeSceneLoad`) each spawn
+their DDOL singleton before any scene loads. The first of those Awakes
+calls `PersistentHud.Instance`, which lazy-creates the shared persistent
+canvas. The file logger comes up immediately — MainMenu and
+HangarSelect both write to the session log file. `MainMenu.unity`
+loads. `MainMenuController.Awake` calls `UIStyle.EnsureEventSystem` and
+builds the title + three buttons in its own scene canvas.
+`UIManager.OnSceneLoaded` runs and hides the corner button GameObject
+(MainMenu isn't in the allowlist).
 
 **Main Menu → Hangar Slot Selector.**
 **Hangar** click → `SceneManager.LoadScene("HangarSelect")`. Build
@@ -437,31 +461,41 @@ slot UI; `RefreshAllCards` calls
 **HangarSelect → Hangar.**
 Slot click (or digit 1/2/3) → `GameData.SetActiveSlot(i)`, then
 `GameData.Clear()` (empty slot) or `GameData.LoadFromSave(...)`
-(filled). `SceneManager.LoadScene("BuildScene")`. BuildScene's
-`UIBootstrap.Awake` instantiates `UICanvas`; `UIManager.Awake` claims
-the singleton, applies `DontDestroyOnLoad`, and shows the corner
-button labelled `Fly!`. `BuildManager.Awake` constructs the
-`CubeFlyInputActions` wrapper and subscribes to `Place` / `RotateZ` /
-`RotateX`. `BuildManager.Start` resolves camera/preview/cubeRoot
-references, spawns the alpha cube, re-instantiates any cubes already in
-`GameData.PlacedCubes`, then subscribes `ScheduleAutosave` to
-`ConstructChanged` so subsequent edits are persisted.
+(filled). `SceneManager.LoadScene("BuildScene")`. The scene's
+`BuildHUD` GameObject Awakes first (`[DefaultExecutionOrder(-500)]`):
+`BuildHud.Awake` adds Canvas / GraphicRaycaster / CanvasScaler at
+sortingOrder 100. `UIManager.OnSceneLoaded` shows the corner button
+GameObject under `PersistentHud` and sets its label to `Fly!`.
+`BuildToolbarController.Start` and `BuildShipClassController.Start`
+build their UI trees under `BuildHud.Instance.Root`. `BuildManager.Awake`
+constructs the `CubeFlyInputActions` wrapper and subscribes to
+`Place` / `RotateZ` / `RotateX`. `BuildManager.Start` resolves
+camera/preview/cubeRoot references, spawns the alpha cube,
+re-instantiates any cubes already in `GameData.PlacedCubes`, then
+subscribes `ScheduleAutosave` to `ConstructChanged` so subsequent
+edits are persisted.
 
 **Build → Fly.**
 Corner-button click → `SceneSwitcher.Toggle()`. BuildScene unloads;
 its `OnDestroy` flushes any pending autosave so the slot file is
-current. `GameData` (static) and `UIManager` / `PauseMenu` (DDOL)
-survive. FlyScene loads; its `UIBootstrap` sees `UIManager.Instance
-!= null` and no-ops. `FlyController.Start` rebuilds the construct
-under the `CubeConstruct` transform, applies each placement's chosen
+current. The `BuildHud` singleton is destroyed with its scene; the
+DDOL singletons (`GameData` static; `UIManager` / `PauseMenu` /
+`GameOverMenu` / `LogBootstrapper` DDOL; `PersistentHud` DDOL) all
+survive. FlyScene loads; the `FlyHUD` GameObject Awakes first
+(`[DefaultExecutionOrder(-500)]`) and creates the `FlyHud` canvas at
+sortingOrder 100. `FlyController.Start` rebuilds the construct under
+the `CubeConstruct` transform, applies each placement's chosen
 `MaterialDefinition`, collects spawned `WeaponBehavior` instances,
-configures the construct `Rigidbody` and sets its mass from the
-summed cube masses, and hands the weapons list to
+configures the construct `Rigidbody` and sets its mass from the summed
+cube masses, and hands the weapons list to
 `FlyShootingController.RegisterWeapons` (which groups by
-`ShapeDefinition` and fires `TypesChanged`). `FlyWeaponToolbarController`
-rebuilds the bottom toolbar from those events. `FlyCamera.Start`
-computes its one-shot offset from `GameData.GetConstructBounds()`.
-`UIManager` swaps the corner-button label to `Hangar`.
+`ShapeDefinition` and fires `TypesChanged`). The Fly HUD scripts
+(`FlyCrosshair`, `FlyWeaponToolbarController`, `FlySpeedIndicator`,
+`FlyHpIndicator`, `FlyBoostBar`) each build their UI under
+`FlyHud.Instance.Root`. `FlyCamera.Start` computes its one-shot offset
+from `GameData.GetConstructBounds()`. `UIManager.OnSceneLoaded` hides
+the corner button (FlyScene is not in its allowlist; scene-switching is
+routed through the pause menu's Hangar button instead).
 
 **Pause.**
 ESC pressed in BuildScene or FlyScene → `PauseMenu.Open` sets

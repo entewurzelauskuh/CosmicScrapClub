@@ -158,7 +158,8 @@ defensive fallback to "all layers minus Ignore Raycast and PreviewCube".
 │   │   ├── Build/                    BuildScene-only behaviours.
 │   │   ├── Fly/                      FlyScene-only behaviours (shooting, crash detection, damage pipeline).
 │   │   ├── HangarSelect/             Slot-picker scene controller.
-│   │   └── MainMenu/                 MainMenu-only behaviours.
+│   │   ├── MainMenu/                 MainMenu-only behaviours.
+│   │   └── Editor/                   Editor-only tooling (excluded from runtime builds).
 │   ├── Shapes/                       ShapeRegistry + per-shape SOs.
 │   ├── Materials/
 │   │   ├── Defs/                     MaterialRegistry + per-material SOs (+ coupled weapon mats).
@@ -279,6 +280,14 @@ sequencing, aim agreement, dispatch ordering).
 | File | Type | Responsibility |
 |---|---|---|
 | `Scripts/MainMenu/MainMenuController.cs` | `MonoBehaviour` | `Awake` builds the title + three buttons (`Hangar` → loads `HangarSelect`; `Settings` → placeholder log; `Exit` → `Application.Quit` / stops Editor play mode). Uses `UIStyle` so its visuals match the in-game corner button. |
+
+---
+
+## Scripts — Editor (`CubeFly.EditorTools`)
+
+| File | Type | Responsibility |
+|---|---|---|
+| `Scripts/Editor/RegistryValidator.cs` | static class, `[MenuItem]` | On-demand registry validation. Walks `ShapeRegistry`, `MaterialRegistry`, every shape's spawn prefab, every coupled `MaterialDefinition`, and the required gameplay layers (`PlacedCube`, `AlphaCube`, `PreviewCube`). Reports each finding to the Console with the offending asset as click-context, then surfaces a summary dialog. Menu path `Tools/CubeFly/Validate Registries`. |
 
 ---
 

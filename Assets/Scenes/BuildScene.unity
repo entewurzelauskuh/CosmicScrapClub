@@ -621,7 +621,7 @@ MonoBehaviour:
   selectedStatsAnchoredPosition: {x: 200, y: 28}
   selectedStatsSize: {x: 460, y: 60}
   deleteToolLabelText: "Delete tool \u2014 click a cube to remove"
-  flyoutEntrySize: {x: 220, y: 56}
+  flyoutEntrySize: {x: 220, y: 45}
   flyoutEntrySpacing: 6
   flyoutBottomGap: 10
   hoverPeekDelay: 0.3

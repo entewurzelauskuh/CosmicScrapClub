@@ -690,7 +690,7 @@ MonoBehaviour:
   deadColor: {r: 0.32, g: 0.32, b: 0.34, a: 0.9}
   deathMarkColor: {r: 0.95, g: 0.2, b: 0.2, a: 1}
   deathMarkSize: {x: 16, y: 16}
-  deathMarkPulseSeconds: 1
+  deathMarkPulseSeconds: 0.9
   deathMarkAlphaMin: 0.25
 --- !u!114 &700004
 MonoBehaviour:

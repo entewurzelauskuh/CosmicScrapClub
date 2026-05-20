@@ -62,8 +62,11 @@ namespace CubeFly.Build
         CanvasGroup _flyoutGroup;
         Button[] _flyoutButtons;
         Image[] _flyoutBackgrounds;
-        bool _flyoutPinned;
-        Coroutine _peekRoutine;
+        bool _flyoutPinned;               // peek removed (UX batch 2026-05-20); always true while open
+        Coroutine _peekRoutine;           // unused after peek removal; kept to avoid touching call sites
+        // Seconds since the cursor last left the flyout's hover area.
+        // Ticked externally via TickAwayTimer; cursor re-enter resets.
+        float _awayTimer;
 
         // Last-armed shape in this category — drives the toolbar button's
         // corner swatch when a shape from another category is active.
@@ -232,15 +235,33 @@ namespace CubeFly.Build
 
             RectTransform btnRT = (RectTransform)_button.transform;
             RectTransform frt = (RectTransform)_flyout.transform;
+            // Position the flyout ABOVE the category button so it sits
+            // fully clear of the toolbar row (UX batch 2026-05-20).
             frt.anchoredPosition = new Vector2(
                 btnRT.anchoredPosition.x,
-                _bottomMargin + _buttonSize.y / 2f + _flyoutBottomGap);
+                _bottomMargin + _buttonSize.y + _flyoutBottomGap);
 
             _flyout.SetActive(true);
-            _flyoutGroup.alpha = pin ? 1f : _peekAlpha;
-            _flyoutGroup.blocksRaycasts = pin;
-            _flyoutPinned = pin;
+            // Peek-on-hover removed (UX batch 2026-05-20); `pin` kept
+            // for API compat — every caller is a click / right-click /
+            // M-key, always pinned.
+            _flyoutGroup.alpha = 1f;
+            _flyoutGroup.blocksRaycasts = true;
+            _flyoutPinned = true;
+            _awayTimer = 0f;
             RefreshFlyoutHighlights();
+        }
+
+        // Per-frame tick from the owning BuildToolbarController. While
+        // the flyout is open and the cursor is NOT over its hover area,
+        // accumulate `dt`; reaching `closeSeconds` → auto-Hide. Cursor
+        // re-enter resets the timer.
+        public void TickAwayTimer(float dt, float closeSeconds)
+        {
+            if (!IsOpen) return;
+            if (IsPointerOverFlyout()) _awayTimer = 0f;
+            else                       _awayTimer += dt;
+            if (_awayTimer >= closeSeconds) Hide();
         }
 
         // Hide the flyout and drop its pinned state.
@@ -334,37 +355,15 @@ namespace CubeFly.Build
 
         void OnHoverEnter()
         {
-            if (_peekRoutine != null) _owner.StopCoroutine(_peekRoutine);
-            _peekRoutine = _owner.StartCoroutine(PeekAfterDelay());
+            // Peek-on-hover was removed (UX batch 2026-05-20) — flyouts
+            // open only on click now.
         }
 
         void OnHoverExit()
         {
-            if (_peekRoutine != null)
-            {
-                _owner.StopCoroutine(_peekRoutine);
-                _peekRoutine = null;
-            }
-            // A peek (non-pinned) flyout closes on exit; a pinned one
-            // stays until Esc / M / an entry click / shape or tool
-            // change. Don't close if the cursor moved INTO the flyout.
-            if (IsOpen && !_flyoutPinned)
-            {
-                if (!IsPointerOverFlyout()) Hide();
-            }
-        }
-
-        IEnumerator PeekAfterDelay()
-        {
-            yield return new WaitForSeconds(_hoverPeekDelay);
-            // Don't peek-open if THIS flyout is already pinned, or if any
-            // OTHER flyout is pinned — peek-opening would call Open with
-            // pin: false and silently unpin the user's deliberate
-            // selection just because they hovered a button.
-            if (IsOpen && _flyoutPinned) yield break;
-            if (_anyOtherFlyoutPinned != null && _anyOtherFlyoutPinned()) yield break;
-            Open(pin: false);
-            _peekRoutine = null;
+            // Peek-on-hover was removed. Closing a pinned flyout when
+            // the cursor leaves the flyout's hover area is handled by
+            // TickAwayTimer (3 s).
         }
 
         void OnFlyoutEntryClicked(int shapeIndex)

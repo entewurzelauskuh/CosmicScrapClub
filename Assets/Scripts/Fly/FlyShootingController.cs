@@ -111,10 +111,14 @@ namespace CubeFly.Fly
             // regardless of where the cursor is.
             AutoSwitchOffDeadType();
 
-            // UI gating — selection/fire input only when not over the HUD.
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
-
+            // Selection input (digits, mouse wheel) is allowed even when
+            // the cursor is over the weapon toolbar — scrolling on the
+            // toolbar is the natural place to cycle weapons. Fire (LMB)
+            // is the only input that conflicts with UI clicks and stays
+            // gated by the pointer-over-UI check below.
             HandleSelectionInputs();
+
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
             HandleFireInput();
         }
 

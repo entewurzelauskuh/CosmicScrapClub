@@ -73,12 +73,20 @@ namespace CubeFly.Core
             if (_canvas != null) _canvas.enabled = inGameplay;
 
             // Reset the corner button to interactable on every scene
-            // change. The FlyScene "Hangar" button is always clickable;
-            // the BuildScene "Fly!" button starts clickable and gets
-            // gated by BuildManager if the construct is over its mass
-            // budget. sceneLoaded fires before BuildManager.Start, so
-            // BuildManager re-evaluates the gate right after this reset.
-            if (sceneSwitchButton != null) sceneSwitchButton.interactable = true;
+            // change. The BuildScene "Fly!" button starts clickable and
+            // gets gated by BuildManager if the construct is over its
+            // mass budget. sceneLoaded fires before BuildManager.Start,
+            // so BuildManager re-evaluates the gate right after this
+            // reset.
+            //
+            // FlyScene hides the corner button entirely — the Hangar
+            // action lives in the ESC pause menu there (UX batch
+            // 2026-05-20).
+            if (sceneSwitchButton != null)
+            {
+                sceneSwitchButton.interactable = true;
+                sceneSwitchButton.gameObject.SetActive(scene.name == BuildSceneName);
+            }
         }
 
         // Enable / disable the corner scene-switch button. BuildManager

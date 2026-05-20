@@ -111,10 +111,14 @@ namespace CubeFly.Fly
             // regardless of where the cursor is.
             AutoSwitchOffDeadType();
 
-            // UI gating — selection/fire input only when not over the HUD.
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
-
+            // Selection input (digits, mouse wheel) is allowed even when
+            // the cursor is over the weapon toolbar — scrolling on the
+            // toolbar is the natural place to cycle weapons. Fire (LMB)
+            // is the only input that conflicts with UI clicks and stays
+            // gated by the pointer-over-UI check below.
             HandleSelectionInputs();
+
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
             HandleFireInput();
         }
 
@@ -225,8 +229,37 @@ namespace CubeFly.Fly
 
         public WeaponTypeGroup(ShapeDefinition shape) { Shape = shape; }
 
-        public float MaxReloadSeconds => Instances.Count > 0 ? Instances[0].ReloadSeconds : 0f;
-        public float CooldownRemaining => Instances.Count > 0 ? Instances[0].CooldownRemaining : 0f;
+        // Route reload-bar inputs through the first ALIVE instance.
+        // Reading Instances[0] unconditionally was wrong when the first
+        // weapon cube of the group died: its _cooldown decays to 0 during
+        // the death drift while the surviving instances fire and hold a
+        // real cooldown, so the bar appeared to "always be full."
+        public float MaxReloadSeconds
+        {
+            get
+            {
+                WeaponBehavior alive = FirstAliveInstance();
+                return alive != null ? alive.ReloadSeconds : 0f;
+            }
+        }
+        public float CooldownRemaining
+        {
+            get
+            {
+                WeaponBehavior alive = FirstAliveInstance();
+                return alive != null ? alive.CooldownRemaining : 0f;
+            }
+        }
+
+        WeaponBehavior FirstAliveInstance()
+        {
+            for (int i = 0; i < Instances.Count; i++)
+            {
+                WeaponBehavior w = Instances[i];
+                if (w != null && w.IsAlive) return w;
+            }
+            return null;
+        }
 
         // 0 = just fired, 1 = ready to fire. Drives the reload progress bar.
         public float ReadyFraction

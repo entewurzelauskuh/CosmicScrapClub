@@ -56,6 +56,7 @@ namespace CubeFly.Core
         const string FlySceneName          = "FlyScene";
 
         GameObject _root;
+        Button _hangarButton;       // visible only in FlyScene
         float _previousTimeScale = 1f;
 
         // Self-bootstrap: spawn the singleton before any scene loads.
@@ -148,6 +149,19 @@ namespace CubeFly.Core
             OnClosed?.Invoke();
         }
 
+        void OnHangarClicked()
+        {
+            // Restore timeScale BEFORE the scene toggle so the next
+            // scene doesn't wake up frozen. SceneSwitcher.Toggle does
+            // the GameData snapshot/restore for the FlyScene → BuildScene
+            // transition before loading.
+            Time.timeScale = 1f;
+            _previousTimeScale = 1f;
+            Close();
+            Debug.unityLogger.Log(TAG, "Hangar button — toggling to BuildScene.");
+            SceneSwitcher.Toggle();
+        }
+
         void OnMenuClicked()
         {
             // Restore timeScale BEFORE the scene load so the next
@@ -175,6 +189,13 @@ namespace CubeFly.Core
         // race-conditioned through), the menu should close cleanly.
         void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            // Hangar button only makes sense in FlyScene — it routes
+            // back to BuildScene via SceneSwitcher.Toggle. Hide it
+            // elsewhere so BuildScene's pause menu just shows
+            // Menu + Back to Desktop.
+            if (_hangarButton != null)
+                _hangarButton.gameObject.SetActive(scene.name == FlySceneName);
+
             if (!IsOpen) return;
             if (scene.name == BuildSceneName || scene.name == FlySceneName) return;
             // Mid-flight reset. Avoid Close()'s "save previousTimeScale"
@@ -226,11 +247,14 @@ namespace CubeFly.Core
 
             // Buttons stacked below the title. Same dimensions as the
             // MainMenu buttons to keep the visual language consistent.
-            CreateButton(root, "Menu",            new Vector2(0f, 0f),    OnMenuClicked);
-            CreateButton(root, "Back to Desktop", new Vector2(0f, -100f), OnExitClicked);
+            // Hangar is created first (top of the stack) but is only
+            // visible in FlyScene — see OnSceneLoaded.
+            _hangarButton = CreateButton(root, "Hangar",          new Vector2(0f, 100f),  OnHangarClicked);
+                            CreateButton(root, "Menu",            new Vector2(0f, 0f),    OnMenuClicked);
+                            CreateButton(root, "Back to Desktop", new Vector2(0f, -100f), OnExitClicked);
         }
 
-        static void CreateButton(RectTransform parent, string text,
+        static Button CreateButton(RectTransform parent, string text,
             Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick)
         {
             (Button button, Text _) = UIStyle.BuildLabeledButton(
@@ -239,6 +263,7 @@ namespace CubeFly.Core
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = anchoredPos;
             button.onClick.AddListener(onClick);
+            return button;
         }
 
         void ShowUI()

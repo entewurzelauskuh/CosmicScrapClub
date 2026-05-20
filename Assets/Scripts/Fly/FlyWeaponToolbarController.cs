@@ -42,7 +42,7 @@ namespace CubeFly.Fly
         [Tooltip("Size of the partial-death corner mark, in UI units.")]
         [SerializeField] Vector2 deathMarkSize = new Vector2(16f, 16f);
         [Tooltip("Period of the partial-death mark's alpha pulse, in seconds.")]
-        [SerializeField] float deathMarkPulseSeconds = 1f;
+        [SerializeField] float deathMarkPulseSeconds = 0.9f;
         [Tooltip("Minimum alpha at the dim end of the partial-death mark pulse.")]
         [SerializeField, Range(0f, 1f)] float deathMarkAlphaMin = 0.25f;
 
@@ -91,7 +91,13 @@ namespace CubeFly.Fly
             for (int i = 0; i < _reloadBars.Length; i++)
             {
                 if (_reloadBars[i] == null) continue;
-                _reloadBars[i].fillAmount = shootingController.Types[i].ReadyFraction;
+                // Width-based fill: foreground sizeDelta.x = ready * full
+                // width. Left-anchored pivot (see BuildReloadRect) keeps
+                // the left edge fixed so the bar shrinks from the right.
+                RectTransform fgRT = (RectTransform)_reloadBars[i].transform;
+                fgRT.sizeDelta = new Vector2(
+                    reloadBarSize.x * shootingController.Types[i].ReadyFraction,
+                    reloadBarSize.y);
             }
             RefreshWeaponStates();
         }
@@ -211,19 +217,28 @@ namespace CubeFly.Fly
             GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             RectTransform rt = (RectTransform)go.transform;
             rt.SetParent(parent, false);
-            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0f);
-            rt.sizeDelta = size;
-            rt.anchoredPosition = anchoredPos;
+            if (isFill)
+            {
+                // Left-anchored pivot so the per-frame Update can shrink the
+                // bar's right edge by changing sizeDelta.x while the left
+                // edge stays fixed. Image.Type.Filled with no sprite
+                // assigned didn't reliably clip against fillAmount across
+                // Unity 6.x patches — width-based fill is sprite-free and
+                // unambiguous.
+                rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
+                rt.pivot = new Vector2(0f, 0.5f);
+                rt.sizeDelta = size;
+                rt.anchoredPosition = new Vector2(anchoredPos.x - size.x / 2f, anchoredPos.y + size.y / 2f);
+            }
+            else
+            {
+                rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0f);
+                rt.sizeDelta = size;
+                rt.anchoredPosition = anchoredPos;
+            }
             Image img = go.GetComponent<Image>();
             img.color = color;
             img.raycastTarget = false;
-            if (isFill)
-            {
-                img.type = Image.Type.Filled;
-                img.fillMethod = Image.FillMethod.Horizontal;
-                img.fillOrigin = (int)Image.OriginHorizontal.Left;
-                img.fillAmount = 1f; // ready by default
-            }
             return img;
         }
 
@@ -274,17 +289,26 @@ namespace CubeFly.Fly
 
                 if (_deathMarks[i] != null)
                 {
-                    _deathMarks[i].enabled = partiallyDead;
-                    if (partiallyDead)
+                    // Show the X mark for BOTH fully-dead and partially-
+                    // dead types. Partial pulses (sine alpha) to flag a
+                    // recoverable-looking state; fully-dead is static at
+                    // full opacity to signal "this slot is gone."
+                    bool showMark = fullyDead || partiallyDead;
+                    _deathMarks[i].enabled = showMark;
+                    if (showMark)
                     {
-                        // Slow sine alpha pulse between deathMarkAlphaMin
-                        // and 1, driven by unscaled time so it keeps
-                        // pulsing while the game is paused.
-                        float period = Mathf.Max(0.01f, deathMarkPulseSeconds);
-                        float phase = 0.5f + 0.5f *
-                            Mathf.Sin(Time.unscaledTime * (2f * Mathf.PI / period));
                         Color c = deathMarkColor;
-                        c.a = Mathf.Lerp(deathMarkAlphaMin, 1f, phase);
+                        if (partiallyDead)
+                        {
+                            // Slow sine alpha pulse between deathMarkAlphaMin
+                            // and 1, driven by unscaled time so it keeps
+                            // pulsing while the game is paused.
+                            float period = Mathf.Max(0.01f, deathMarkPulseSeconds);
+                            float phase = 0.5f + 0.5f *
+                                Mathf.Sin(Time.unscaledTime * (2f * Mathf.PI / period));
+                            c.a = Mathf.Lerp(deathMarkAlphaMin, 1f, phase);
+                        }
+                        // else: fullyDead — c.a stays at deathMarkColor.a (static, opaque).
                         _deathMarks[i].color = c;
                     }
                 }

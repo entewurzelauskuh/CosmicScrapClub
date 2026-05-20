@@ -67,13 +67,9 @@ namespace CubeFly.Build
         [SerializeField] string deleteToolLabelText = "Delete tool — click a cube to remove";
 
         [Header("Material flyout")]
-        [SerializeField] Vector2 flyoutEntrySize = new Vector2(220f, 56f);
+        [SerializeField] Vector2 flyoutEntrySize = new Vector2(220f, 45f);
         [SerializeField] float flyoutEntrySpacing = 6f;
         [SerializeField] float flyoutBottomGap = 10f;
-        [Tooltip("Seconds the cursor must rest on a shape button before the flyout fades in (peek).")]
-        [SerializeField] float hoverPeekDelay = 0.30f;
-        [Tooltip("Alpha of the flyout when peeking (hover-only). Fully opaque when pinned via click.")]
-        [SerializeField, Range(0f, 1f)] float peekAlpha = 0.6f;
         [SerializeField] Vector2 swatchSize = new Vector2(18f, 18f);
 
         const string TAG = "BuildToolbar";
@@ -108,9 +104,13 @@ namespace CubeFly.Build
         Button[] _flyoutButtons;
         Image[] _flyoutBackgrounds;
         int _flyoutOwnerShape = -1;       // shape whose flyout is currently shown
-        bool _flyoutPinned;               // true if opened by click; false when only hover-peeking
-        Coroutine _peekRoutine;
+        bool _flyoutPinned;               // always true while open (peek removed in UX batch 2026-05-20)
         RectTransform _canvasRect;
+        // Seconds since the cursor last left the flyout's hover area.
+        // Ticks in Update; cursor re-enter resets to 0. Reaches
+        // FlyoutAwayCloseSeconds → auto-close.
+        float _flyoutAwayTimer;
+        const float FlyoutAwayCloseSeconds = 3f;
 
         // Non-armour categories — one CategoryFlyout per category that
         // the ShapeRegistry contains (Weapons today; Utilities lands in
@@ -157,6 +157,13 @@ namespace CubeFly.Build
 
         void Update()
         {
+            // Tick the auto-close timer for every open flyout. Runs
+            // BEFORE the keyboard / pause checks so the timer also ticks
+            // when no keyboard is present. Time.deltaTime is 0 while
+            // PauseMenu is open (timeScale = 0), so the timer pauses
+            // automatically with the game.
+            TickFlyoutAwayTimers();
+
             Keyboard kb = Keyboard.current;
             if (kb == null) return;
             // Pause menu owns all keyboard input while open. PauseMenu
@@ -381,8 +388,6 @@ namespace CubeFly.Build
                     flyoutEntrySize,
                     flyoutEntrySpacing,
                     flyoutBottomGap,
-                    peekAlpha,
-                    hoverPeekDelay,
                     BuildCornerSwatch,
                     BuildEntrySwatch,
                     () => CloseFlyoutsExcept(flyout),
@@ -451,15 +456,11 @@ namespace CubeFly.Build
         // via EventTrigger to avoid hand-rolling raycasts.
         void AddPointerHandlers(GameObject buttonObject, int shapeIndex)
         {
+            // Only right-click is wired. Peek-on-hover removed in the
+            // UX batch 2026-05-20, so PointerEnter / PointerExit triggers
+            // would dispatch to nothing — keeping them just burns
+            // EventSystem cycles for no behaviour.
             EventTrigger trigger = buttonObject.AddComponent<EventTrigger>();
-
-            EventTrigger.Entry enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-            enter.callback.AddListener(_ => OnShapeButtonHoverEnter(shapeIndex));
-            trigger.triggers.Add(enter);
-
-            EventTrigger.Entry exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-            exit.callback.AddListener(_ => OnShapeButtonHoverExit(shapeIndex));
-            trigger.triggers.Add(exit);
 
             EventTrigger.Entry click = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
             click.callback.AddListener(data =>
@@ -470,41 +471,6 @@ namespace CubeFly.Build
                     OpenFlyoutForShape(shapeIndex, pin: true);
             });
             trigger.triggers.Add(click);
-        }
-
-        void OnShapeButtonHoverEnter(int shapeIndex)
-        {
-            if (_peekRoutine != null) StopCoroutine(_peekRoutine);
-            _peekRoutine = StartCoroutine(PeekAfterDelay(shapeIndex));
-        }
-
-        void OnShapeButtonHoverExit(int shapeIndex)
-        {
-            if (_peekRoutine != null) { StopCoroutine(_peekRoutine); _peekRoutine = null; }
-            // If the flyout was just peeking (not pinned), close it. A
-            // pinned flyout (opened by click) stays open until the user
-            // presses Escape / M, picks a material, or switches shape
-            // or tool. No out-of-bounds-click dismissal.
-            if (_flyout != null && _flyout.activeSelf && _flyoutOwnerShape == shapeIndex && !_flyoutPinned)
-            {
-                // But — don't close if the cursor moved INTO the flyout
-                // itself; check via the EventSystem's current pointer.
-                if (!IsPointerOverFlyout()) HideFlyout();
-            }
-        }
-
-        IEnumerator PeekAfterDelay(int shapeIndex)
-        {
-            yield return new WaitForSeconds(hoverPeekDelay);
-            // Don't peek-open if ANY flyout is already pinned —
-            // peek-opening another would call OpenFlyoutForShape with
-            // pin: false, which would silently unpin the user's
-            // deliberate pinned selection just because they hovered
-            // a different button.
-            if (_flyout != null && _flyout.activeSelf && _flyoutPinned) yield break;
-            if (AnyCategoryFlyoutPinned()) yield break;
-            OpenFlyoutForShape(shapeIndex, pin: false);
-            _peekRoutine = null;
         }
 
         // ---------- Flyout construction & lifecycle ----------
@@ -586,25 +552,42 @@ namespace CubeFly.Build
             // CategoryFlyout.Open has the symmetric call via closeOthers.
             CloseAllCategoryFlyouts();
 
-            // Capture "is this the same shape as the one currently
-            // pinned?" BEFORE overwriting _flyoutOwnerShape, otherwise
-            // the equality check is trivially true and a pinned flyout
-            // for shape A would stay "pinned" when peek-opened for B.
-            bool sameShape = _flyoutOwnerShape == shapeIndex;
             _flyoutOwnerShape = shapeIndex;
-            _flyoutPinned = pin || (sameShape && _flyoutPinned);
+            // Peek-on-hover removed (UX batch 2026-05-20); the `pin`
+            // parameter is kept for API compat but every caller is a
+            // click / right-click / M-key — always pinned.
+            _flyoutPinned = true;
 
-            // Position the flyout above the relevant shape button.
+            // Position the flyout ABOVE the category button so it sits
+            // fully clear of the toolbar row (was overlapping at
+            // buttonSize.y / 2 + gap; now full buttonSize.y + gap).
             RectTransform shapeRT = (RectTransform)_shapeButtons[shapeIndex].transform;
             RectTransform frt = (RectTransform)_flyout.transform;
             frt.anchoredPosition = new Vector2(
                 shapeRT.anchoredPosition.x,
-                bottomMargin + buttonSize.y / 2f + flyoutBottomGap);
+                bottomMargin + buttonSize.y + flyoutBottomGap);
 
             _flyout.SetActive(true);
-            _flyoutGroup.alpha = pin ? 1f : peekAlpha;
-            _flyoutGroup.blocksRaycasts = pin; // peek is non-interactive
+            _flyoutGroup.alpha = 1f;
+            _flyoutGroup.blocksRaycasts = true;
+            _flyoutAwayTimer = 0f; // fresh-open: the 3 s timer starts only after the cursor leaves
             RefreshFlyoutEntryHighlights();
+        }
+
+        // Per-frame auto-close: 3 s after the cursor leaves the flyout's
+        // hover area, hide it. Cursor re-enter resets the timer. Pauses
+        // automatically while the game is paused (Time.deltaTime = 0).
+        void TickFlyoutAwayTimers()
+        {
+            float dt = Time.deltaTime;
+            if (_flyout != null && _flyout.activeSelf)
+            {
+                if (IsPointerOverFlyout()) _flyoutAwayTimer = 0f;
+                else                       _flyoutAwayTimer += dt;
+                if (_flyoutAwayTimer >= FlyoutAwayCloseSeconds) HideFlyout();
+            }
+            for (int i = 0; i < _categoryFlyouts.Count; i++)
+                _categoryFlyouts[i].TickAwayTimer(dt, FlyoutAwayCloseSeconds);
         }
 
         void HideFlyout()
@@ -617,27 +600,15 @@ namespace CubeFly.Build
 
         bool IsPointerOverFlyout()
         {
-            if (EventSystem.current == null) return false;
-            // Walk the current hovered object up to the flyout.
-            GameObject hovered = EventSystem.current.currentSelectedGameObject;
-            // Use raycast result instead — currentSelectedGameObject is not
-            // updated for hover-only states.
-            PointerEventData ped = new PointerEventData(EventSystem.current)
-            {
-                position = Mouse.current != null ? (Vector2)Mouse.current.position.ReadValue() : Vector2.zero
-            };
-            List<RaycastResult> results = new List<RaycastResult>();
-            EventSystem.current.RaycastAll(ped, results);
-            for (int i = 0; i < results.Count; i++)
-            {
-                Transform t = results[i].gameObject.transform;
-                while (t != null)
-                {
-                    if (t.gameObject == _flyout) return true;
-                    t = t.parent;
-                }
-            }
-            return false;
+            if (_flyout == null || Mouse.current == null) return false;
+            // Allocation-free rect test. The away-timer calls this every
+            // frame while a flyout is open; an EventSystem.RaycastAll +
+            // PointerEventData + List<RaycastResult> per frame was a
+            // steady GC source. ScreenSpaceOverlay canvas → null camera.
+            return RectTransformUtility.RectangleContainsScreenPoint(
+                (RectTransform)_flyout.transform,
+                Mouse.current.position.ReadValue(),
+                null);
         }
 
         void RefreshFlyoutEntryHighlights()
@@ -747,10 +718,13 @@ namespace CubeFly.Build
             GameObject go = new GameObject("EntrySwatch", typeof(RectTransform), typeof(Image));
             RectTransform rt = (RectTransform)go.transform;
             rt.SetParent(parent, false);
-            rt.anchorMin = new Vector2(0f, 0.5f);
-            rt.anchorMax = new Vector2(0f, 0.5f);
-            rt.pivot = new Vector2(0f, 0.5f);
-            rt.anchoredPosition = new Vector2(8f, 0f);
+            // Right-anchored so the swatch sits clear of the entry's
+            // left-aligned text label (was on the left, overlapping the
+            // text — UX batch 2026-05-20).
+            rt.anchorMin = new Vector2(1f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.anchoredPosition = new Vector2(-8f, 0f);
             rt.sizeDelta = new Vector2(28f, 28f);
             Image img = go.GetComponent<Image>();
             img.color = color;

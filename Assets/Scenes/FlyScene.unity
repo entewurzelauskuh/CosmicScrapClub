@@ -580,6 +580,7 @@ GameObject:
   - component: {fileID: 700004}
   - component: {fileID: 700005}
   - component: {fileID: 700006}
+  - component: {fileID: 700007}
   m_Layer: 0
   m_Name: FlyHUD
   m_TagString: Untagged
@@ -706,6 +707,18 @@ MonoBehaviour:
   criticalPulseSeconds: 1.2
   criticalSizePulse: 0.05
   criticalAlphaMin: 0.55
+--- !u!114 &700007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0a0a0a0000000210000000000000021, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.FlyHud
 --- !u!1001 &29337581
 PrefabInstance:
   m_ObjectHideFlags: 0

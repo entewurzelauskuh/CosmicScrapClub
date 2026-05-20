@@ -48,8 +48,11 @@ namespace CubeFly.Fly
 
         const string TAG = "FlyWeaponToolbar";
 
-        Canvas _canvas;
-        RectTransform _canvasRoot;
+        // Child of FlyHud.Instance.Root that owns every toolbar button +
+        // reload bar. RebuildButtons destroys + re-creates this container's
+        // children when TypesChanged fires; HideContainer / ShowContainer
+        // toggle its active state when the construct has no weapons.
+        RectTransform _container;
         Button[] _buttons;
         Image[] _buttonBackgrounds;
         Image[] _reloadBars;          // foreground fill (per-type colored)
@@ -61,11 +64,11 @@ namespace CubeFly.Fly
         void Start()
         {
             if (shootingController == null) shootingController = FindAnyObjectByType<FlyShootingController>();
-            BuildCanvas();
+            BuildContainer();
             if (shootingController == null)
             {
                 Debug.unityLogger.LogWarning(TAG, "No FlyShootingController in scene; toolbar will stay hidden.");
-                HideCanvas();
+                HideContainer();
                 return;
             }
 
@@ -104,33 +107,43 @@ namespace CubeFly.Fly
 
         // ---------- UI construction ----------
 
-        void BuildCanvas()
+        void BuildContainer()
         {
-            UIStyle.EnsureEventSystem();
-            _canvas = UIStyle.BuildScreenSpaceCanvas("FlyWeaponToolbarCanvas", sortingOrder: 120);
-            _canvasRoot = (RectTransform)_canvas.transform;
-            HideCanvas();
+            GameObject go = new GameObject("FlyWeaponToolbar", typeof(RectTransform));
+            go.transform.SetParent(FlyHud.Instance.Root, false);
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0) go.layer = uiLayer;
+            _container = (RectTransform)go.transform;
+            // Stretch to fill the parent canvas — the per-button anchored
+            // positions (bottom-centre pivot, `bottomMargin` offset) target
+            // the canvas's bottom edge, so the container needs to match the
+            // canvas's full rect.
+            _container.anchorMin = Vector2.zero;
+            _container.anchorMax = Vector2.one;
+            _container.offsetMin = Vector2.zero;
+            _container.offsetMax = Vector2.zero;
+            HideContainer();
         }
 
-        void HideCanvas()
+        void HideContainer()
         {
-            if (_canvas != null) _canvas.gameObject.SetActive(false);
+            if (_container != null) _container.gameObject.SetActive(false);
         }
 
-        void ShowCanvas()
+        void ShowContainer()
         {
-            if (_canvas != null) _canvas.gameObject.SetActive(true);
+            if (_container != null) _container.gameObject.SetActive(true);
         }
 
         // Clear any existing buttons and rebuild from scratch. Called
         // when TypesChanged fires (and once during Start).
         void RebuildButtons()
         {
-            if (shootingController == null || _canvasRoot == null) return;
+            if (shootingController == null || _container == null) return;
 
             // Destroy prior children.
-            for (int i = _canvasRoot.childCount - 1; i >= 0; i--)
-                Destroy(_canvasRoot.GetChild(i).gameObject);
+            for (int i = _container.childCount - 1; i >= 0; i--)
+                Destroy(_container.GetChild(i).gameObject);
 
             int count = shootingController.Types.Count;
             if (count == 0)
@@ -140,10 +153,10 @@ namespace CubeFly.Fly
                 _reloadBars = null;
                 _swatches = null;
                 _deathMarks = null;
-                HideCanvas();
+                HideContainer();
                 return;
             }
-            ShowCanvas();
+            ShowContainer();
 
             _buttons = new Button[count];
             _buttonBackgrounds = new Image[count];
@@ -165,7 +178,7 @@ namespace CubeFly.Fly
                     : Color.gray;
 
                 // ---- Button ----
-                (Button btn, Text _) = UIStyle.BuildLabeledButton(_canvasRoot, label, buttonSize, fontSize);
+                (Button btn, Text _) = UIStyle.BuildLabeledButton(_container, label, buttonSize, fontSize);
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
                 brt.anchoredPosition = new Vector2(startX + i * (buttonSize.x + spacing), bottomMargin);
@@ -189,8 +202,8 @@ namespace CubeFly.Fly
                 float barY = bottomMargin + buttonSize.y + reloadBarGap + reloadBarSize.y / 2f;
                 Vector2 barCenter = new Vector2(startX + i * (buttonSize.x + spacing), barY);
 
-                BuildReloadRect(_canvasRoot, "ReloadBarBg" + i, reloadBarSize, barCenter, reloadBarBackground, isFill: false);
-                _reloadBars[i] = BuildReloadRect(_canvasRoot, "ReloadBarFg" + i, reloadBarSize, barCenter, swatchColor, isFill: true);
+                BuildReloadRect(_container, "ReloadBarBg" + i, reloadBarSize, barCenter, reloadBarBackground, isFill: false);
+                _reloadBars[i] = BuildReloadRect(_container, "ReloadBarFg" + i, reloadBarSize, barCenter, swatchColor, isFill: true);
             }
 
             RefreshWeaponStates();

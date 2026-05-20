@@ -64,15 +64,17 @@ document is the implementation map.
                                 ┌────────────────────┴────────────────────┐
                                 │ DontDestroyOnLoad singletons            │
                                 │ • PersistentHud — shared canvas         │
-                                │   (lazy-created; sortingOrder 200)      │
+                                │   (lazy-created on first Instance       │
+                                │    access; sortingOrder 200)            │
                                 │ • UIManager — corner button             │
                                 │   (hidden on MainMenu+HangarSelect+Fly, │
                                 │    label flips Fly!↔Hangar)             │
                                 │ • PauseMenu — ESC overlay               │
                                 │ • GameOverMenu — Construct Destroyed    │
                                 │ • LogBootstrapper — file logger         │
-                                │ (all four self-bootstrap                │
-                                │  BeforeSceneLoad)                       │
+                                │ (the lower four self-bootstrap          │
+                                │  BeforeSceneLoad; the first of them to  │
+                                │  Awake triggers PersistentHud.Create)   │
                                 └─────────────────────────────────────────┘
 
            ┌────────────────────────────────────────────────────┐
@@ -108,14 +110,15 @@ document is the implementation map.
 **Persistence model.** `GameData` is a *static* C# class — its data
 naturally survives `SceneManager.LoadScene` for the lifetime of the
 play session, with no `DontDestroyOnLoad` needed. The persistent UI is
-five `DontDestroyOnLoad` singletons that each self-bootstrap from
-`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`: `UIManager` (corner
-scene-switch button), `PauseMenu` (ESC overlay), `GameOverMenu`
-("Construct Destroyed" overlay), `LogBootstrapper` (file logger), and
-`PersistentHud` — a shared screen-space-overlay canvas at
-`sortingOrder 200` that hosts the other three's UI trees. `PersistentHud`
-is lazy-created on first `Instance` access, triggered by whichever of
-the UI scripts Awakes first.
+five `DontDestroyOnLoad` singletons; four of them self-bootstrap from
+`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` — `UIManager`
+(corner scene-switch button), `PauseMenu` (ESC overlay), `GameOverMenu`
+("Construct Destroyed" overlay), and `LogBootstrapper` (file logger).
+The fifth, `PersistentHud`, is a shared screen-space-overlay canvas at
+`sortingOrder 200` that hosts the corner button + pause panel +
+game-over panel; it's **lazy-created** on first `Instance` access,
+triggered by whichever of the four `BeforeSceneLoad` singletons Awakes
+first and calls `PersistentHud.Instance.Root` to parent its UI.
 
 **On-disk saves** are handled separately by `SaveManager` (atomic
 `File.Replace` with fallback) reading/writing `ConstructSave` JSON. The
@@ -242,7 +245,7 @@ Registered in `ProjectSettings/EditorBuildSettings.asset` at indices
 | `Scripts/Core/PersistentHud.cs` | DDOL singleton, lazy-created | Shared screen-space-overlay canvas for every persistent UI element (`UIManager`'s corner button, `PauseMenu`'s panel, `GameOverMenu`'s panel). `Canvas` + `GraphicRaycaster` + `CanvasScaler` at `sortingOrder 200`. `Instance` getter triggers `Create()` on first access — whichever persistent UI script Awakes first pulls the canvas into existence. |
 | `Scripts/Core/UIStyle.cs` | static helpers | Shared UI builders: `BuildScreenSpaceCanvas`, `EnsureEventSystem` (DDOL-aware), `BuildLabeledButton`, `BuildLabel`, `BuildDropdown`. Uses legacy `UI.Text` + `LegacyRuntime.ttf`. Exposes shared colour constants (`BackgroundIdle`, etc.) used by toolbars. The post-HUD-consolidation HUD scripts (e.g. `FlyCrosshair`) call `BuildLabel` directly under a shared root rather than building their own canvas via `BuildScreenSpaceCanvas`. |
 | `Scripts/Core/SceneSwitcher.cs` | static class | Single `Toggle()` method that flips BuildScene ↔ FlyScene. Wired by `UIManager`'s corner button. Not used by the MainMenu → HangarSelect → BuildScene path. |
-| `Scripts/Core/HitContext.cs` | `readonly struct` + enums | Per-hit metadata carried from damage source to `CubeDamage.ApplyAndLog`. Holds `Target`, `Amount`, `DamageType` (`Projectile` / `Energy` / `Kinetic`), `HitFlags` (`None` / `BypassArmour`), surface `Point` + `Normal`, reserved `Impulse` + `OutwardOrigin`, source-construct `Transform`, and a log tag. Single point of integration for the phase-2 shield system's projectile-vs-energy modifiers. |
+| `Scripts/Core/HitContext.cs` | `readonly struct` + enums | Per-hit metadata carried from damage source to `CubeDamage.ApplyAndLog`. Holds `Target`, `Amount`, `DamageType` (`Projectile` / `Energy` / `Kinetic`), `HitFlags` (`None` / `BypassArmour`), surface `Point` + `Normal`, `OutwardOrigin` (the death-drift bias point `CubeDeath` reads), a reserved `Impulse` field for future knockback, the source-construct `Transform`, and a log tag. Single point of integration for the phase-2 shield system's projectile-vs-energy modifiers. |
 | `Scripts/Core/FileLogHandler.cs` | `ILogHandler` | Append-only file logger. Wraps the default Unity log handler so messages still hit the Editor console. |
 | `Scripts/Core/LogBootstrapper.cs` | DDOL singleton, self-bootstraps `BeforeSceneLoad` | Swaps `Debug.unityLogger.logHandler` for a `FileLogHandler` writing to `Application.persistentDataPath/Logs/CubeFly_<timestamp>.log`. Spawns its own DDOL host before any scene loads, so MainMenu / HangarSelect also write to the session log. |
 

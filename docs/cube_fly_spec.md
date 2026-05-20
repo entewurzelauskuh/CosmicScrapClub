@@ -384,10 +384,11 @@ route it through a single `CubeFly.Fly.CubeDamage.ApplyAndLog(in HitContext)`
 pipeline that handles the damage math, logging, and (on fatal hits) the
 death animation and cleanup. `HitContext` carries the target cube, raw
 amount, `DamageType` (`Projectile` / `Energy` / `Kinetic`), `HitFlags`
-(`None` / `BypassArmour`), surface point + normal, source-construct
-transform, log tag, and reserved fields for impulse / outward-origin.
-The struct is the integration seam for the phase-2 shield system —
-shields will read `Type` to apply their projectile/energy modifiers and
+(`None` / `BypassArmour`), surface point + normal, `OutwardOrigin` (the
+death-drift bias point `CubeDeath` reads), source-construct transform,
+log tag, and a reserved `Impulse` field for future knockback. The
+struct is the integration seam for the phase-2 shield system — shields
+will read `Type` to apply their projectile/energy modifiers and
 `Point` / `Normal` for splash falloff.
 
 ### Damage routing

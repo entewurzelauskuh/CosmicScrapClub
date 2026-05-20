@@ -624,8 +624,6 @@ MonoBehaviour:
   flyoutEntrySize: {x: 220, y: 45}
   flyoutEntrySpacing: 6
   flyoutBottomGap: 10
-  hoverPeekDelay: 0.3
-  peekAlpha: 0.6
   swatchSize: {x: 18, y: 18}
 --- !u!114 &500003
 MonoBehaviour:

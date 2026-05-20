@@ -70,10 +70,6 @@ namespace CubeFly.Build
         [SerializeField] Vector2 flyoutEntrySize = new Vector2(220f, 45f);
         [SerializeField] float flyoutEntrySpacing = 6f;
         [SerializeField] float flyoutBottomGap = 10f;
-        [Tooltip("Seconds the cursor must rest on a shape button before the flyout fades in (peek).")]
-        [SerializeField] float hoverPeekDelay = 0.30f;
-        [Tooltip("Alpha of the flyout when peeking (hover-only). Fully opaque when pinned via click.")]
-        [SerializeField, Range(0f, 1f)] float peekAlpha = 0.6f;
         [SerializeField] Vector2 swatchSize = new Vector2(18f, 18f);
 
         const string TAG = "BuildToolbar";
@@ -108,8 +104,7 @@ namespace CubeFly.Build
         Button[] _flyoutButtons;
         Image[] _flyoutBackgrounds;
         int _flyoutOwnerShape = -1;       // shape whose flyout is currently shown
-        bool _flyoutPinned;               // peek removed (UX batch 2026-05-20); always true while open
-        Coroutine _peekRoutine;           // unused after peek removal; kept to avoid touching call sites
+        bool _flyoutPinned;               // always true while open (peek removed in UX batch 2026-05-20)
         RectTransform _canvasRect;
         // Seconds since the cursor last left the flyout's hover area.
         // Ticks in Update; cursor re-enter resets to 0. Reaches
@@ -393,8 +388,6 @@ namespace CubeFly.Build
                     flyoutEntrySize,
                     flyoutEntrySpacing,
                     flyoutBottomGap,
-                    peekAlpha,
-                    hoverPeekDelay,
                     BuildCornerSwatch,
                     BuildEntrySwatch,
                     () => CloseFlyoutsExcept(flyout),
@@ -463,15 +456,11 @@ namespace CubeFly.Build
         // via EventTrigger to avoid hand-rolling raycasts.
         void AddPointerHandlers(GameObject buttonObject, int shapeIndex)
         {
+            // Only right-click is wired. Peek-on-hover removed in the
+            // UX batch 2026-05-20, so PointerEnter / PointerExit triggers
+            // would dispatch to nothing — keeping them just burns
+            // EventSystem cycles for no behaviour.
             EventTrigger trigger = buttonObject.AddComponent<EventTrigger>();
-
-            EventTrigger.Entry enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-            enter.callback.AddListener(_ => OnShapeButtonHoverEnter(shapeIndex));
-            trigger.triggers.Add(enter);
-
-            EventTrigger.Entry exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-            exit.callback.AddListener(_ => OnShapeButtonHoverExit(shapeIndex));
-            trigger.triggers.Add(exit);
 
             EventTrigger.Entry click = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
             click.callback.AddListener(data =>
@@ -482,20 +471,6 @@ namespace CubeFly.Build
                     OpenFlyoutForShape(shapeIndex, pin: true);
             });
             trigger.triggers.Add(click);
-        }
-
-        void OnShapeButtonHoverEnter(int shapeIndex)
-        {
-            // Peek-on-hover was removed (UX batch 2026-05-20) — flyouts
-            // open only on click now. Hook kept for any future
-            // hover-driven behaviour.
-        }
-
-        void OnShapeButtonHoverExit(int shapeIndex)
-        {
-            // Peek-on-hover was removed. Closing a pinned flyout when
-            // the cursor leaves the flyout's hover area is handled by
-            // TickFlyoutAwayTimers (3 s).
         }
 
         // ---------- Flyout construction & lifecycle ----------
@@ -625,27 +600,15 @@ namespace CubeFly.Build
 
         bool IsPointerOverFlyout()
         {
-            if (EventSystem.current == null) return false;
-            // Walk the current hovered object up to the flyout.
-            GameObject hovered = EventSystem.current.currentSelectedGameObject;
-            // Use raycast result instead — currentSelectedGameObject is not
-            // updated for hover-only states.
-            PointerEventData ped = new PointerEventData(EventSystem.current)
-            {
-                position = Mouse.current != null ? (Vector2)Mouse.current.position.ReadValue() : Vector2.zero
-            };
-            List<RaycastResult> results = new List<RaycastResult>();
-            EventSystem.current.RaycastAll(ped, results);
-            for (int i = 0; i < results.Count; i++)
-            {
-                Transform t = results[i].gameObject.transform;
-                while (t != null)
-                {
-                    if (t.gameObject == _flyout) return true;
-                    t = t.parent;
-                }
-            }
-            return false;
+            if (_flyout == null || Mouse.current == null) return false;
+            // Allocation-free rect test. The away-timer calls this every
+            // frame while a flyout is open; an EventSystem.RaycastAll +
+            // PointerEventData + List<RaycastResult> per frame was a
+            // steady GC source. ScreenSpaceOverlay canvas → null camera.
+            return RectTransformUtility.RectangleContainsScreenPoint(
+                (RectTransform)_flyout.transform,
+                Mouse.current.position.ReadValue(),
+                null);
         }
 
         void RefreshFlyoutEntryHighlights()

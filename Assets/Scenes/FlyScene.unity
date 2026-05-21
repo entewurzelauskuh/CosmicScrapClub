@@ -295,6 +295,9 @@ MonoBehaviour:
   flyController: {fileID: 300002}
   aimRange: 100
   scrollDeadzone: 0.05
+  heatRisePerSecond: 50
+  heatFallPerSecond: 30
+  heatFallOverheatedPerSecond: 15
 --- !u!1 &400000
 GameObject:
   m_ObjectHideFlags: 0
@@ -599,6 +602,7 @@ GameObject:
   - component: {fileID: 700006}
   - component: {fileID: 700007}
   - component: {fileID: 700008}
+  - component: {fileID: 700009}
   m_Layer: 0
   m_Name: FlyHUD
   m_TagString: Untagged
@@ -761,6 +765,32 @@ MonoBehaviour:
   ejectHintAnchoredPosition: {x: 20, y: -20}
   ejectHintFontSize: 22
   ejectHintColor: {r: 1, g: 0.55, b: 0.2, a: 1}
+--- !u!114 &700009
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0a0a0a0000000290000000000000029, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.FlyHeatBar
+  shootingController: {fileID: 0}
+  anchoredPosition: {x: 90, y: 0}
+  barSize: {x: 12, y: 120}
+  coolColor: {r: 1, g: 0.6, b: 0.2, a: 1}
+  hotColor: {r: 1, g: 0.2, b: 0.1, a: 1}
+  frameColor: {r: 0.12, g: 0.06, b: 0.04, a: 1}
+  flashAnchoredPosition: {x: 0, y: 70}
+  flashFontSize: 26
+  flashColor: {r: 1, g: 0.4, b: 0.25, a: 1}
+  flashCount: 3
+  flashOnSeconds: 0.27
+  flashOffSeconds: 0.12
+  overheatedPulseSeconds: 0.6
+  overheatedAlphaMin: 0.45
 --- !u!1001 &29337581
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -45,7 +45,12 @@ namespace CubeFly.Fly
         Image _frameImage;
         Text _flashLabel;
 
-        bool _wasOverheated;
+        // Edge-detect the overheat flash PER weapon-type: remember the last
+        // selected group + its Overheated state, so switching away from and
+        // back to an already-overheated laser (or between laser types)
+        // re-establishes the baseline instead of spuriously re-flashing.
+        WeaponTypeGroup _lastGroup;
+        bool _lastGroupOverheated;
         Coroutine _flashRoutine;
 
         const string TAG = "FlyHeatBar";
@@ -75,7 +80,9 @@ namespace CubeFly.Fly
             if (_frame.gameObject.activeSelf != isLaser) _frame.gameObject.SetActive(isLaser);
             if (!isLaser)
             {
-                _wasOverheated = false;
+                // No baseline while hidden — re-selecting a laser establishes
+                // a fresh one (below) rather than flashing.
+                _lastGroup = null;
                 return;
             }
 
@@ -97,12 +104,23 @@ namespace CubeFly.Fly
                 SetImageAlpha(_frameImage, frameColor, 1f);
             }
 
-            if (sel.Overheated && !_wasOverheated)
+            // Flash only on a genuine false->true overheat transition of the
+            // SAME selected type. A type switch (sel != _lastGroup) just
+            // re-establishes the baseline without flashing.
+            if (sel != _lastGroup)
             {
-                if (_flashRoutine != null) StopCoroutine(_flashRoutine);
-                _flashRoutine = StartCoroutine(FlashOverheated());
+                _lastGroup = sel;
+                _lastGroupOverheated = sel.Overheated;
             }
-            _wasOverheated = sel.Overheated;
+            else
+            {
+                if (sel.Overheated && !_lastGroupOverheated)
+                {
+                    if (_flashRoutine != null) StopCoroutine(_flashRoutine);
+                    _flashRoutine = StartCoroutine(FlashOverheated());
+                }
+                _lastGroupOverheated = sel.Overheated;
+            }
         }
 
         static void SetImageAlpha(Image img, Color baseColor, float alpha)

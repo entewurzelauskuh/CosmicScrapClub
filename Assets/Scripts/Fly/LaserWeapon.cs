@@ -39,6 +39,36 @@ namespace CubeFly.Fly
 
         const string TAG = "Laser";
 
+        // One beam material shared by every LaserWeapon (per-instance colour
+        // comes from the LineRenderer's vertex colours, not the material, so
+        // sharing is safe) — avoids allocating + leaking a Material per cube.
+        // Lazy + null-guarded: Shader.Find can return null in a build if the
+        // shader isn't in Always Included Shaders, so fall back down a chain.
+        static Material s_beamMaterial;
+        static Material BeamMaterial
+        {
+            get
+            {
+                if (s_beamMaterial == null)
+                {
+                    Shader sh = Shader.Find("Sprites/Default")
+                                ?? Shader.Find("Universal Render Pipeline/Unlit")
+                                ?? Shader.Find("Unlit/Color");
+                    if (sh != null) s_beamMaterial = new Material(sh) { name = "LaserBeam (shared)" };
+                }
+                return s_beamMaterial;
+            }
+        }
+
+        // Keep designer-tunable values sane. tickInterval is the decrement
+        // step in Fire's while loop — 0 or negative would spin forever.
+        void OnValidate()
+        {
+            tickInterval = Mathf.Max(0.01f, tickInterval);
+            range = Mathf.Max(0f, range);
+            beamWidth = Mathf.Max(0.001f, beamWidth);
+        }
+
         void Awake()
         {
             // Add + configure the LineRenderer at runtime so the prefab
@@ -49,10 +79,11 @@ namespace CubeFly.Fly
             _line.useWorldSpace = true;
             _line.startWidth = _line.endWidth = beamWidth;
             _line.startColor = _line.endColor = beamColor;
-            // Sprites/Default renders vertex colours and works under URP for
-            // a simple unlit beam line. Real beam VFX is the Extended VFX
-            // pass (roadmap item 4); this is the v1 placeholder.
-            _line.material = new Material(Shader.Find("Sprites/Default"));
+            // Shared unlit beam material (vertex-colour tinted by the
+            // LineRenderer above). Real beam VFX is the Extended VFX pass
+            // (roadmap item 4); this is the v1 placeholder.
+            Material beam = BeamMaterial;
+            if (beam != null) _line.sharedMaterial = beam;
             _line.enabled = false;
 
             // Same target layers + fallback as Bullet/Rocket.
@@ -81,7 +112,7 @@ namespace CubeFly.Fly
             // interval to whatever the beam currently hits. While loop so a
             // long frame applies all due ticks (matching elapsed time).
             _tickTimer += Time.deltaTime;
-            while (_tickTimer >= tickInterval)
+            while (tickInterval > 0f && _tickTimer >= tickInterval)
             {
                 _tickTimer -= tickInterval;
                 if (didHit)

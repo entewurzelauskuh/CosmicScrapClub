@@ -41,19 +41,22 @@ namespace CubeFly.Core
 
         bool _dying;
 
-        // Raised when a genuine player-construct cube has died — it has
-        // been removed from GameData and its death sequence kicked off.
-        // CubeDamage is the sole raiser (via RaiseCubeDied) and fires it
-        // only for real construct cubes, NOT world props or turret
-        // pyramids. FlyController subscribes to recompute the construct's
-        // Rigidbody mass. Static so a dying cube needs no reference to its
-        // listeners; subscribers MUST unsubscribe (a static event outlives
-        // scene loads).
+        // Raised when a genuine player-construct cube has been removed in
+        // flight — dropped from GameData with its death sequence kicked
+        // off. Raised via RaiseCubeDied from two call sites: CubeDamage
+        // (fatal damage on a real construct cube — NOT world props or
+        // turret pyramids) and ConstructEnergySystem.Eject (the player
+        // self-destructing dead-weight power cubes after losing all
+        // reactors). FlyController subscribes to recompute the construct's
+        // Rigidbody mass + power balance. Static so a dying cube needs no
+        // reference to its listeners; subscribers MUST unsubscribe (a
+        // static event outlives scene loads).
         public static event System.Action CubeDied;
 
-        // Raises CubeDied. Called by CubeDamage once a construct cube's
-        // GameData entry is removed and BeginDeath has detached it, so
-        // listeners observe the construct already shrunk by the dead cube.
+        // Raises CubeDied. Called once a construct cube's GameData entry is
+        // removed and BeginDeath has detached it, so listeners observe the
+        // construct already shrunk by the dead cube. Callers: CubeDamage
+        // (damage deaths) and ConstructEnergySystem.Eject (eject).
         public static void RaiseCubeDied() => CubeDied?.Invoke();
 
         public void BeginDeath(Vector3 outwardOrigin)

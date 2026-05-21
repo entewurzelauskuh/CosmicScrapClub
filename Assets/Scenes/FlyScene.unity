@@ -212,7 +212,6 @@ MonoBehaviour:
   regenDelaySeconds: 5
   projectileModifier: 0.9
   energyModifier: 1.1
-  kineticModifier: 1
 --- !u!1 &300000
 GameObject:
   m_ObjectHideFlags: 0
@@ -759,6 +758,9 @@ MonoBehaviour:
   shieldDownColor: {r: 0.4, g: 0.4, b: 0.45, a: 0.6}
   powerPositiveColor: {r: 0.4, g: 1, b: 0.5, a: 1}
   powerNegativeColor: {r: 1, g: 0.4, b: 0.35, a: 1}
+  ejectHintAnchoredPosition: {x: 20, y: -20}
+  ejectHintFontSize: 22
+  ejectHintColor: {r: 1, g: 0.55, b: 0.2, a: 1}
 --- !u!1001 &29337581
 PrefabInstance:
   m_ObjectHideFlags: 0

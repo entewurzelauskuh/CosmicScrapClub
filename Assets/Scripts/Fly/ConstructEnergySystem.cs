@@ -46,6 +46,8 @@ namespace CubeFly.Fly
         float _shieldMax;
         float _shieldDraw;
         float _totalOutput;
+        int _aliveReactorCount;
+        int _aliveShieldCount;
         bool _shieldPowered;
         float _timeSinceDamage;
 
@@ -58,18 +60,22 @@ namespace CubeFly.Fly
         // (later also − active laser draw). Negative = under-powered.
         public float NetPower => _totalOutput - _shieldDraw;
         public bool ShieldActive => _shieldPowered;
-        // Derived from the recomputed ALIVE totals (set in RecomputePower,
-        // which runs on Start + every cube death) rather than the
-        // registered list counts — so the HUD bar / readout disappear once
-        // all shield / power cubes are destroyed, not just when none were
-        // ever built.
-        public bool HasShieldCubes => _shieldMax > 0f;
-        public bool HasPowerCubes => _totalOutput > 0f || _shieldMax > 0f;
+        // Derived from the recomputed ALIVE cube counts (set in
+        // RecomputePower, which runs on Start + every cube death) rather
+        // than the registered list counts — so the HUD bar / readout
+        // disappear once all shield / power cubes are destroyed, not just
+        // when none were ever built. Counts rather than _totalOutput /
+        // _shieldMax so a cube tuned to 0 output / 0 contribution still
+        // reads as present.
+        public bool HasShieldCubes => _aliveShieldCount > 0;
+        public bool HasPowerCubes => _aliveReactorCount > 0 || _aliveShieldCount > 0;
         // True when the construct has lost all reactors but still carries
         // power-drawing cubes (shields today, lasers later) that can never
         // function again — dead weight. Drives the "Eject: P" HUD hint and
-        // gates the P-key eject.
-        public bool CanEject => _totalOutput <= 0f && _shieldDraw > 0f;
+        // gates the P-key eject. Uses the alive REACTOR COUNT (not
+        // _totalOutput) so a reactor tuned to 0 output doesn't read as
+        // "no reactors left".
+        public bool CanEject => _aliveReactorCount == 0 && _shieldDraw > 0f;
 
         // Called once by FlyController.Start after BuildConstruct.
         public void RegisterCubes(IEnumerable<ReactorBehavior> reactors, IEnumerable<ShieldBehavior> shields)
@@ -94,15 +100,17 @@ namespace CubeFly.Fly
         public void RecomputePower()
         {
             _totalOutput = 0f;
+            _aliveReactorCount = 0;
             for (int i = 0; i < _reactors.Count; i++)
-                if (_reactors[i] != null && _reactors[i].IsAlive) _totalOutput += _reactors[i].Output;
+                if (_reactors[i] != null && _reactors[i].IsAlive) { _totalOutput += _reactors[i].Output; _aliveReactorCount++; }
 
             _shieldDraw = 0f;
             _shieldMax = 0f;
+            _aliveShieldCount = 0;
             for (int i = 0; i < _shields.Count; i++)
             {
                 ShieldBehavior s = _shields[i];
-                if (s != null && s.IsAlive) { _shieldDraw += s.Draw; _shieldMax += s.Contribution; }
+                if (s != null && s.IsAlive) { _shieldDraw += s.Draw; _shieldMax += s.Contribution; _aliveShieldCount++; }
             }
 
             // Shield is highest-priority consumer: powered iff output covers

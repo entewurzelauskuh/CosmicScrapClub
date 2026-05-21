@@ -55,8 +55,13 @@ namespace CubeFly.Fly
         // (later also − active laser draw). Negative = under-powered.
         public float NetPower => _totalOutput - _shieldDraw;
         public bool ShieldActive => _shieldPowered;
-        public bool HasShieldCubes => _shields.Count > 0;
-        public bool HasPowerCubes => _reactors.Count > 0 || _shields.Count > 0;
+        // Derived from the recomputed ALIVE totals (set in RecomputePower,
+        // which runs on Start + every cube death) rather than the
+        // registered list counts — so the HUD bar / readout disappear once
+        // all shield / power cubes are destroyed, not just when none were
+        // ever built.
+        public bool HasShieldCubes => _shieldMax > 0f;
+        public bool HasPowerCubes => _totalOutput > 0f || _shieldMax > 0f;
 
         // Called once by FlyController.Start after BuildConstruct.
         public void RegisterCubes(IEnumerable<ReactorBehavior> reactors, IEnumerable<ShieldBehavior> shields)

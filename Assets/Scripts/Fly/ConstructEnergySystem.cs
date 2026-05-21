@@ -8,10 +8,11 @@ namespace CubeFly.Fly
 {
     // Construct-wide power + shield system. One per construct, on the
     // CubeConstruct GameObject (sibling to FlyController). FlyController
-    // collects ReactorBehavior + ShieldBehavior instances during
-    // BuildConstruct and hands them over via RegisterCubes; this system
-    // owns the instantaneous net-rate power balance, the single shared
-    // shield pool, regen, and the consumer-priority cascade.
+    // collects ReactorBehavior + ShieldBehavior instances (plus LaserWeapon
+    // instances, for the eject check) during BuildConstruct and hands them
+    // over via RegisterCubes; this system owns the instantaneous net-rate
+    // power balance, the single shared shield pool, regen, and the
+    // consumer-priority cascade.
     //
     // Power model: NetPower (the player-facing demand balance) =
     // Σ(alive reactor Output) − Σ(alive shield Draw). The shield is a
@@ -41,6 +42,10 @@ namespace CubeFly.Fly
 
         readonly List<ReactorBehavior> _reactors = new();
         readonly List<ShieldBehavior> _shields = new();
+        // Laser cubes are weapon-tier power consumers (dynamic draw, handled
+        // by FlyShootingController). Tracked here only so Eject + CanEject
+        // treat a reactor-less laser as ejectable dead weight.
+        readonly List<LaserWeapon> _lasers = new();
 
         float _shieldPoints;
         float _shieldMax;
@@ -48,6 +53,7 @@ namespace CubeFly.Fly
         float _totalOutput;
         int _aliveReactorCount;
         int _aliveShieldCount;
+        int _aliveLaserCount;
         bool _shieldPowered;
         float _timeSinceDamage;
 
@@ -70,12 +76,13 @@ namespace CubeFly.Fly
         public bool HasShieldCubes => _aliveShieldCount > 0;
         public bool HasPowerCubes => _aliveReactorCount > 0 || _aliveShieldCount > 0;
         // True when the construct has lost all reactors but still carries
-        // power-drawing cubes (shields today, lasers later) that can never
+        // power-drawing cubes (shields and/or lasers) that can never
         // function again — dead weight. Drives the "Eject: P" HUD hint and
         // gates the P-key eject. Uses the alive REACTOR COUNT (not
         // _totalOutput) so a reactor tuned to 0 output doesn't read as
         // "no reactors left".
-        public bool CanEject => _aliveReactorCount == 0 && _shieldDraw > 0f;
+        public bool CanEject =>
+            _aliveReactorCount == 0 && (_aliveShieldCount > 0 || _aliveLaserCount > 0);
 
         // Spare power left for the weapon tier after the shield's
         // higher-priority claim. A shield that is offline because it's
@@ -86,12 +93,15 @@ namespace CubeFly.Fly
             Mathf.Max(0f, _totalOutput - (_shieldPowered ? _shieldDraw : 0f));
 
         // Called once by FlyController.Start after BuildConstruct.
-        public void RegisterCubes(IEnumerable<ReactorBehavior> reactors, IEnumerable<ShieldBehavior> shields)
+        public void RegisterCubes(IEnumerable<ReactorBehavior> reactors,
+            IEnumerable<ShieldBehavior> shields, IEnumerable<LaserWeapon> lasers)
         {
             _reactors.Clear();
             _shields.Clear();
+            _lasers.Clear();
             _reactors.AddRange(reactors);
             _shields.AddRange(shields);
+            _lasers.AddRange(lasers);
             RecomputePower();
             // Seed the pool full so a freshly-built powered construct flies
             // in with shields up.
@@ -120,6 +130,10 @@ namespace CubeFly.Fly
                 ShieldBehavior s = _shields[i];
                 if (s != null && s.IsAlive) { _shieldDraw += s.Draw; _shieldMax += s.Contribution; _aliveShieldCount++; }
             }
+
+            _aliveLaserCount = 0;
+            for (int i = 0; i < _lasers.Count; i++)
+                if (_lasers[i] != null && _lasers[i].IsAlive) _aliveLaserCount++;
 
             // Shield is highest-priority consumer: powered iff output covers
             // its full draw.
@@ -172,35 +186,43 @@ namespace CubeFly.Fly
         float TypeModifier(DamageType type)
             => type == DamageType.Energy ? energyModifier : projectileModifier;
 
-        // Self-destruct every alive power-drawing cube (shields today;
-        // lasers will extend this). Called from the P-key poll when
-        // CanEject. Mirrors FlyController's cascade kill: drop the cube
-        // from GameData, zero its HP, and start its death drift; then raise
-        // CubeDied once so FlyController recomputes mass + power and
-        // cascades any cubes the removals orphaned.
+        // Self-destruct every alive power-drawing cube — shields AND lasers
+        // (both are useless without a reactor). Called from the P-key poll
+        // when CanEject. Then raise CubeDied once so FlyController recomputes
+        // mass + power and cascades any cubes the removals orphaned.
         public void Eject()
         {
             Vector3 origin = transform.position;
             bool any = false;
+
             for (int i = 0; i < _shields.Count; i++)
             {
                 ShieldBehavior s = _shields[i];
-                if (s == null || !s.IsAlive) continue;
-                GameObject cube = s.gameObject;
-
-                PlacedCubeData placed = cube.GetComponent<PlacedCubeData>();
-                if (placed != null) GameData.Remove(placed.cell);
-
-                CubeStats stats = cube.GetComponent<CubeStats>();
-                if (stats != null) stats.healthPoints = 0f;
-
-                CubeDeath death = cube.GetComponent<CubeDeath>() ?? cube.AddComponent<CubeDeath>();
-                death.BeginDeath(origin);
-                any = true;
+                if (s != null && s.IsAlive) { KillPowerCube(s.gameObject, origin); any = true; }
             }
+            for (int i = 0; i < _lasers.Count; i++)
+            {
+                LaserWeapon l = _lasers[i];
+                if (l != null && l.IsAlive) { KillPowerCube(l.gameObject, origin); any = true; }
+            }
+
             if (!any) return;
             Debug.unityLogger.Log(TAG, "Eject — self-destructed all power-drawing cubes (no reactors remain).");
             CubeDeath.RaiseCubeDied();
+        }
+
+        // Drop a power-drawing cube from GameData, zero its HP, and start its
+        // death drift. Mirrors FlyController's cascade-kill bookkeeping.
+        static void KillPowerCube(GameObject cube, Vector3 origin)
+        {
+            PlacedCubeData placed = cube.GetComponent<PlacedCubeData>();
+            if (placed != null) GameData.Remove(placed.cell);
+
+            CubeStats stats = cube.GetComponent<CubeStats>();
+            if (stats != null) stats.healthPoints = 0f;
+
+            CubeDeath death = cube.GetComponent<CubeDeath>() ?? cube.AddComponent<CubeDeath>();
+            death.BeginDeath(origin);
         }
     }
 }

@@ -197,6 +197,14 @@ system was built for. The steady `Power:` readout (output − shield draw)
 already shows the spare-for-weapons headroom, so a player who can't fire
 sees they're short.
 
+A laser is useless without a reactor (it can never draw power), so it is
+also wired into the **Eject** feature from Power & Energy:
+`ConstructEnergySystem` tracks laser cubes (passed alongside reactors /
+shields in `RegisterCubes`), so `CanEject` (no alive reactors + ≥1 alive
+shield *or* laser) and `Eject()` shed reactor-less lasers as dead weight
+just like shields. (Power & Energy shipped Eject for shields only — "lasers
+later"; this closes that.)
+
 ### The cube — geometry, shape, stats
 
 A **thin barrel**: the `SolidCylinder` mesh on a child transform scaled to

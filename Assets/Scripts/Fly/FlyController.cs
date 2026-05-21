@@ -67,6 +67,17 @@ namespace CubeFly.Fly
         // pattern as _spawnedWeapons.
         readonly List<ThrusterBehavior> _spawnedThrusters = new();
 
+        // Collected during BuildConstruct — every ReactorBehavior /
+        // ShieldBehavior on the spawned construct, handed to the
+        // ConstructEnergySystem in Start (same pattern as _spawnedWeapons).
+        readonly List<ReactorBehavior> _spawnedReactors = new();
+        readonly List<ShieldBehavior> _spawnedShields = new();
+
+        // The construct-wide power/shield system (sibling on CubeConstruct).
+        // Resolved in Start; RecomputePower() is called after each cube
+        // death so power reflects lost reactors/shields.
+        ConstructEnergySystem _energySystem;
+
         [Header("Linear thrust (Rigidbody.AddForce)")]
         [Tooltip("Force in Newtons applied per FixedUpdate while thrust input is held. Mass affects acceleration: accel = thrustForce / Rigidbody.mass. Starting value tuned for a ~25-mass construct; expect to retune.")]
         [SerializeField] float thrustForce = 100f;
@@ -211,6 +222,10 @@ namespace CubeFly.Fly
         {
             CascadeDestroyDisconnectedCubes();
             ResolveRigidbody();
+
+            // Reactors/shields may have died (or been orphaned by the
+            // cascade) — recompute the power balance + shield ceiling.
+            if (_energySystem != null) _energySystem.RecomputePower();
         }
 
         // Flight-side mirror of BuildManager's delete-tool cleanup: when a
@@ -284,6 +299,14 @@ namespace CubeFly.Fly
             Debug.unityLogger.Log(TAG, $"Construct initial position: {construct.position}");
 
             ResolveRigidbody();
+
+            // Resolve the construct-wide power/shield system (a scene
+            // component on CubeConstruct; AddComponent fallback so
+            // direct-Play without it still works) and hand it the collected
+            // reactor/shield cubes.
+            _energySystem = construct.GetComponent<ConstructEnergySystem>();
+            if (_energySystem == null) _energySystem = construct.gameObject.AddComponent<ConstructEnergySystem>();
+            _energySystem.RegisterCubes(_spawnedReactors, _spawnedShields);
 
             // Hand the weapon list to the shooting controller so it can
             // group by ShapeDefinition for selection + dispatch.
@@ -446,6 +469,14 @@ namespace CubeFly.Fly
                     thruster.Construct = construct;
                     _spawnedThrusters.Add(thruster);
                 }
+
+                // Collect any ReactorBehavior / ShieldBehavior — same
+                // collected-into-a-list pattern as weapons + thrusters.
+                ReactorBehavior reactor = go.GetComponent<ReactorBehavior>();
+                if (reactor != null) _spawnedReactors.Add(reactor);
+
+                ShieldBehavior shield = go.GetComponent<ShieldBehavior>();
+                if (shield != null) _spawnedShields.Add(shield);
             }
         }
 

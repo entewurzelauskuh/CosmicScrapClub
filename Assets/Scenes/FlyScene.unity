@@ -130,6 +130,7 @@ GameObject:
   - component: {fileID: 200001}
   - component: {fileID: 200003}
   - component: {fileID: 200002}
+  - component: {fileID: 200004}
   m_Layer: 0
   m_Name: CubeConstruct
   m_TagString: Untagged
@@ -195,6 +196,22 @@ Rigidbody:
   m_Interpolate: 1
   m_Constraints: 0
   m_CollisionDetection: 2
+--- !u!114 &200004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0a0a0a0000000250000000000000025, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.ConstructEnergySystem
+  regenRate: 20
+  regenDelaySeconds: 5
+  projectileModifier: 0.9
+  energyModifier: 1.1
 --- !u!1 &300000
 GameObject:
   m_ObjectHideFlags: 0
@@ -581,6 +598,7 @@ GameObject:
   - component: {fileID: 700005}
   - component: {fileID: 700006}
   - component: {fileID: 700007}
+  - component: {fileID: 700008}
   m_Layer: 0
   m_Name: FlyHUD
   m_TagString: Untagged
@@ -719,6 +737,30 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a0a0a0a0000000210000000000000021, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.FlyHud
+--- !u!114 &700008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0a0a0a0000000270000000000000027, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Fly.FlyShieldIndicator
+  barAnchoredPosition: {x: 20, y: 100}
+  barSize: {x: 180, y: 16}
+  powerLabelAnchoredPosition: {x: 20, y: 122}
+  powerFontSize: 18
+  shieldFillColor: {r: 0.3, g: 0.8, b: 1, a: 0.95}
+  shieldFrameColor: {r: 0.05, g: 0.12, b: 0.16, a: 0.85}
+  shieldDownColor: {r: 0.4, g: 0.4, b: 0.45, a: 0.6}
+  powerPositiveColor: {r: 0.4, g: 1, b: 0.5, a: 1}
+  powerNegativeColor: {r: 1, g: 0.4, b: 0.35, a: 1}
+  ejectHintAnchoredPosition: {x: 20, y: -20}
+  ejectHintFontSize: 22
+  ejectHintColor: {r: 1, g: 0.55, b: 0.2, a: 1}
 --- !u!1001 &29337581
 PrefabInstance:
   m_ObjectHideFlags: 0

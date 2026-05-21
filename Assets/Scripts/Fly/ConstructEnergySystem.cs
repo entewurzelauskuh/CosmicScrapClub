@@ -1,0 +1,198 @@
+using System.Collections.Generic;
+using CubeFly.Build;
+using CubeFly.Core;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace CubeFly.Fly
+{
+    // Construct-wide power + shield system. One per construct, on the
+    // CubeConstruct GameObject (sibling to FlyController). FlyController
+    // collects ReactorBehavior + ShieldBehavior instances during
+    // BuildConstruct and hands them over via RegisterCubes; this system
+    // owns the instantaneous net-rate power balance, the single shared
+    // shield pool, regen, and the consumer-priority cascade.
+    //
+    // Power model: NetPower (the player-facing demand balance) =
+    // Σ(alive reactor Output) − Σ(alive shield Draw). The shield is a
+    // single all-or-nothing consumer that claims power first (so the
+    // laser, a later lower-priority consumer, is what gets cut first
+    // under contention): powered iff total output >= total shield draw.
+    //
+    // Damage interception: CubeDamage.ApplyAndLog resolves this system via
+    // GetComponentInParent on the hit cube and calls ApplyToShield, which
+    // absorbs against the pool (type-scaled) before the overflow reaches HP.
+    public class ConstructEnergySystem : MonoBehaviour
+    {
+        [Header("Shield regen")]
+        [Tooltip("Shield points regenerated per second once the regen delay has elapsed.")]
+        [SerializeField] float regenRate = 20f;
+        [Tooltip("Seconds without taking damage before the shield starts regenerating.")]
+        [SerializeField] float regenDelaySeconds = 5f;
+
+        [Header("Shield damage-type modifiers")]
+        [Tooltip("Multiplier on projectile damage while the shield absorbs it. <1 = shield resists projectiles.")]
+        [SerializeField] float projectileModifier = 0.9f;
+        [Tooltip("Multiplier on energy damage while the shield absorbs it. >1 = shield is weak to energy.")]
+        [SerializeField] float energyModifier = 1.1f;
+        // Kinetic (crash) damage always bypasses the shield entirely — no
+        // modifier, no absorption. A shield stops projectiles / energy, not
+        // a physical ram. See ApplyToShield.
+
+        readonly List<ReactorBehavior> _reactors = new();
+        readonly List<ShieldBehavior> _shields = new();
+
+        float _shieldPoints;
+        float _shieldMax;
+        float _shieldDraw;
+        float _totalOutput;
+        int _aliveReactorCount;
+        int _aliveShieldCount;
+        bool _shieldPowered;
+        float _timeSinceDamage;
+
+        const string TAG = "Energy";
+
+        // --- HUD read-only surface ---
+        public float ShieldPoints => _shieldPoints;
+        public float ShieldMax => _shieldMax;
+        // Player-facing demand balance: output − total nominal shield draw
+        // (later also − active laser draw). Negative = under-powered.
+        public float NetPower => _totalOutput - _shieldDraw;
+        public bool ShieldActive => _shieldPowered;
+        // Derived from the recomputed ALIVE cube counts (set in
+        // RecomputePower, which runs on Start + every cube death) rather
+        // than the registered list counts — so the HUD bar / readout
+        // disappear once all shield / power cubes are destroyed, not just
+        // when none were ever built. Counts rather than _totalOutput /
+        // _shieldMax so a cube tuned to 0 output / 0 contribution still
+        // reads as present.
+        public bool HasShieldCubes => _aliveShieldCount > 0;
+        public bool HasPowerCubes => _aliveReactorCount > 0 || _aliveShieldCount > 0;
+        // True when the construct has lost all reactors but still carries
+        // power-drawing cubes (shields today, lasers later) that can never
+        // function again — dead weight. Drives the "Eject: P" HUD hint and
+        // gates the P-key eject. Uses the alive REACTOR COUNT (not
+        // _totalOutput) so a reactor tuned to 0 output doesn't read as
+        // "no reactors left".
+        public bool CanEject => _aliveReactorCount == 0 && _shieldDraw > 0f;
+
+        // Called once by FlyController.Start after BuildConstruct.
+        public void RegisterCubes(IEnumerable<ReactorBehavior> reactors, IEnumerable<ShieldBehavior> shields)
+        {
+            _reactors.Clear();
+            _shields.Clear();
+            _reactors.AddRange(reactors);
+            _shields.AddRange(shields);
+            RecomputePower();
+            // Seed the pool full so a freshly-built powered construct flies
+            // in with shields up.
+            _shieldPoints = _shieldPowered ? _shieldMax : 0f;
+            Debug.unityLogger.Log(TAG,
+                $"Registered {_reactors.Count} reactor(s), {_shields.Count} shield(s). " +
+                $"Output {_totalOutput:F0}, shield draw {_shieldDraw:F0}, net {NetPower:F0}, " +
+                $"shield {(_shieldPowered ? "ONLINE" : "OFFLINE")} (max {_shieldMax:F0}).");
+        }
+
+        // Recompute power balance + shield ceiling. Public so
+        // FlyController.OnCubeDied can call it after the disconnect cascade
+        // settles (a reactor/shield may have died or been orphaned).
+        public void RecomputePower()
+        {
+            _totalOutput = 0f;
+            _aliveReactorCount = 0;
+            for (int i = 0; i < _reactors.Count; i++)
+                if (_reactors[i] != null && _reactors[i].IsAlive) { _totalOutput += _reactors[i].Output; _aliveReactorCount++; }
+
+            _shieldDraw = 0f;
+            _shieldMax = 0f;
+            _aliveShieldCount = 0;
+            for (int i = 0; i < _shields.Count; i++)
+            {
+                ShieldBehavior s = _shields[i];
+                if (s != null && s.IsAlive) { _shieldDraw += s.Draw; _shieldMax += s.Contribution; _aliveShieldCount++; }
+            }
+
+            // Shield is highest-priority consumer: powered iff output covers
+            // its full draw.
+            _shieldPowered = _shieldMax > 0f && _totalOutput >= _shieldDraw;
+
+            if (!_shieldPowered) _shieldPoints = 0f;                    // field collapses
+            else _shieldPoints = Mathf.Min(_shieldPoints, _shieldMax);  // clamp to (maybe reduced) ceiling
+        }
+
+        void Update()
+        {
+            _timeSinceDamage += Time.deltaTime;
+            if (_shieldPowered && _shieldPoints < _shieldMax && _timeSinceDamage >= regenDelaySeconds)
+                _shieldPoints = Mathf.Min(_shieldMax, _shieldPoints + regenRate * Time.deltaTime);
+
+            // Eject: P self-destructs the now-useless power-drawing cubes
+            // once all reactors are gone. Gated by CanEject + pause.
+            if (CanEject && (PauseMenu.Instance == null || !PauseMenu.Instance.IsOpen))
+            {
+                Keyboard kb = Keyboard.current;
+                if (kb != null && kb.pKey.wasPressedThisFrame) Eject();
+            }
+        }
+
+        // Called from CubeDamage.ApplyAndLog for any hit on a construct
+        // cube. Resets the regen timer (the construct was hit), absorbs
+        // against the pool if powered, and returns the overflow that should
+        // continue to HP. When the shield is down, returns the amount
+        // unchanged (full overflow, no type modifier — the modifier is a
+        // shield property).
+        public float ApplyToShield(float amount, DamageType type)
+        {
+            // Kinetic (crash) damage bypasses the shield entirely — it
+            // never touches the pool or the regen timer and always goes
+            // straight through to HP.
+            if (type == DamageType.Kinetic) return amount;
+
+            _timeSinceDamage = 0f;
+            if (!_shieldPowered || _shieldPoints <= 0f) return amount;
+
+            float scaled = amount * TypeModifier(type);
+            float absorbed = Mathf.Min(scaled, _shieldPoints);
+            _shieldPoints -= absorbed;
+            return scaled - absorbed;
+        }
+
+        // Only projectile + energy reach here (kinetic returns early in
+        // ApplyToShield). Energy is the construct's vulnerability; anything
+        // else uses the projectile modifier.
+        float TypeModifier(DamageType type)
+            => type == DamageType.Energy ? energyModifier : projectileModifier;
+
+        // Self-destruct every alive power-drawing cube (shields today;
+        // lasers will extend this). Called from the P-key poll when
+        // CanEject. Mirrors FlyController's cascade kill: drop the cube
+        // from GameData, zero its HP, and start its death drift; then raise
+        // CubeDied once so FlyController recomputes mass + power and
+        // cascades any cubes the removals orphaned.
+        public void Eject()
+        {
+            Vector3 origin = transform.position;
+            bool any = false;
+            for (int i = 0; i < _shields.Count; i++)
+            {
+                ShieldBehavior s = _shields[i];
+                if (s == null || !s.IsAlive) continue;
+                GameObject cube = s.gameObject;
+
+                PlacedCubeData placed = cube.GetComponent<PlacedCubeData>();
+                if (placed != null) GameData.Remove(placed.cell);
+
+                CubeStats stats = cube.GetComponent<CubeStats>();
+                if (stats != null) stats.healthPoints = 0f;
+
+                CubeDeath death = cube.GetComponent<CubeDeath>() ?? cube.AddComponent<CubeDeath>();
+                death.BeginDeath(origin);
+                any = true;
+            }
+            if (!any) return;
+            Debug.unityLogger.Log(TAG, "Eject — self-destructed all power-drawing cubes (no reactors remain).");
+            CubeDeath.RaiseCubeDied();
+        }
+    }
+}

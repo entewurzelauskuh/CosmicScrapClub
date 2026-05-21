@@ -30,11 +30,20 @@ namespace CubeFly.Fly
             CubeStats stats = context.Target;
             if (stats == null) return 0f;
 
+            // Shield interception: if the struck cube belongs to a construct
+            // with a ConstructEnergySystem, route the hit through its shield
+            // pool first. The shield absorbs (type-scaled) and returns the
+            // overflow that continues to HP. World target cubes have no
+            // energy system → full damage to HP, exactly as before.
+            float toHp = context.Amount;
+            ConstructEnergySystem energy = stats.GetComponentInParent<ConstructEnergySystem>();
+            if (energy != null) toHp = energy.ApplyToShield(context.Amount, context.Type);
+
             float hpBefore = stats.healthPoints;
             bool bypassArmour = (context.Flags & HitFlags.BypassArmour) != 0;
             float applied = bypassArmour
-                ? stats.TakeRawDamage(context.Amount)
-                : stats.TakeDamage(context.Amount);
+                ? stats.TakeRawDamage(toHp)
+                : stats.TakeDamage(toHp);
 
             // Different log format depending on whether armour is in play —
             // logging "AV 10" for a kinetic hit that bypasses AV would be
@@ -43,14 +52,14 @@ namespace CubeFly.Fly
             {
                 Debug.unityLogger.Log(context.SourceTag,
                     $"Hit '{stats.name}' for {applied:F1} damage " +
-                    $"(raw {context.Amount:F1}, type {context.Type}, armour bypassed). " +
+                    $"(raw {context.Amount:F1}, to-HP {toHp:F1}, type {context.Type}, armour bypassed). " +
                     $"HP: {hpBefore:F1} → {stats.healthPoints:F1}.");
             }
             else
             {
                 Debug.unityLogger.Log(context.SourceTag,
                     $"Hit '{stats.name}' for {applied:F1} damage " +
-                    $"(raw {context.Amount:F1}, type {context.Type}, AV {stats.armourValue:F1}). " +
+                    $"(raw {context.Amount:F1}, to-HP {toHp:F1}, type {context.Type}, AV {stats.armourValue:F1}). " +
                     $"HP: {hpBefore:F1} → {stats.healthPoints:F1}.");
             }
 

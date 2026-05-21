@@ -11,6 +11,7 @@ namespace CubeFly.Core
         static Mesh _squarePyramid;
         static Mesh _hollowCylinder;
         static Mesh _cone;
+        static Mesh _solidCylinder;
 
         // 1×1×1 right-triangular prism centred at the origin. The
         // hypotenuse (slope) runs from the front-bottom edge to the
@@ -311,6 +312,78 @@ namespace CubeFly.Core
             }
 
             Mesh m = new Mesh { name = "Cone" };
+            m.vertices = verts;
+            m.triangles = tris;
+            m.RecalculateNormals();
+            m.RecalculateBounds();
+            return m;
+        }
+
+        // 1×1×1 solid cylinder centred at the origin. Axis along +Y;
+        // radius 0.5 (fills the cell horizontally), height 1 (fills it
+        // vertically). Same outer dimensions and the same single valid
+        // attachment face (-Y) as the hollow cylinder weapon, but solid:
+        // capped top + bottom discs, no inner wall. Used by the Reactor
+        // cube. Wall winding matches HollowCylinder's outer wall; cap
+        // windings match Cone's base (-Y) / its reverse (+Y) for outward
+        // normals in Unity's left-handed CW-front convention.
+        public static Mesh SolidCylinder
+        {
+            get
+            {
+                if (_solidCylinder == null) _solidCylinder = BuildSolidCylinder();
+                return _solidCylinder;
+            }
+        }
+
+        static Mesh BuildSolidCylinder()
+        {
+            const int N = 32;
+            const float h = 0.5f;
+            const float r = 0.5f;
+
+            // Vertex layout (4N + 2):
+            //   [0 .. N-1]     wall top ring     (smooth radial)
+            //   [N .. 2N-1]    wall bottom ring  (smooth radial)
+            //   [2N .. 3N-1]   top cap ring      (flat +Y)
+            //   [3N .. 4N-1]   bottom cap ring   (flat -Y)
+            //   [4N]           top centre        (flat +Y)
+            //   [4N+1]         bottom centre     (flat -Y)
+            Vector3[] verts = new Vector3[4 * N + 2];
+            for (int i = 0; i < N; i++)
+            {
+                float theta = i * (2f * Mathf.PI / N);
+                float c = Mathf.Cos(theta);
+                float s = Mathf.Sin(theta);
+                Vector3 top = new Vector3(r * c,  h, r * s);
+                Vector3 bot = new Vector3(r * c, -h, r * s);
+                verts[i]         = top;
+                verts[N + i]     = bot;
+                verts[2 * N + i] = top;
+                verts[3 * N + i] = bot;
+            }
+            verts[4 * N]     = new Vector3(0f,  h, 0f);
+            verts[4 * N + 1] = new Vector3(0f, -h, 0f);
+
+            // 4 tris/segment: 2 wall + 1 top cap + 1 bottom cap.
+            int[] tris = new int[12 * N];
+            int t = 0;
+            for (int i = 0; i < N; i++)
+            {
+                int j = (i + 1) % N;
+
+                // Outer wall — normal radially outward.
+                tris[t++] = i;          tris[t++] = j;          tris[t++] = N + j;
+                tris[t++] = i;          tris[t++] = N + j;      tris[t++] = N + i;
+
+                // Top cap (+Y) — fan from top centre, reversed vs the -Y base.
+                tris[t++] = 4 * N;      tris[t++] = 2 * N + j;  tris[t++] = 2 * N + i;
+
+                // Bottom cap (-Y) — fan from bottom centre.
+                tris[t++] = 4 * N + 1;  tris[t++] = 3 * N + i;  tris[t++] = 3 * N + j;
+            }
+
+            Mesh m = new Mesh { name = "SolidCylinder" };
             m.vertices = verts;
             m.triangles = tris;
             m.RecalculateNormals();

@@ -58,6 +58,7 @@ namespace CubeFly.Build
         [Header("Stat labels (bottom-left)")]
         [SerializeField] int statFontSize = 20;
         [SerializeField] Vector2 massLabelAnchoredPosition = new Vector2(20f, 60f);
+        [SerializeField] Vector2 powerLabelAnchoredPosition = new Vector2(20f, 92f);
         [SerializeField] Vector2 hpLabelAnchoredPosition = new Vector2(20f, 28f);
         [SerializeField] Vector2 statLabelSize = new Vector2(260f, 28f);
 
@@ -94,6 +95,7 @@ namespace CubeFly.Build
         Image _deleteBackground;
         Text _massLabel;
         Text _hpLabel;
+        Text _powerLabel;
         Text _selectedStatsLabel;
         Text _floatingMessage;
         Coroutine _floatingRoutine;
@@ -122,6 +124,8 @@ namespace CubeFly.Build
         static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
         static readonly Color FlyoutEntryIdle   = new Color(0.18f, 0.18f, 0.22f, 0.95f);
         static readonly Color FlyoutEntryActive = new Color(0.35f, 0.55f, 0.95f, 0.95f);
+        static readonly Color PowerPositive     = new Color(0.4f, 1f, 0.5f, 1f);
+        static readonly Color PowerNegative     = new Color(1f, 0.4f, 0.35f, 1f);
 
         void Start()
         {
@@ -417,6 +421,14 @@ namespace CubeFly.Build
             hpRT.anchorMin = hpRT.anchorMax = hpRT.pivot = new Vector2(0f, 0f);
             hpRT.anchoredPosition = hpLabelAnchoredPosition;
             hpRT.sizeDelta = statLabelSize;
+
+            _powerLabel = UIStyle.BuildLabel(root, "Power: +0", fontSize: statFontSize);
+            _powerLabel.alignment = TextAnchor.LowerLeft;
+            RectTransform powerRT = (RectTransform)_powerLabel.transform;
+            powerRT.anchorMin = powerRT.anchorMax = powerRT.pivot = new Vector2(0f, 0f);
+            powerRT.anchoredPosition = powerLabelAnchoredPosition;
+            powerRT.sizeDelta = statLabelSize;
+            _powerLabel.enabled = false;
 
             _selectedStatsLabel = UIStyle.BuildLabel(root, string.Empty, fontSize: statFontSize);
             _selectedStatsLabel.alignment = TextAnchor.LowerLeft;
@@ -871,6 +883,16 @@ namespace CubeFly.Build
                 _massLabel.text = $"Mass: {mass:F1} / {buildManager.MassLimit:F0}";
             if (_hpLabel != null)
                 _hpLabel.text = $"HP: {hp:F0}";
+            if (_powerLabel != null)
+            {
+                float net = buildManager.ComputeCurrentNetPower(out bool hasPower);
+                _powerLabel.enabled = hasPower;
+                if (hasPower)
+                {
+                    _powerLabel.text = $"Power: {(net >= 0f ? "+" : "")}{net:F0}";
+                    _powerLabel.color = net >= 0f ? PowerPositive : PowerNegative;
+                }
+            }
         }
 
         // ---------- Floating message ----------

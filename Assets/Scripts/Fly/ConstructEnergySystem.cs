@@ -77,6 +77,14 @@ namespace CubeFly.Fly
         // "no reactors left".
         public bool CanEject => _aliveReactorCount == 0 && _shieldDraw > 0f;
 
+        // Spare power left for the weapon tier after the shield's
+        // higher-priority claim. A shield that is offline because it's
+        // unaffordable draws nothing, so its budget is freed for the laser.
+        // FlyShootingController allocates this across firing laser cubes
+        // (weapons cut first under contention).
+        public float AvailableForWeapons =>
+            Mathf.Max(0f, _totalOutput - (_shieldPowered ? _shieldDraw : 0f));
+
         // Called once by FlyController.Start after BuildConstruct.
         public void RegisterCubes(IEnumerable<ReactorBehavior> reactors, IEnumerable<ShieldBehavior> shields)
         {

@@ -85,7 +85,8 @@ namespace CubeFly.Fly
         // object has no CubeStats — which shouldn't happen for the
         // layers we mask against, but is defensive.
         public static void ApplyAndLog(RaycastHit hit, float damage,
-            Transform firingConstruct, string projectileTag)
+            Transform firingConstruct, string projectileTag,
+            DamageType damageType = DamageType.Projectile)
         {
             // GetComponentInParent searches the current GameObject AND walks
             // up through parents, so a single call covers both the
@@ -108,7 +109,7 @@ namespace CubeFly.Fly
             HitContext context = new HitContext(
                 target: stats,
                 amount: damage,
-                type: DamageType.Projectile,
+                type: damageType,
                 flags: HitFlags.None,
                 point: hit.point,
                 normal: hit.normal,

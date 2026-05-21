@@ -27,6 +27,14 @@ namespace CubeFly.Fly
         [Tooltip("Magnitude threshold for treating a scroll-wheel delta as an active 'scroll event'. Each non-zero event (in either direction) cycles selection by one step regardless of magnitude, so a Windows wheel notch arriving as ±120 raw units and a trackpad swipe arriving as small fractional values both behave the same — one notch / one swipe = one cycle.")]
         [SerializeField] float scrollDeadzone = 0.05f;
 
+        [Header("Laser heat (shared per laser weapon-type)")]
+        [Tooltip("Heat units added per second while a laser of the selected type is firing. 100 = overheated. At 50/s a cold laser overheats after ~2 s of sustained fire.")]
+        [SerializeField] float heatRisePerSecond = 50f;
+        [Tooltip("Heat units shed per second when not firing (and not overheated).")]
+        [SerializeField] float heatFallPerSecond = 30f;
+        [Tooltip("Heat units shed per second while overheated — the slow lockout recovery. The laser stays locked until heat returns to 0.")]
+        [SerializeField] float heatFallOverheatedPerSecond = 15f;
+
         // Cached so HandleSelectionInputs() doesn't allocate a fresh
         // array every Update — keeps the hot path GC-free.
         static readonly Key[] DigitKeys =
@@ -53,6 +61,15 @@ namespace CubeFly.Fly
         // changes from 0 → non-zero, so one wheel notch / one trackpad
         // swipe yields one cycle even though it may span many frames.
         int _lastScrollSign;
+
+        // Resolved in RegisterWeapons. The laser is the weapon-tier power
+        // consumer; FlyShootingController allocates AvailableForWeapons
+        // across firing laser cubes.
+        ConstructEnergySystem _energy;
+        // Set true by HandleFireInput on a frame the SELECTED laser type
+        // actually beamed (>=1 cube powered + fired); consumed by
+        // TickLaserHeat to decide rise vs cool. Reset each Update.
+        bool _selectedLaserFiredThisFrame;
 
         const string TAG = "FlyShooting";
 
@@ -87,6 +104,7 @@ namespace CubeFly.Fly
                 g.Instances.Add(w);
             }
             _selectedTypeIndex = _types.Count > 0 ? 0 : -1;
+            _energy = FindAnyObjectByType<ConstructEnergySystem>();
             Debug.unityLogger.Log(TAG,
                 $"Registered {_types.Count} weapon type(s) across {CountInstances()} instance(s).");
             TypesChanged?.Invoke();
@@ -106,6 +124,8 @@ namespace CubeFly.Fly
             if (PauseMenu.Instance != null && PauseMenu.Instance.IsOpen) return;
             if (!HasWeapons) return;
 
+            _selectedLaserFiredThisFrame = false; // HandleFireInput may set it
+
             // Auto-switch off a fully-dead selected type. Runs before the
             // pointer-over-UI gate — a weapon dying must move selection
             // regardless of where the cursor is.
@@ -115,11 +135,15 @@ namespace CubeFly.Fly
             // the cursor is over the weapon toolbar — scrolling on the
             // toolbar is the natural place to cycle weapons. Fire (LMB)
             // is the only input that conflicts with UI clicks and stays
-            // gated by the pointer-over-UI check below.
+            // gated by the pointer-over-UI check below. Heat must still
+            // tick (cool) when over UI, so the fire dispatch is conditional
+            // but TickLaserHeat below always runs.
             HandleSelectionInputs();
 
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
-            HandleFireInput();
+            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+            if (!overUI) HandleFireInput();
+
+            TickLaserHeat();
         }
 
         // If the selected type is fully dead, move selection to the
@@ -175,12 +199,64 @@ namespace CubeFly.Fly
             Transform construct = flyController.Construct;
             if (construct == null) return;
 
-            Vector3 target = construct.position + construct.forward * aimRange;
             WeaponTypeGroup active = _types[_selectedTypeIndex];
-            for (int i = 0; i < active.Instances.Count; i++)
+            Vector3 target = construct.position + construct.forward * aimRange;
+
+            if (active.IsLaser)
             {
-                WeaponBehavior w = active.Instances[i];
-                if (w != null && w.IsAlive) w.TryFire(target);
+                // Overheated lasers are locked out entirely (heat still
+                // cools in TickLaserHeat).
+                if (active.Overheated) return;
+
+                // Power-gate: the laser is the weapon-tier consumer. Power
+                // floor(available / per-cube draw) of the alive lasers; the
+                // rest don't fire this frame and turn their beam off in
+                // LaserWeapon.LateUpdate.
+                float drawPer = active.LaserPowerDraw;
+                float available = _energy != null ? _energy.AvailableForWeapons : 0f;
+                int budget = drawPer > 0f ? Mathf.FloorToInt(available / drawPer) : int.MaxValue;
+
+                int fired = 0;
+                for (int i = 0; i < active.Instances.Count; i++)
+                {
+                    WeaponBehavior w = active.Instances[i];
+                    if (w == null || !w.IsAlive) continue;
+                    if (fired >= budget) continue;
+                    w.TryFire(target); // laser ignores target, beams along its barrel
+                    fired++;
+                }
+                _selectedLaserFiredThisFrame = fired > 0;
+            }
+            else
+            {
+                for (int i = 0; i < active.Instances.Count; i++)
+                {
+                    WeaponBehavior w = active.Instances[i];
+                    if (w != null && w.IsAlive) w.TryFire(target);
+                }
+            }
+        }
+
+        // Tick shared heat for every laser type each frame: the selected
+        // type rises while it's firing, everything else (and the selected
+        // type when idle) cools. Overheat latches at 100 and clears at 0.
+        void TickLaserHeat()
+        {
+            float dt = Time.deltaTime;
+            for (int i = 0; i < _types.Count; i++)
+            {
+                WeaponTypeGroup t = _types[i];
+                if (!t.IsLaser) continue;
+
+                bool rising = (i == _selectedTypeIndex) && _selectedLaserFiredThisFrame;
+                if (rising)
+                    t.Heat = Mathf.Min(100f, t.Heat + heatRisePerSecond * dt);
+                else
+                    t.Heat = Mathf.Max(0f, t.Heat -
+                        (t.Overheated ? heatFallOverheatedPerSecond : heatFallPerSecond) * dt);
+
+                if (!t.Overheated && t.Heat >= 100f) t.Overheated = true;
+                else if (t.Overheated && t.Heat <= 0f) t.Overheated = false;
             }
         }
 
@@ -229,6 +305,43 @@ namespace CubeFly.Fly
 
         public WeaponTypeGroup(ShapeDefinition shape) { Shape = shape; }
 
+        // Shared heat for a laser type (0..100). Ticked by
+        // FlyShootingController; meaningless for non-laser types.
+        public float Heat;
+        // Latched at heat 100, cleared at 0 — while true the type is fire-
+        // locked.
+        public bool Overheated;
+
+        bool _isLaserResolved;
+        bool _isLaser;
+        // True when this type's instances are LaserWeapons. Cached — a
+        // type's weapon class never changes for a Fly session.
+        public bool IsLaser
+        {
+            get
+            {
+                if (!_isLaserResolved)
+                {
+                    for (int i = 0; i < Instances.Count; i++)
+                        if (Instances[i] is LaserWeapon) { _isLaser = true; break; }
+                    _isLaserResolved = true;
+                }
+                return _isLaser;
+            }
+        }
+
+        // Per-cube power draw of this laser type (0 for non-lasers). Read
+        // from a representative LaserWeapon instance.
+        public float LaserPowerDraw
+        {
+            get
+            {
+                for (int i = 0; i < Instances.Count; i++)
+                    if (Instances[i] is LaserWeapon lw) return lw.PowerDraw;
+                return 0f;
+            }
+        }
+
         // Route reload-bar inputs through the first ALIVE instance.
         // Reading Instances[0] unconditionally was wrong when the first
         // weapon cube of the group died: its _cooldown decays to 0 during
@@ -261,11 +374,14 @@ namespace CubeFly.Fly
             return null;
         }
 
-        // 0 = just fired, 1 = ready to fire. Drives the reload progress bar.
+        // 0 = just fired / fully heated, 1 = ready / cold. Drives the
+        // toolbar bar. For a laser the bar shows remaining heat capacity
+        // (1 - heat); for a projectile weapon it shows reload progress.
         public float ReadyFraction
         {
             get
             {
+                if (IsLaser) return 1f - Mathf.Clamp01(Heat / 100f);
                 float r = MaxReloadSeconds;
                 if (r <= 0f) return 1f;
                 return 1f - Mathf.Clamp01(CooldownRemaining / r);

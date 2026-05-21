@@ -11,8 +11,11 @@ namespace CubeFly.Fly
     // unless the selected type is a laser.
     //
     // Fill   — bar height = Heat/100 (grows up as the laser heats).
+    // Opacity— alpha = Heat/100 (mirrors FlyBoostBar's opacity ramp):
+    //          invisible when cold, fades in with use, fades back out as it
+    //          regens to 0 — so the bar only shows while in use / cooling.
     // Colour — lerps cool->hot with heat; while Overheated it pulses red
-    //          (the FlyBoostBar critical-throb pattern).
+    //          (the FlyBoostBar critical-throb pattern — stays visible).
     // Flash  — "Overheated!" flashes 3x on the lockout edge, above the
     //          crosshair (the FlyBoostBar "Overboosted!" pattern).
     public class FlyHeatBar : MonoBehaviour
@@ -99,9 +102,13 @@ namespace CubeFly.Fly
             }
             else
             {
+                // Alpha ramps with heat (mirrors FlyBoostBar's 1-fraction
+                // opacity ramp): invisible when cold, fades in as the laser
+                // heats, fades back out as it regens to 0 — so the bar only
+                // shows while the laser is in use / cooling down.
                 Color c = Color.Lerp(coolColor, hotColor, fraction);
-                SetImageAlpha(_fillImage, c, 1f);
-                SetImageAlpha(_frameImage, frameColor, 1f);
+                SetImageAlpha(_fillImage, c, fraction);
+                SetImageAlpha(_frameImage, frameColor, fraction);
             }
 
             // Flash only on a genuine false->true overheat transition of the

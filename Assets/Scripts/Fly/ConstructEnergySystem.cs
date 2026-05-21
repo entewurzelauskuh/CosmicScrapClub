@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using CubeFly.Build;
 using CubeFly.Core;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace CubeFly.Fly
 {
@@ -33,8 +35,9 @@ namespace CubeFly.Fly
         [SerializeField] float projectileModifier = 0.9f;
         [Tooltip("Multiplier on energy damage while the shield absorbs it. >1 = shield is weak to energy.")]
         [SerializeField] float energyModifier = 1.1f;
-        [Tooltip("Multiplier on kinetic (crash) damage while the shield absorbs it.")]
-        [SerializeField] float kineticModifier = 1f;
+        // Kinetic (crash) damage always bypasses the shield entirely — no
+        // modifier, no absorption. A shield stops projectiles / energy, not
+        // a physical ram. See ApplyToShield.
 
         readonly List<ReactorBehavior> _reactors = new();
         readonly List<ShieldBehavior> _shields = new();
@@ -62,6 +65,11 @@ namespace CubeFly.Fly
         // ever built.
         public bool HasShieldCubes => _shieldMax > 0f;
         public bool HasPowerCubes => _totalOutput > 0f || _shieldMax > 0f;
+        // True when the construct has lost all reactors but still carries
+        // power-drawing cubes (shields today, lasers later) that can never
+        // function again — dead weight. Drives the "Eject: P" HUD hint and
+        // gates the P-key eject.
+        public bool CanEject => _totalOutput <= 0f && _shieldDraw > 0f;
 
         // Called once by FlyController.Start after BuildConstruct.
         public void RegisterCubes(IEnumerable<ReactorBehavior> reactors, IEnumerable<ShieldBehavior> shields)
@@ -110,6 +118,14 @@ namespace CubeFly.Fly
             _timeSinceDamage += Time.deltaTime;
             if (_shieldPowered && _shieldPoints < _shieldMax && _timeSinceDamage >= regenDelaySeconds)
                 _shieldPoints = Mathf.Min(_shieldMax, _shieldPoints + regenRate * Time.deltaTime);
+
+            // Eject: P self-destructs the now-useless power-drawing cubes
+            // once all reactors are gone. Gated by CanEject + pause.
+            if (CanEject && (PauseMenu.Instance == null || !PauseMenu.Instance.IsOpen))
+            {
+                Keyboard kb = Keyboard.current;
+                if (kb != null && kb.pKey.wasPressedThisFrame) Eject();
+            }
         }
 
         // Called from CubeDamage.ApplyAndLog for any hit on a construct
@@ -120,6 +136,11 @@ namespace CubeFly.Fly
         // shield property).
         public float ApplyToShield(float amount, DamageType type)
         {
+            // Kinetic (crash) damage bypasses the shield entirely — it
+            // never touches the pool or the regen timer and always goes
+            // straight through to HP.
+            if (type == DamageType.Kinetic) return amount;
+
             _timeSinceDamage = 0f;
             if (!_shieldPowered || _shieldPoints <= 0f) return amount;
 
@@ -129,14 +150,41 @@ namespace CubeFly.Fly
             return scaled - absorbed;
         }
 
+        // Only projectile + energy reach here (kinetic returns early in
+        // ApplyToShield). Energy is the construct's vulnerability; anything
+        // else uses the projectile modifier.
         float TypeModifier(DamageType type)
+            => type == DamageType.Energy ? energyModifier : projectileModifier;
+
+        // Self-destruct every alive power-drawing cube (shields today;
+        // lasers will extend this). Called from the P-key poll when
+        // CanEject. Mirrors FlyController's cascade kill: drop the cube
+        // from GameData, zero its HP, and start its death drift; then raise
+        // CubeDied once so FlyController recomputes mass + power and
+        // cascades any cubes the removals orphaned.
+        public void Eject()
         {
-            switch (type)
+            Vector3 origin = transform.position;
+            bool any = false;
+            for (int i = 0; i < _shields.Count; i++)
             {
-                case DamageType.Projectile: return projectileModifier;
-                case DamageType.Energy:     return energyModifier;
-                default:                    return kineticModifier; // Kinetic
+                ShieldBehavior s = _shields[i];
+                if (s == null || !s.IsAlive) continue;
+                GameObject cube = s.gameObject;
+
+                PlacedCubeData placed = cube.GetComponent<PlacedCubeData>();
+                if (placed != null) GameData.Remove(placed.cell);
+
+                CubeStats stats = cube.GetComponent<CubeStats>();
+                if (stats != null) stats.healthPoints = 0f;
+
+                CubeDeath death = cube.GetComponent<CubeDeath>() ?? cube.AddComponent<CubeDeath>();
+                death.BeginDeath(origin);
+                any = true;
             }
+            if (!any) return;
+            Debug.unityLogger.Log(TAG, "Eject — self-destructed all power-drawing cubes (no reactors remain).");
+            CubeDeath.RaiseCubeDied();
         }
     }
 }

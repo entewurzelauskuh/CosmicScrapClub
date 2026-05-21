@@ -29,11 +29,17 @@ namespace CubeFly.Fly
         [SerializeField] Color powerPositiveColor = new Color(0.4f, 1f, 0.5f, 1f);
         [SerializeField] Color powerNegativeColor = new Color(1f, 0.4f, 0.35f, 1f);
 
+        [Header("Eject hint (top-left)")]
+        [SerializeField] Vector2 ejectHintAnchoredPosition = new Vector2(20f, -20f);
+        [SerializeField] int ejectHintFontSize = 22;
+        [SerializeField] Color ejectHintColor = new Color(1f, 0.55f, 0.2f, 1f);
+
         ConstructEnergySystem _energy;
         RectTransform _frame;
         RectTransform _fill;
         Image _fillImage;
         Text _powerLabel;
+        Text _ejectHint;
 
         const string TAG = "FlyShield";
 
@@ -54,6 +60,7 @@ namespace CubeFly.Fly
             if (_frame != null && _frame.gameObject.activeSelf != hasShield)
                 _frame.gameObject.SetActive(hasShield);
             if (_powerLabel != null) _powerLabel.enabled = hasPower;
+            if (_ejectHint != null) _ejectHint.enabled = _energy != null && _energy.CanEject;
             if (!hasPower) return;
 
             if (hasShield)
@@ -107,6 +114,17 @@ namespace CubeFly.Fly
             plRT.anchorMin = plRT.anchorMax = plRT.pivot = new Vector2(0f, 0f);
             plRT.sizeDelta = new Vector2(220f, 28f);
             plRT.anchoredPosition = powerLabelAnchoredPosition;
+
+            // "Eject: P" hint, top-left. Shown only while CanEject (all
+            // reactors lost but power-drawing cubes remain) — see Update.
+            _ejectHint = UIStyle.BuildLabel(root, "Eject: P", ejectHintFontSize, FontStyle.Bold);
+            _ejectHint.color = ejectHintColor;
+            _ejectHint.alignment = TextAnchor.UpperLeft;
+            RectTransform ehRT = (RectTransform)_ejectHint.transform;
+            ehRT.anchorMin = ehRT.anchorMax = ehRT.pivot = new Vector2(0f, 1f);
+            ehRT.sizeDelta = new Vector2(260f, 36f);
+            ehRT.anchoredPosition = ejectHintAnchoredPosition;
+            _ejectHint.enabled = false;
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using CubeFly.Core;
+using CubeFly.Fly;
 using CubeFly.Input;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -310,6 +311,30 @@ namespace CubeFly.Build
 
         public float ComputeCurrentMass()         => SumStat(s => s.mass);
         public float ComputeCurrentHealthPoints() => SumStat(s => s.healthPoints);
+
+        // Net power = Σ(reactor Output) − Σ(shield Draw) across the spawned
+        // placed cubes, mirroring SumStat's instance walk. hasPowerCubes is
+        // false when the construct carries no reactor / shield cubes, so the
+        // build HUD can hide the readout entirely. The flight-side
+        // ConstructEnergySystem owns the live balance; this is the build
+        // preview of the same arithmetic so the player gets power feedback
+        // while building.
+        public float ComputeCurrentNetPower(out bool hasPowerCubes)
+        {
+            float output = 0f;
+            float draw = 0f;
+            bool any = false;
+            foreach (var kv in _spawned)
+            {
+                if (kv.Value == null) continue;
+                ReactorBehavior r = kv.Value.GetComponent<ReactorBehavior>();
+                if (r != null) { output += r.Output; any = true; }
+                ShieldBehavior s = kv.Value.GetComponent<ShieldBehavior>();
+                if (s != null) { draw += s.Draw; any = true; }
+            }
+            hasPowerCubes = any;
+            return output - draw;
+        }
 
         void EnsureAlphaCube()
         {

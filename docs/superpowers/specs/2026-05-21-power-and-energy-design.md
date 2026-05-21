@@ -340,3 +340,32 @@ compile-check (`refresh_unity` + `read_console` filtered to
 - **Battery / stored-charge power** — net-rate model only.
 - **Directional / per-face shields** — one shared omnidirectional pool.
 - **Reactor overcharge, repair cubes, per-cube shield pools** — not planned.
+
+## Addendum — post-review refinements (2026-05-21)
+
+Three changes requested after the initial implementation (PR #43), folded
+into the same feature branch before merge:
+
+1. **Kinetic damage bypasses the shield entirely.** Supersedes the original
+   "kinetic ×1.0 absorbed" rule. Crash / kinetic damage now always passes
+   straight through to HP — it never touches the shield pool or the regen
+   timer. A shield stops projectiles and energy, not a physical ram.
+   (`ConstructEnergySystem.ApplyToShield` early-returns for
+   `DamageType.Kinetic`; the kinetic modifier field is removed.)
+
+2. **Eject (P).** When the construct has lost all reactors but still
+   carries power-drawing cubes (shields today, lasers later), those cubes
+   are dead weight that can never function again. `ConstructEnergySystem`
+   exposes `CanEject` (no alive reactors + ≥1 alive power-drawer) and an
+   `Eject()` that self-destructs every alive power-drawing cube (drop from
+   `GameData`, zero HP, death-drift), then raises `CubeDied` so
+   `FlyController` recomputes mass + power and cascades any orphans. The P
+   key triggers it while `CanEject`; a top-left "Eject: P" hint (in
+   `FlyShieldIndicator`) shows only in that state.
+
+3. **Build-scene power readout.** The player needs power feedback while
+   building, not just in flight. `BuildManager.ComputeCurrentNetPower(out
+   bool hasPowerCubes)` sums reactor `Output` − shield `Draw` across the
+   spawned cubes; `BuildToolbarController` shows a `Power: +N / −N` label in
+   the bottom-left stat block (green ≥ 0, red < 0), hidden when the
+   construct has no power cubes.

@@ -4,10 +4,10 @@ namespace CubeFly.Core
 {
     // Assigns the runtime-generated solid-cylinder mesh to this
     // GameObject's MeshFilter (and MeshCollider, if present) on Awake,
-    // only when the slot is empty. Mirror of CylinderMeshAuthor for the
-    // Reactor cube's solid cylinder.
+    // only when the slot is empty. Shared by the Reactor cube and the
+    // Laser barrel (both solid cylinders). Mirror of CylinderMeshAuthor.
     [RequireComponent(typeof(MeshFilter))]
-    public class ReactorMeshAuthor : MonoBehaviour
+    public class SolidCylinderMeshAuthor : MonoBehaviour
     {
         void Awake()
         {

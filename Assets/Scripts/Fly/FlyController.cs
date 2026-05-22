@@ -68,10 +68,13 @@ namespace CubeFly.Fly
         readonly List<ThrusterBehavior> _spawnedThrusters = new();
 
         // Collected during BuildConstruct — every ReactorBehavior /
-        // ShieldBehavior on the spawned construct, handed to the
-        // ConstructEnergySystem in Start (same pattern as _spawnedWeapons).
+        // ShieldBehavior / LaserWeapon on the spawned construct, handed to
+        // the ConstructEnergySystem in Start (same pattern as
+        // _spawnedWeapons). Lasers are also weapons (in _spawnedWeapons);
+        // the separate list lets the energy system include them in Eject.
         readonly List<ReactorBehavior> _spawnedReactors = new();
         readonly List<ShieldBehavior> _spawnedShields = new();
+        readonly List<LaserWeapon> _spawnedLasers = new();
 
         // The construct-wide power/shield system (sibling on CubeConstruct).
         // Resolved in Start; RecomputePower() is called after each cube
@@ -306,7 +309,7 @@ namespace CubeFly.Fly
             // reactor/shield cubes.
             _energySystem = construct.GetComponent<ConstructEnergySystem>();
             if (_energySystem == null) _energySystem = construct.gameObject.AddComponent<ConstructEnergySystem>();
-            _energySystem.RegisterCubes(_spawnedReactors, _spawnedShields);
+            _energySystem.RegisterCubes(_spawnedReactors, _spawnedShields, _spawnedLasers);
 
             // Hand the weapon list to the shooting controller so it can
             // group by ShapeDefinition for selection + dispatch.
@@ -457,6 +460,9 @@ namespace CubeFly.Fly
                     weapon.Construct = construct;
                     weapon.Shape = shape;
                     _spawnedWeapons.Add(weapon);
+                    // Lasers are also power consumers — track them so the
+                    // energy system's Eject can shed a reactor-less laser.
+                    if (weapon is LaserWeapon laser) _spawnedLasers.Add(laser);
                 }
 
                 // Collect any ThrusterBehavior on this placement — wire

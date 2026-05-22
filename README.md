@@ -16,14 +16,15 @@ The companion documents are:
 - **[`docs/weapon_shooting_spec.md`](docs/weapon_shooting_spec.md)** — deep dive on the Fly-mode shooting system (weapons, projectiles, crosshair).
 - **[`ROADMAP.md`](ROADMAP.md)** — what is shipped and what is planned next.
 - **[`docs/thruster_boost_spec.md`](docs/thruster_boost_spec.md)** / **[`docs/boost_overboost_tuning_spec.md`](docs/boost_overboost_tuning_spec.md)** — design specs for the thruster cube and its boost mechanic.
+- **[`docs/power_and_energy_spec.md`](docs/power_and_energy_spec.md)** — the reactor / shield / laser power system (production, shields, the energy laser, eject).
 
 ---
 
 ## What's In Here
 
-- **Shape × Material decoupled.** Two orthogonal axes: a `ShapeRegistry` (Cube, Slope, Pyramid weapon, Cylinder weapon, Thruster utility) and a `MaterialRegistry` (A / B / C / D). Each placement records both indices. Adding a new shape or a new armour material is a data-only change.
+- **Shape × Material decoupled.** Two orthogonal axes: a `ShapeRegistry` (Cube, Slope, Pyramid / Cylinder / Laser weapons, Thruster / Reactor / Shield utilities) and a `MaterialRegistry` (A / B / C / D). Each placement records both indices. Adding a new shape or a new armour material is a data-only change.
 - **Slope shape with face-validity.** Slopes only attach where they actually have a real surface — the cut-away faces refuse adjacency. Both shape and neighbour are checked, so a slope's hypotenuse can't pretend to be a square face.
-- **Weapon shapes.** Pyramid (machine gun, fires bullets) and Cylinder (rocket launcher, fires two-phase rockets). Weapon shapes carry their own coupled material; the regular material flyout is suppressed for them.
+- **Weapon shapes.** Pyramid (machine gun, fires bullets), Cylinder (rocket launcher, fires two-phase rockets), and Laser (continuous energy beam — see Power & Energy below). Weapon shapes carry their own coupled material; the regular material flyout is suppressed for them.
 - **90°-stepped per-placement rotation.** `R` rotates around Z, `T` around X. Each placement remembers its placed pose.
 - **Delete tool.** Non-allocating red `MaterialPropertyBlock` hover tint plus an automatic flood-fill cleanup of any cube disconnected from the alpha cube.
 - **Ship classes.** Allrounder / Tank / Scout, chosen from a dropdown in BuildScene and stored per save slot. Each sets the alpha cube's HP, the construct mass cap, and a flight movement multiplier (Allrounder 100 HP / 100 cap / ×1.0, Tank 200 / 180 / ×0.7, Scout 60 / 60 / ×1.4).
@@ -38,6 +39,8 @@ The companion documents are:
 - **HUD readouts.** Bottom-left of the Fly screen shows live `Speed` and `HP` (current / initial).
 - **Shooting (Fly mode).** LMB fires every weapon of the currently selected type. Digits 1–9 and mouse wheel cycle the active type. A screen-space crosshair projects `construct.forward * 100` so the on-screen reticle and the actual aim agree.
 - **Projectile hit registration.** Bullets and rockets do per-frame swept raycasts (not Unity triggers) so they don't tunnel through cubes at high speed. Self-construct hits are filtered. Damage routes through `CubeStats.TakeDamage` with the documented `effective = max(0, raw − armourValue)` formula.
+- **Power & Energy.** Reactor cubes produce power; Shield cubes draw it and add a single shared pool that absorbs damage before HP (projectile −10%, energy +10%, kinetic bypasses; overflow spills to HP; collapses when unpowered; regenerates after a lull). Two reactors power one shield. A `Power: +N / −N` readout shows the balance in both build and flight; an **Eject (P)** sheds reactor-less power cubes when they've become dead weight. Full design in `docs/power_and_energy_spec.md`.
+- **Laser weapon.** A continuous energy hitscan beam along the cube's barrel axis (drawn with a `LineRenderer`), with shared per-type **heat** (sustained fire overheats → an "Overheated!" lockout that cools down) and per-cube power draw — it needs a reactor to fire. A `FlyHeatBar` mirrors the boost bar on the right of the crosshair.
 - **Cube destruction & death animation.** When a cube's HP hits zero it detaches, disables its colliders, drifts outward at ~2 u/s for 2 s, then despawns. Player-construct cubes are removed from `GameData` at the same time so the mass budget and Hangar re-entry stay consistent.
 - **Crash damage.** `OnCollisionEnter` on the construct's Rigidbody applies kinetic damage scaled to the normal-component impact speed. Both sides of the collision take damage. Bypasses armour because armour mitigates penetration, not raw kinetic energy.
 - **End-of-run.** When the alpha cube (the construct's anchor) reaches 0 HP, a "Construct Destroyed" overlay shows and the run ends back at the main menu.
@@ -156,6 +159,7 @@ much mass!" message at the top of the screen.
 | **LMB (held)** | **Fire** every weapon of the active weapon type. Per-weapon reload throttles the rate. |
 | **Digits `1`–`9`** | Select weapon type by index in the bottom toolbar. |
 | **Mouse wheel** | Cycle weapon type (one notch = one cycle; edge-detected so a Windows ±120 notch and a small trackpad swipe behave the same). |
+| `P` | **Eject** — only when all reactors are destroyed but power-drawing cubes (shields / lasers) remain. Self-destructs them (dead weight without a reactor). An "Eject: P" hint shows top-left only in that state. |
 | `Esc` | Open the pause overlay. |
 | Top-right `Hangar` button | Switch back to BuildScene. |
 
@@ -188,30 +192,34 @@ Assets/
                   ShapeDefinition, ShapeRegistry,
                   MaterialDefinition, MaterialRegistry, SaveManager, PauseMenu, GameOverMenu,
                   PrimitiveMeshes, PrismMeshAuthor, PyramidMeshAuthor, CylinderMeshAuthor,
-                  ThrusterMeshAuthor, UIManager, UIStyle, PersistentHud, SceneSwitcher,
-                  HitContext, FileLogHandler, LogBootstrapper
+                  ThrusterMeshAuthor, SolidCylinderMeshAuthor, UIManager, UIStyle,
+                  PersistentHud, SceneSwitcher, HitContext, FileLogHandler, LogBootstrapper
   Scripts/Build/  BuildManager, BuildHud, CubePreview, BuildCamera, BuildToolbarController,
                   CategoryFlyout, BuildShipClassController,
                   BuildIndicatorController, PlacedCubeData
   Scripts/Fly/    FlyController, FlyCamera, FlyHud, FlyCrosshair,
                   FlyShootingController, FlyWeaponToolbarController,
                   FlyCrashHandler, FlySpeedIndicator, FlyHpIndicator, FlyBoostBar,
+                  FlyShieldIndicator, FlyHeatBar,
+                  ConstructEnergySystem, ReactorBehavior, ShieldBehavior,
                   CubeDamage, ProjectileHit,
-                  WeaponBehavior, ThrusterBehavior, PyramidWeapon, CylinderWeapon,
+                  WeaponBehavior, ThrusterBehavior, PyramidWeapon, CylinderWeapon, LaserWeapon,
                   Bullet, Rocket
   Scripts/HangarSelect/ HangarSelectController
   Scripts/MainMenu/     MainMenuController
   Shapes/         ShapeRegistry + ShapeCube, ShapeSlope,
-                  ShapeWeaponPyramid, ShapeWeaponCylinder, ShapeUtilityThruster
+                  ShapeWeaponPyramid, ShapeWeaponCylinder, ShapeWeaponLaser,
+                  ShapeUtilityThruster, ShapeUtilityReactor, ShapeUtilityShield
   Materials/Defs/ MaterialRegistry + MaterialA/B/C/D,
-                  PyramidWeaponMatDef, CylinderWeaponMatDef, ThrusterMatDef
+                  PyramidWeaponMatDef, CylinderWeaponMatDef, LaserMatDef,
+                  ThrusterMatDef, ReactorMatDef, ShieldMatDef
   Materials/      Per-prefab URP/Lit materials (AlphaCube, Placed*, Preview,
-                  Bullet, Rocket, weapon-shape, ThrusterMat, AlphaCubeIndicator,
-                  Ground, WorldTargetCube)
+                  Bullet, Rocket, weapon-shape, ThrusterMat, ReactorMat, ShieldMat,
+                  LaserMat, AlphaCubeIndicator, Ground, WorldTargetCube)
   PhysicMaterials/ GroundPhysMat, WorldTargetCubePhysMat (bounce / friction)
   Prefabs/        AlphaCube, PlacedCube[A–D], PlacedPrism, PlacedPyramid,
-                  PlacedCylinder, PlacedThruster, PreviewCube, AlphaCubeIndicator,
-                  Ground, WorldTargetCube
+                  PlacedCylinder, PlacedThruster, PlacedReactor, PlacedShield, PlacedLaser,
+                  PreviewCube, AlphaCubeIndicator, Ground, WorldTargetCube
   Prefabs/Projectiles/ Bullet, Rocket
   Input/          CubeFlyInputActions (.inputactions + hand-rolled C# wrapper)
   Settings/       URP render-pipeline assets

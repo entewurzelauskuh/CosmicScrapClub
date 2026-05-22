@@ -159,7 +159,7 @@ much mass!" message at the top of the screen.
 | **LMB (held)** | **Fire** every weapon of the active weapon type. Per-weapon reload throttles the rate. |
 | **Digits `1`–`9`** | Select weapon type by index in the bottom toolbar. |
 | **Mouse wheel** | Cycle weapon type (one notch = one cycle; edge-detected so a Windows ±120 notch and a small trackpad swipe behave the same). |
-| `P` | **Eject** — only when all reactors are destroyed but power-drawing cubes (shields / laser) remain. Self-destructs them (dead weight without a reactor). An "Eject: P" hint shows top-left only in that state. |
+| `P` | **Eject** — only when all reactors are destroyed but power-drawing cubes (shields / lasers) remain. Self-destructs them (dead weight without a reactor). An "Eject: P" hint shows top-left only in that state. |
 | `Esc` | Open the pause overlay. |
 | Top-right `Hangar` button | Switch back to BuildScene. |
 

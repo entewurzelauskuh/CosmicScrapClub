@@ -29,9 +29,11 @@ like the cylinder weapon and thruster. Stats are tunable; starter values:
 | **Laser** (`ShapeWeaponLaser`) | Weapon | 40 | 0 | 2 | **−5 draw** (while firing) | thin barrel (`SolidCylinder` scaled `(0.3,1,0.3)`) |
 
 Reactor + Laser share `SolidCylinderMeshAuthor` (assigns the runtime
-`SolidCylinder` mesh). Each cube's behaviour is a passive descriptor —
-`ReactorBehavior` (`Output`), `ShieldBehavior` (`Draw`, `Contribution`),
-`LaserWeapon` (`PowerDraw`, + the beam) — the `ThrusterBehavior` pattern.
+`SolidCylinder` mesh). The reactor and shield behaviours are passive
+descriptors — `ReactorBehavior` (`Output`) and `ShieldBehavior` (`Draw`,
+`Contribution`) — the `ThrusterBehavior` pattern. The laser is different:
+`LaserWeapon` is an active `WeaponBehavior` (it draws the beam and applies
+ticked damage) that also exposes a `PowerDraw` the energy system reads.
 
 Backward compatible: a construct with none of these has no power system and
 flies/builds exactly as before; old saves load unchanged (shapes are stored
@@ -67,9 +69,12 @@ up at all.
   higher-priority claim. A shield that's offline (unaffordable) draws
   nothing, so its budget frees up for the laser.
 
-This is the **consumer-priority cascade**: the shield is kept; the laser
-(weapon tier) is cut first when power is tight (reactor destroyed, or shield
-claiming the budget).
+This is the **consumer-priority cascade**: the shield has first claim, but
+all-or-nothing. When output covers the shield draw, the shield comes up and
+the laser runs on the remainder — so the laser is cut first if that remainder
+is too small. When output *can't* cover the shield, the shield stays offline
+(its pool collapses) and its whole budget frees up, so the laser can still
+fire on the available output.
 
 ### Shield mechanics
 
@@ -92,7 +97,7 @@ it resolves the struck cube's `ConstructEnergySystem` (via
   last projectile/energy hit** to any construct cube. No regen while
   unpowered.
 
-So the shield shreds-resistant against projectiles, vulnerable to the laser,
+So the shield is resistant against projectiles, vulnerable to the laser,
 and useless against crashes — a clear counter/weakness profile.
 
 ### Eject (P)

@@ -474,10 +474,12 @@ section is a summary; the detailed design lives in
   (no battery): `NetPower = Σ reactor output − Σ shield draw`. `FlyController`
   registers the reactor / shield / laser cubes on `Start` and recomputes the
   balance after every cube death.
-- **Consumer-priority cascade.** The shield is the high-priority consumer
-  and is kept; the **laser is cut first** when power is tight (a reactor
-  destroyed, or the shield claiming the budget). A laser needs spare power
-  after the shield's claim, so **a laser can't fire without a reactor**.
+- **Consumer-priority cascade.** The shield has first claim on power, but
+  all-or-nothing: when output covers its draw the shield comes up and the
+  **laser runs on the remainder** (cut first if that's too small); when output
+  can't cover it, the shield stays offline and frees its budget for the laser.
+  Either way a laser needs spare power, so **a laser can't fire without a
+  reactor**.
 - **Power readout.** `Power: +N / −N` (green when ≥ 0, red when negative)
   shows the net balance in **both** BuildScene and FlyScene, so power is
   visible while building, not just in flight.

@@ -43,7 +43,7 @@ This document is the implementation map.
 │        │ │  metadata; routes │ │ • CubePreview (composite) │ │ • CubeConstruct GO    │
 │        │ │  with ActiveSlot  │ │ • BuildCamera             │ │   (Rigidbody +        │
 │        │ │  armed)           │ │ • BuildIndicator-         │ │    FlyCrashHandler +  │
-│        │ │                   │ │     Controller            │ │    ConstructEnergy-   │
+│        │ │                   │ │     Controller            │ │    ConstructEnergy    │
 │        │ │                   │ │ • BuildHUD GameObject:    │ │    System)            │
 │        │ │                   │ │   - BuildHud canvas       │ │ • Weapon instances:   │
 │        │ │                   │ │   - BuildToolbar-         │ │   PyramidWeapon /     │

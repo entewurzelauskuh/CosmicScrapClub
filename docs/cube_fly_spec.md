@@ -22,6 +22,9 @@ This document is the single canonical spec. Companion docs:
 - `thruster_boost_spec.md` — deep dive on the thruster cube and the
   flight boost mechanic.
 - `boost_overboost_tuning_spec.md` — the boost / overboost tuning pass.
+- `power_and_energy_spec.md` — deep dive on the power / shield / energy-weapon
+  system: the `ConstructEnergySystem`, reactor / shield / laser cubes, the
+  shared shield pool, and Eject.
 
 ---
 
@@ -206,7 +209,10 @@ public class ShapeDefinition : ScriptableObject
 | `ShapeSlope.asset`       | Armour   | bottom (-Y), back (-Z), left (-X), right (+X) | Front (+Z) and top (+Y) are cut away by the hypotenuse. |
 | `ShapeWeaponPyramid.asset` | Weapon | bottom (-Y) only                              | Apex up; coupled to `PyramidWeaponMatDef`.             |
 | `ShapeWeaponCylinder.asset` | Weapon | bottom (-Y) only                            | Hollow tube axis +Y; coupled to `CylinderWeaponMatDef`. |
+| `ShapeWeaponLaser.asset`   | Weapon   | bottom (-Y) only                              | Thin barrel (solid cylinder); energy beam. Coupled to `LaserMatDef`. |
 | `ShapeUtilityThruster.asset` | Utility | bottom (-Y) only                           | Cone geometry; coupled to `ThrusterMatDef`.            |
+| `ShapeUtilityReactor.asset` | Utility | bottom (-Y) only                            | Solid cylinder; produces power. Coupled to `ReactorMatDef`. |
+| `ShapeUtilityShield.asset` | Utility  | bottom (-Y) only                              | Half-size cube; draws power, feeds the shield pool. Coupled to `ShieldMatDef`. |
 
 **Symmetric face validity.** A placement at `cell` with `(shape,
 rotation)` is valid only when, for at least one face-neighbour:
@@ -250,7 +256,8 @@ MaterialB, MaterialC, MaterialD — collected into `MaterialRegistry`.
 The order is what `Placement.MaterialIndex` references.
 
 **Coupled materials**: `PyramidWeaponMatDef`, `CylinderWeaponMatDef`,
-and `ThrusterMatDef`. These are not in `MaterialRegistry`; each is
+`LaserMatDef`, `ThrusterMatDef`, `ReactorMatDef`, and `ShieldMatDef`.
+These are not in `MaterialRegistry`; each is
 referenced by its parent `ShapeDefinition.coupledMaterial` field
 (formerly `weaponMaterial`). `ShapeDefinition.ResolveMaterial(index,
 registry)` returns the coupled material for both Weapon and Utility
@@ -377,25 +384,46 @@ lives in `thruster_boost_spec.md` and `boost_overboost_tuning_spec.md`.
 
 ## Combat
 
-Three damage sources are wired today: bullets from `PyramidWeapon`,
-rockets from `CylinderWeapon`, and kinetic crashes from
-`FlyCrashHandler`. All three build a `CubeFly.Core.HitContext` and
-route it through a single `CubeFly.Fly.CubeDamage.ApplyAndLog(in HitContext)`
-pipeline that handles the damage math, logging, and (on fatal hits) the
-death animation and cleanup. `HitContext` carries the target cube, raw
-amount, `DamageType` (`Projectile` / `Energy` / `Kinetic`), `HitFlags`
-(`None` / `BypassArmour`), surface point + normal, `OutwardOrigin` (the
-death-drift bias point `CubeDeath` reads), source-construct transform,
-log tag, and a reserved `Impulse` field for future knockback. The
-struct is the integration seam for the phase-2 shield system — shields
-will read `Type` to apply their projectile/energy modifiers and
-`Point` / `Normal` for splash falloff.
+Four damage sources are wired today: bullets from `PyramidWeapon`,
+rockets from `CylinderWeapon`, the continuous energy beam from
+`LaserWeapon`, and kinetic crashes from `FlyCrashHandler`. All four build
+a `CubeFly.Core.HitContext` and route it through a single
+`CubeFly.Fly.CubeDamage.ApplyAndLog(in HitContext)` pipeline that handles
+the damage math, logging, and (on fatal hits) the death animation and
+cleanup. `HitContext` carries the target cube, raw amount, `DamageType`
+(`Projectile` / `Energy` / `Kinetic`), `HitFlags` (`None` /
+`BypassArmour`), surface point + normal, `OutwardOrigin` (the death-drift
+bias point `CubeDeath` reads), source-construct transform, log tag, and a
+reserved `Impulse` field for future knockback. The `DamageType` split now
+drives the shield system — `ApplyAndLog` reads `Type` to apply the shield's
+projectile / energy modifiers (and to decide that kinetic bypasses the
+shield entirely), and `Point` / `Normal` remain available for future
+splash falloff.
 
 ### Damage routing
 
-- **Projectile damage** (bullets, rockets; energy weapons land in phase 2) — `HitContext` with `Type = DamageType.Projectile` or `Energy`, `Flags = HitFlags.None`. `CubeDamage.ApplyAndLog` routes to `CubeStats.TakeDamage(raw)`. Armour absorbs sub-armour hits: `effective = max(0, raw − armourValue)`. A 1-damage bullet against an AV-10 cube does nothing; a 20-damage rocket against the same cube does 10.
-- **Kinetic damage** (crashes; future explosion concussion, melee, etc.) — `HitContext` with `Type = DamageType.Kinetic`, `Flags = HitFlags.BypassArmour`. `CubeDamage.ApplyAndLog` routes to `CubeStats.TakeRawDamage(raw)`. Skips armour entirely. The rationale is that armour mitigates penetration, not raw kinetic energy: a steel plate stops a bullet, not a 35 u/s collision into a wall.
-- The phase-2 **shield system** layers on top of the same `DamageType` enum: shields take −10% from `Projectile` and +10% from `Energy`. No code change to the call sites — shields read `HitContext.Type` directly.
+- **Projectile damage** (bullets, rockets) — `HitContext` with `Type = DamageType.Projectile`, `Flags = HitFlags.None`. `CubeDamage.ApplyAndLog` routes to `CubeStats.TakeDamage(raw)`. Armour absorbs sub-armour hits: `effective = max(0, raw − armourValue)`. A 1-damage bullet against an AV-10 cube does nothing; a 20-damage rocket against the same cube does 10.
+- **Energy damage** (the laser beam) — `HitContext` with `Type = DamageType.Energy`, `Flags = HitFlags.None`. Routes through the same armour-aware `CubeStats.TakeDamage(raw)` path, so per-tick raw must still exceed the cube's AV to penetrate. Energy is the laser's signature: shields take it at ×1.1 (see below), making the beam the natural shield-breaker.
+- **Kinetic damage** (crashes; future explosion concussion, melee, etc.) — `HitContext` with `Type = DamageType.Kinetic`, `Flags = HitFlags.BypassArmour`. `CubeDamage.ApplyAndLog` routes to `CubeStats.TakeRawDamage(raw)`. Skips armour entirely, **and bypasses the shield entirely** — a crash always goes straight to HP. The rationale is that armour mitigates penetration, not raw kinetic energy, and a shield stops a beam or a bullet, not a physical ram: a steel plate stops a bullet, not a 35 u/s collision into a wall.
+
+### Shield system
+
+A construct can carry **shield cubes** that pool into one shared barrier
+covering the whole construct. `CubeDamage.ApplyAndLog` resolves the struck
+cube's `ConstructEnergySystem` (via `GetComponentInParent`) and runs the
+hit through the pool **before** HP. See `power_and_energy_spec.md` for the
+full model; the gameplay-facing behaviour:
+
+- **Absorb before HP.** A `Projectile` / `Energy` hit is intercepted by the shield pool first; HP is only touched by the overflow.
+- **Type modifiers** (applied while the shield absorbs): `Projectile ×0.9` (shields resist projectiles), `Energy ×1.1` (shields are weak to the laser).
+- **Kinetic bypasses entirely** — kinetic / crash damage never touches the pool or its regen timer; it always goes straight to HP.
+- **Overflow to HP.** A hit larger than the remaining pool spills the (already type-scaled) overflow through to the cube's HP via the normal armour-aware path.
+- **Collapse when unpowered.** The moment the construct goes power-negative (a reactor lost, or shields over-built), the pool drops to 0 immediately.
+- **Regen** toward `ShieldMax` at 20 pts/sec, starting 5 s after the last projectile / energy hit to any construct cube. No regen while unpowered.
+
+So the shield is projectile-resistant, laser-vulnerable, and useless
+against crashes — a clear counter / weakness profile. Shields draw power
+and need reactors to stay up; the power model is in *Power & Energy* below.
 
 ### Hit registration
 
@@ -410,7 +438,7 @@ will read `Type` to apply their projectile/energy modifiers and
 - **Damage formula**: `clamp(normalImpactSpeed × 0.3, 1, 10)`. Below 3 u/s, no damage at all (landing gently doesn't punish). At `FlyController`'s `maxSpeed` of 37.5 u/s the formula caps at 10. Routes through `CubeDamage.ApplyAndLog` with a `HitContext` carrying `DamageType.Kinetic` + `HitFlags.BypassArmour`.
 - **Both sides take damage**: the construct's contact-point cube (`ContactPoint.thisCollider`) AND the other collider if it carries `CubeStats`. So crashing into a `WorldTargetCube` damages both the ship and the target.
 - **Entry-only** by nature: `OnCollisionEnter` fires once per contact, so sliding / scraping along a surface registers one damage event, not one per frame.
-- Crash damage is **kinetic** — `HitFlags.BypassArmour` — so armour doesn't mitigate it (a steel plate stops a bullet, not a wall).
+- Crash damage is **kinetic** — `HitFlags.BypassArmour` — so armour doesn't mitigate it (a steel plate stops a bullet, not a wall), and it **bypasses the shield** too: a ram always lands on HP.
 
 ### Cube death
 
@@ -423,6 +451,41 @@ will read `Type` to apply their projectile/energy modifiers and
 ### Disconnected sub-pieces
 
 When a structural cube is destroyed in flight, child cubes that should logically detach with it stay attached to the construct. The Hangar's existing flood-fill cleanup is BuildScene-only — it doesn't run in Fly. This is a deliberate v1 simplification; a Fly-mode flood-fill is in the **Later** roadmap section.
+
+---
+
+## Power & Energy
+
+A construct-wide power economy ties together three new cube types. This
+section is a summary; the detailed design lives in
+`power_and_energy_spec.md`.
+
+- **Reactor cube** — `ShapeUtilityReactor`, a `Utility` shape (solid
+  cylinder, attaches by its `-Y` face, coupled to `ReactorMatDef`).
+  Produces **+10 power** output.
+- **Shield cube** — `ShapeUtilityShield`, a `Utility` shape (half-size
+  cube, coupled to `ShieldMatDef`). Draws **20 power** and adds **+50** to
+  the shared shield pool. So **two reactors power one shield**.
+- **Laser cube** — `ShapeWeaponLaser`, a `Weapon` shape (thin barrel,
+  coupled to `LaserMatDef`); the construct's energy weapon. Draws **5
+  power** while firing — see *Shooting* / `weapon_shooting_spec.md`.
+- **`ConstructEnergySystem`** — one per construct, on `CubeConstruct`
+  (sibling to `FlyController`). Owns an instantaneous net-rate power balance
+  (no battery): `NetPower = Σ reactor output − Σ shield draw`. `FlyController`
+  registers the reactor / shield / laser cubes on `Start` and recomputes the
+  balance after every cube death.
+- **Consumer-priority cascade.** The shield is the high-priority consumer
+  and is kept; the **laser is cut first** when power is tight (a reactor
+  destroyed, or the shield claiming the budget). A laser needs spare power
+  after the shield's claim, so **a laser can't fire without a reactor**.
+- **Power readout.** `Power: +N / −N` (green when ≥ 0, red when negative)
+  shows the net balance in **both** BuildScene and FlyScene, so power is
+  visible while building, not just in flight.
+- **Eject (P).** When all reactors are gone but power-drawing cubes
+  (shields and/or lasers) remain, those cubes are dead weight that can never
+  function again. A top-left **"Eject: P"** hint appears; pressing **P**
+  self-destructs every alive shield + laser, after which `FlyController`
+  recomputes mass + power and cascades any orphans.
 
 ---
 
@@ -473,9 +536,10 @@ Build-scene UI overlays (built at runtime by `BuildToolbarController`):
 - **Middle-left** — the `BuildShipClassController` "Class" dropdown.
 - **Top-left** — `Rotate: R/T` hint label.
 - **Top-centre** — fading red floating message slot (used for "Too much mass!").
-- **Bottom-left** — two stat readouts:
+- **Bottom-left** — stat readouts:
   - `Mass: X / cap` (live, recomputed on `ConstructChanged`; the denominator is the active ship class's mass cap).
   - `HP: Y` (sum of all placed cubes' health, including alpha).
+  - `Power: +N / −N` (green when ≥ 0, red when negative; hidden when the construct has no power cubes) — `BuildManager.ComputeCurrentNetPower` sums reactor output − shield draw across the placed cubes, so power balance is visible while building. See *Power & Energy*.
 
 Tools:
 
@@ -495,12 +559,12 @@ Autosave (see *Save / Load*) flushes 0.25 s after the last
 
 Scene contents:
 
-- `CubeConstruct` GameObject — the construct's pivot, at `(0, 10, 0)`. Carries a non-kinematic `Rigidbody` (the flight body) and the `FlyCrashHandler` component.
+- `CubeConstruct` GameObject — the construct's pivot, at `(0, 10, 0)`. Carries a non-kinematic `Rigidbody` (the flight body), the `FlyCrashHandler` component, and the `ConstructEnergySystem` (the power balance + shared shield pool; sibling to `FlyController`, registered on `Start` — see *Power & Energy*).
 - `FlyController` rebuilds the construct on `Start`, instantiating one `alphaCubePrefab` at the origin plus one shape-prefab per `Placement` in `GameData`. `MaterialDefinition.ApplyTo` is invoked per placement. Any spawned `WeaponBehavior` is collected for the shooting controller. `FlyController` shares its GameObject with `FlyShootingController`.
 - `Main Camera` with `FlyCamera`.
 - `FlyShootingController` — owns the per-frame fire / weapon-selection dispatch.
 - `FlyCrashHandler` — `OnCollisionEnter`-based crash damage on the construct's Rigidbody. See **Combat** above.
-- `FlyHUD` GameObject — carries the `FlyHud` component (the FlyScene-attached shared UI canvas at `sortingOrder 100`) and also hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom weapon toolbar with reload bars), `FlySpeedIndicator` (bottom-left `Speed: NN.N u/s`), `FlyHpIndicator` (bottom-left `HP: current / initial`), and `FlyBoostBar` (Boost meter bar left of the crosshair, with a critical-zone red throb and an "Overboosted!" flash). Every HUD script parents its UI tree under `FlyHud.Instance.Root`.
+- `FlyHUD` GameObject — carries the `FlyHud` component (the FlyScene-attached shared UI canvas at `sortingOrder 100`) and also hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom weapon toolbar with reload bars), `FlySpeedIndicator` (bottom-left `Speed: NN.N u/s`), `FlyHpIndicator` (bottom-left `HP: current / initial`), `FlyBoostBar` (Boost meter bar left of the crosshair, with a critical-zone red throb and an "Overboosted!" flash), `FlyShieldIndicator` (bottom-left shield bar + the `Power:` readout + the "Eject: P" hint), and `FlyHeatBar` (laser heat bar right of the crosshair, mirroring the boost bar). Every HUD script parents its UI tree under `FlyHud.Instance.Root`.
 - One `Ground` prefab instance at the origin (200×200 flat plane) and 20 `WorldTargetCube` prefab instances scattered in front of the spawn position — the basic flat-plain practice arena. Targets are tuned fragile (HP 30, AV 0) so the demo is actually destructible.
 - Directional Light.
 
@@ -532,8 +596,9 @@ Shooting (see `weapon_shooting_spec.md` for the full design):
 - LMB held → fire every weapon of the active type each frame. Per-weapon `reloadSeconds` throttles the actual rate.
 - Pyramid weapons: machine-gun style. Frontal pyramids (tip aligned with `construct.forward`, dot > 0.7 = cos 45°) fire at the shared crosshair world target; off-axis pyramids fire along their tip direction (`transform.up`).
 - Cylinder weapons: rocket launchers. Two-phase rockets — exit phase along the cylinder's open-end direction for 0.5 units, then re-orient toward the crosshair point captured at fire-time and travel straight to it.
+- Laser weapons: a continuous **hitscan energy beam** along the fixed barrel axis (`transform.up`, **not** crosshair-tracked), drawn by a runtime `LineRenderer` from barrel to hit (or to max range, 100). Single-target; no projectile. Damage is applied in fixed ticks (~60 raw DPS) as `DamageType.Energy`. Lasers share a per-type **heat** resource (rises while firing, cools when released; at 100 it locks out with an "Overheated!" flash, then cools slower until it unlocks) and are **power-gated** — each laser draws 5 power and only fires if the `ConstructEnergySystem` has spare power after the shield's claim (so a laser needs a reactor). See `weapon_shooting_spec.md` and `power_and_energy_spec.md`.
 - Weapon-type selection: digits `1`–`9` set by index; mouse wheel cycles (edge-detected so a single notch = one cycle).
-- Reload bars in the weapon toolbar show per-type cooldown progress; all instances of a type share the first instance's cooldown reading (they fire together, so they stay synchronised).
+- Reload bars in the weapon toolbar show per-type cooldown progress; all instances of a type share the first instance's cooldown reading (they fire together, so they stay synchronised). The laser type's bar instead drains with shared heat (`1 − heat`), and the `FlyHeatBar` mirrors it right of the crosshair.
 
 ---
 
@@ -618,6 +683,9 @@ are URP/Lit:
 | `PlacedPrismMat`       | Opaque      | Default slope material (set at spawn by MaterialDefinition.ApplyTo). |
 | `PyramidWeaponMat`     | Opaque      | Pyramid weapon shape.                                                |
 | `CylinderWeaponMat`    | Opaque      | Cylinder weapon shape.                                               |
+| `LaserMat`             | Opaque      | Laser weapon shape (barrel).                                         |
+| `ReactorMat`           | Opaque      | Reactor cube.                                                        |
+| `ShieldMat`            | Opaque      | Shield cube.                                                         |
 | `BulletMat`            | Opaque      | Pyramid-weapon projectile.                                           |
 | `RocketMat`            | Opaque      | Cylinder-weapon projectile.                                          |
 | `PreviewCubeMat`       | Transparent | Preview-bounds ghost (red-tinted via MPB for invalid placements).   |

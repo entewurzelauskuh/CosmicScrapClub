@@ -100,6 +100,14 @@ namespace CubeFly.Core
         {
             EscConsumedThisFrame = false;
 
+            // If SettingsMenu owns ESC this frame (it's open, or just
+            // closed itself on this same ESC press), do nothing here.
+            // SettingsMenu runs at [DefaultExecutionOrder(-2000)], so
+            // its Update has already run by the time we reach this.
+            if (SettingsMenu.Instance != null &&
+                (SettingsMenu.Instance.IsOpen || SettingsMenu.Instance.EscConsumedThisFrame))
+                return;
+
             Keyboard kb = Keyboard.current;
             if (kb == null) return;
             if (!kb.escapeKey.wasPressedThisFrame) return;
@@ -172,6 +180,17 @@ namespace CubeFly.Core
             SceneManager.LoadScene(MainMenuSceneName);
         }
 
+        void OnSettingsClicked()
+        {
+            // Navigate-to flow. Hide the pause panel WITHOUT closing
+            // PauseMenu (IsOpen stays true, Time.timeScale stays 0).
+            // SettingsMenu.Show() takes over; on its close it calls
+            // PauseMenu.Instance.ShowUI() to restore the pause panel.
+            HideUI();
+            Debug.unityLogger.Log(TAG, "Settings button — opening SettingsMenu.");
+            SettingsMenu.Instance.Show();
+        }
+
         void OnExitClicked()
         {
             Time.timeScale = 1f;
@@ -242,10 +261,12 @@ namespace CubeFly.Core
             // Buttons stacked below the title. Same dimensions as the
             // MainMenu buttons to keep the visual language consistent.
             // Hangar is created first (top of the stack) but is only
-            // visible in FlyScene — see OnSceneLoaded.
-            _hangarButton = CreateButton(root, "Hangar",          new Vector2(0f, 100f),  OnHangarClicked);
-                            CreateButton(root, "Menu",            new Vector2(0f, 0f),    OnMenuClicked);
-                            CreateButton(root, "Back to Desktop", new Vector2(0f, -100f), OnExitClicked);
+            // visible in FlyScene — see OnSceneLoaded. Four-button
+            // restack: 100 px gap between each button, centred around 0.
+            _hangarButton = CreateButton(root, "Hangar",          new Vector2(0f,  150f), OnHangarClicked);
+                            CreateButton(root, "Menu",            new Vector2(0f,   50f), OnMenuClicked);
+                            CreateButton(root, "Settings",        new Vector2(0f,  -50f), OnSettingsClicked);
+                            CreateButton(root, "Back to Desktop", new Vector2(0f, -150f), OnExitClicked);
         }
 
         static Button CreateButton(RectTransform parent, string text,

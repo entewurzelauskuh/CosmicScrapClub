@@ -232,6 +232,15 @@ namespace CubeFly.Core
                 RectTransform tabRT = (RectTransform)tabButton.transform;
                 tabRT.anchorMin = tabRT.anchorMax = tabRT.pivot = new Vector2(0f, 1f);
                 tabRT.anchoredPosition = new Vector2(0f, -i * 70f);
+
+                // Disable the default ColorTint transition so SelectTab's
+                // direct Image.color assignment isn't overwritten by the
+                // Selectable's state machine on hover/click. The active /
+                // inactive sidebar tint is the only state we care about
+                // for tab buttons; hover feedback is sacrificed for a
+                // reliable selected-state indicator.
+                tabButton.transition = Selectable.Transition.None;
+
                 tabButton.onClick.AddListener(() => SelectTab(captured));
                 _tabButtons[i] = tabButton;
             }

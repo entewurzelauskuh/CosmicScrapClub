@@ -45,7 +45,13 @@ Engine trails, muzzle flashes, projectile trails, explosion / death particles, h
 
 ### 2. Settings menu
 
-Functional — volume, FOV, mouse sensitivity, key rebinding. The Main Menu's `Settings` button currently logs and does nothing; this fills it in.
+A tabbed settings UI, reachable from **both** the Main Menu's `Settings` button (currently logs and does nothing) and the ESC pause overlay (which gains a new `Settings` button alongside `Menu` / `Back to Desktop`) — same UI from two entry points.
+
+Six tabs scaffolded as **placeholders** — the scaffolding is the deliverable; real controls fill in tab by tab later, as each becomes relevant:
+
+- **General** · **Display** · **Graphics** · **Audio** · **Controls** · **Gameplay**
+
+A seventh **Debug** tab is added during the VFX pass (item 1 above): a per-effect on/off toggle for every VFX item in `docs/vfx_pass_ideas.md`, with a hover-over description sourced from that file's one-liner per item (shortened for the tooltip where needed; the ideas file remains the source of truth and is not shortened). Lets the player disable individual effects without an Inspector trip and gives us a single in-game A/B testbed during VFX development.
 
 ### 3. Docs sync — phase 3 close-out
 

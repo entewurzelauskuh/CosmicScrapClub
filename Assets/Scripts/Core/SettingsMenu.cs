@@ -53,7 +53,7 @@ namespace CubeFly.Core
         // means appending here + adding a content panel in BuildUI.
         static readonly string[] TabNames = new[]
         {
-            "General", "Display", "Graphics", "Audio", "Controls", "Gameplay"
+            "General", "Display", "Graphics", "Audio", "Controls", "Gameplay", "Debug"
         };
 
         GameObject _root;
@@ -257,7 +257,7 @@ namespace CubeFly.Core
             contentRT.offsetMin = new Vector2(260f, 20f);            // 20 left + 220 sidebar + 20 gap
             contentRT.offsetMax = new Vector2(-20f, -100f);          // 20 right, 100 title clearance
 
-            // Six placeholder content panels — one per tab.
+            // Six placeholder content panels + the Debug tab.
             _tabPanels = new GameObject[TabNames.Length];
             for (int i = 0; i < TabNames.Length; i++)
             {
@@ -272,11 +272,18 @@ namespace CubeFly.Core
                 prt.offsetMin = Vector2.zero;
                 prt.offsetMax = Vector2.zero;
 
-                Text label = UIStyle.BuildLabel(prt, "Coming soon", fontSize: 32);
-                RectTransform lrt = (RectTransform)label.transform;
-                lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 0.5f);
-                lrt.sizeDelta = new Vector2(400f, 80f);
-                lrt.anchoredPosition = Vector2.zero;
+                if (TabNames[i] == "Debug")
+                {
+                    BuildDebugPanel(prt);
+                }
+                else
+                {
+                    Text label = UIStyle.BuildLabel(prt, "Coming soon", fontSize: 32);
+                    RectTransform lrt = (RectTransform)label.transform;
+                    lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 0.5f);
+                    lrt.sizeDelta = new Vector2(400f, 80f);
+                    lrt.anchoredPosition = Vector2.zero;
+                }
 
                 _tabPanels[i] = panel;
             }
@@ -300,6 +307,59 @@ namespace CubeFly.Core
                     }
                 }
             }
+        }
+
+        // ---------- Debug tab ----------
+
+        void BuildDebugPanel(RectTransform parent)
+        {
+            // Section title at top of the content panel.
+            Text title = UIStyle.BuildLabel(parent, "VFX Toggles", fontSize: 28,
+                style: FontStyle.Bold);
+            RectTransform titleRT = (RectTransform)title.transform;
+            titleRT.anchorMin = new Vector2(0f, 1f);
+            titleRT.anchorMax = new Vector2(1f, 1f);
+            titleRT.pivot = new Vector2(0.5f, 1f);
+            titleRT.sizeDelta = new Vector2(0f, 40f);
+            titleRT.anchoredPosition = new Vector2(0f, -20f);
+
+            // Five toggle rows. Each is anchored top-left of the content
+            // area, offset by 50 px per row below the title.
+            BuildDebugToggle(parent, "Bloom",
+                "Globally lifts emissive surfaces (laser beam, reactor glow, muzzle flash). High visual impact for low cost.",
+                0, () => VfxSettings.Bloom, v => VfxSettings.Bloom = v);
+            BuildDebugToggle(parent, "Vignette",
+                "Subtle dark edge that focuses attention on the centre of the screen.",
+                1, () => VfxSettings.Vignette, v => VfxSettings.Vignette = v);
+            BuildDebugToggle(parent, "Tonemapping (ACES)",
+                "Cinematic tone curve. Stops bright effects clipping to pure white.",
+                2, () => VfxSettings.Tonemapping, v => VfxSettings.Tonemapping = v);
+            BuildDebugToggle(parent, "Colour grading",
+                "Light contrast and saturation lift for cinematic colour response.",
+                3, () => VfxSettings.ColorAdjustments, v => VfxSettings.ColorAdjustments = v);
+            BuildDebugToggle(parent, "Chromatic aberration",
+                "Subtle colour-fringe at screen edges. Some find it muddies the picture — toggle off if so.",
+                4, () => VfxSettings.ChromaticAberration, v => VfxSettings.ChromaticAberration = v);
+        }
+
+        void BuildDebugToggle(RectTransform parent, string label, string tooltip,
+            int rowIndex, System.Func<bool> getter, System.Action<bool> setter)
+        {
+            Toggle toggle = UIStyle.BuildToggle(parent, label, new Vector2(600f, 40f), fontSize: 22);
+            RectTransform rt = (RectTransform)toggle.transform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            // -80 px clearance below the title, then 50 px per row.
+            rt.anchoredPosition = new Vector2(20f, -80f - rowIndex * 50f);
+
+            toggle.isOn = getter();
+            toggle.onValueChanged.AddListener(value => setter(value));
+
+            // Attach a TooltipTrigger to the toggle so hovering anywhere
+            // on the row reveals the description tooltip.
+            TooltipTrigger trigger = toggle.gameObject.AddComponent<TooltipTrigger>();
+            trigger.SetText(tooltip);
         }
     }
 }

@@ -260,12 +260,12 @@ namespace CubeFly.Core
             return button;
         }
 
-        void ShowUI()
+        internal void ShowUI()
         {
             if (_root != null) _root.SetActive(true);
         }
 
-        void HideUI()
+        internal void HideUI()
         {
             if (_root != null) _root.SetActive(false);
         }

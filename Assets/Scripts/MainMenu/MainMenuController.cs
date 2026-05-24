@@ -63,8 +63,8 @@ namespace CubeFly.MainMenu
 
         void OnSettings()
         {
-            // Placeholder: Settings panel is a future feature.
-            Debug.unityLogger.Log(TAG, "Settings selected — not implemented yet.");
+            Debug.unityLogger.Log(TAG, "Settings selected — opening Settings menu.");
+            SettingsMenu.Instance.Show();
         }
 
         void OnExit()

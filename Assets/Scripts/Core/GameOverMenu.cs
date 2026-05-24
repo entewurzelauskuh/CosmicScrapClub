@@ -121,7 +121,8 @@ namespace CubeFly.Core
             // raycastTarget true. Slightly darker / redder than PauseMenu's
             // dim to signal the different mood.
             GameObject panelGO = new GameObject("GameOverMenuPanel",
-                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
+                typeof(Canvas), typeof(GraphicRaycaster));
             panelGO.transform.SetParent(PersistentHud.Instance.Root, false);
             int uiLayer = LayerMask.NameToLayer("UI");
             if (uiLayer >= 0) panelGO.layer = uiLayer;
@@ -132,6 +133,15 @@ namespace CubeFly.Core
             root.anchorMax = Vector2.one;
             root.offsetMin = Vector2.zero;
             root.offsetMax = Vector2.zero;
+
+            // Canvas override: explicitly draw above PauseMenu and the
+            // SettingsMenu (sortingOrder 350) so the end-of-run overlay
+            // always wins, regardless of sibling order. Backs the
+            // docstring's "sortingOrder 400" claim with actual code
+            // (previously it relied on being the last sibling added).
+            Canvas canvasOverride = panelGO.GetComponent<Canvas>();
+            canvasOverride.overrideSorting = true;
+            canvasOverride.sortingOrder = 400;
 
             Image bgImage = panelGO.GetComponent<Image>();
             bgImage.color = new Color(0.15f, 0.04f, 0.04f, 0.85f);

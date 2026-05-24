@@ -108,7 +108,7 @@ through the slot picker.
 | Input | Action |
 |-------|--------|
 | `Hangar` | Open the slot picker (HangarSelect). |
-| `Settings` | Placeholder. |
+| `Settings` | Open the Settings menu (six placeholder tabs — General / Display / Graphics / Audio / Controls / Gameplay). |
 | `Exit` | Quit (or stop Editor play mode). |
 
 ### Hangar Slot Selector (HangarSelect)
@@ -173,7 +173,8 @@ and slower rotation for the same torque (`τ = Iα`). A
 
 | Input | Action |
 |-------|--------|
-| `Esc` | Open or close the overlay. (Closing acts as Resume — no dedicated Resume button.) |
+| `Esc` | Open or close the overlay. (Closing acts as Resume — no dedicated Resume button. If the Settings menu is open over the pause overlay, the first `Esc` closes Settings and re-shows the overlay; the second `Esc` closes the overlay.) |
+| `Settings` button | Open the Settings menu (six placeholder tabs). `Esc` from Settings returns here, then `Esc` again resumes the game. |
 | `Menu` button | Load Main Menu. |
 | `Back to Desktop` button | Quit (or stop Editor play mode). |
 

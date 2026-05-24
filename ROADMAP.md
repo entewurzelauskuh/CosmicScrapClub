@@ -43,6 +43,13 @@ In running order. Phase 1 (HitContext + HUD consolidation) and phase 2 (Power & 
 
 Engine trails, muzzle flashes, projectile trails, explosion / death particles, hit sparks — plus the deferred laser-beam glow and the shield dome. Cheap polish, big perceived-quality win. Mostly URP particles plus a couple of shader graphs — no new gameplay systems.
 
+Phasing per `docs/vfx_pass_ideas.md`:
+
+- **Phase 1 — Post-processing + Debug tab (in-flight).** Bloom, Vignette, Tonemapping (ACES), ColorAdjustments, ChromaticAberration as URP Volume overrides on the main game profile, plus the seventh `Debug` tab in Settings with per-effect toggles backed by PlayerPrefs. Establishes the Debug-tab pattern subsequent phases append to. Plus reusable Tooltip helper.
+- **Phase B — Small prefabs / new behaviours.** Engine plumes per thruster cube (with boost flare), muzzle flash + bullet tracer + impact spark, rocket exhaust + smoke trail, cube death enhancement (flash + spark + debris + trail), camera shake on crash / detonation.
+- **Phase C — Shaders + scripted sequences.** Laser beam glow + impact heat-distortion + scorch decal, shield dome (hex/fresnel) + hit ripple + collapse, rocket detonation multi-emitter, delete-tool dissolve, reactor inner glow + stress sparks.
+- **Phase D — Alpha-cube cinematic death.** Multi-stage explosion + time-scale dip + radial blur + debris field, before the existing "Construct Destroyed" overlay.
+
 ### 2. Settings menu
 
 A tabbed settings UI, reachable from **both** the Main Menu's `Settings` button (currently logs and does nothing) and the ESC pause overlay (which gains a new `Settings` button alongside `Menu` / `Back to Desktop`) — same UI from two entry points.

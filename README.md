@@ -33,6 +33,7 @@ The companion documents are:
 - **Red arrow indicator** that auto-reparents to the frontmost cube so you can tell which way the ship is pointed.
 - **Save / load to 3 slots.** The hangar slot picker shows cube count, mass, HP, and "last edited N ago" per slot. BuildScene autosaves to the armed slot on every construct change (debounced 0.25 s). Atomic on-disk writes via `File.Replace` with a rename-to-bak fallback for runtimes that don't support it.
 - **ESC pause overlay.** Self-bootstrapping DDOL singleton. ESC pauses anywhere in BuildScene / FlyScene; `Menu` returns to Main Menu, `Back to Desktop` quits.
+- **Post-processing + VFX Debug tab.** Five URP Volume overrides (Bloom, Vignette, Tonemapping ACES, ColorAdjustments, ChromaticAberration) on the main game profile, with a seventh `Debug` tab in the Settings menu letting the player toggle each effect individually. Toggles persist via `PlayerPrefs`. First slice of the broader VFX pass — engines / weapons / shields / destruction effects follow in later PRs (see `docs/vfx_pass_ideas.md`).
 - **Rigidbody-driven flight.** The construct is a non-kinematic `Rigidbody` with the cube colliders forming a compound body. 6-axis thrust via `AddForce`, pitch / yaw / roll via `AddTorque`. Mass affects flight through real physics — heavier ships accelerate and turn slower. The ship physically bounces off the ground and world cubes instead of phasing through them.
 - **Thruster cube & boost.** A placeable Utility cone thruster (the third toolbar category). Holding **Left Ctrl** while commanding thrust along a thrustered axis boosts that axis — ×1.3 acceleration and ×1.3 max-speed — draining a 0–100 Boost meter; emptying it triggers an overboost lockout until the meter recovers. A `FlyBoostBar` HUD bar (with a red critical-zone throb) shows the meter.
 - **Adaptive third-person camera.** RMB free-look with snap-back; the follow speed scales with the construct's angular velocity so the camera stays glued during sharp turns.
@@ -108,7 +109,7 @@ through the slot picker.
 | Input | Action |
 |-------|--------|
 | `Hangar` | Open the slot picker (HangarSelect). |
-| `Settings` | Open the Settings menu (six placeholder tabs — General / Display / Graphics / Audio / Controls / Gameplay). |
+| `Settings` | Open the Settings menu (six placeholder tabs — General / Display / Graphics / Audio / Controls / Gameplay — plus a `Debug` tab with per-effect VFX toggles). |
 | `Exit` | Quit (or stop Editor play mode). |
 
 ### Hangar Slot Selector (HangarSelect)
@@ -174,7 +175,7 @@ and slower rotation for the same torque (`τ = Iα`). A
 | Input | Action |
 |-------|--------|
 | `Esc` | Open or close the overlay. (Closing acts as Resume — no dedicated Resume button. If the Settings menu is open over the pause overlay, the first `Esc` closes Settings and re-shows the overlay; the second `Esc` closes the overlay.) |
-| `Settings` button | Open the Settings menu (six placeholder tabs). `Esc` from Settings returns here, then `Esc` again resumes the game. |
+| `Settings` button | Open the Settings menu (six placeholder tabs + `Debug` tab with VFX toggles). `Esc` from Settings returns here, then `Esc` again resumes the game. |
 | `Menu` button | Load Main Menu. |
 | `Back to Desktop` button | Quit (or stop Editor play mode). |
 

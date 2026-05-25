@@ -43,6 +43,12 @@ namespace CubeFly.EditorTools
         const string EnginePlumeMatPath    = MaterialsDir + "/EnginePlumeMat.mat";
         const string BoostShockMatPath     = MaterialsDir + "/BoostShockMat.mat";
         const string RcsPuffMatPath        = MaterialsDir + "/RcsPuffMat.mat";
+        const string MuzzleStarburstMatPath   = MaterialsDir + "/MuzzleStarburstMat.mat";
+        const string MuzzleDiscMatPath        = MaterialsDir + "/MuzzleDiscMat.mat";
+        const string BulletTracerMatPath      = MaterialsDir + "/BulletTracerMat.mat";
+        const string BulletImpactDustMatPath  = MaterialsDir + "/BulletImpactDustMat.mat";
+        const string RocketExhaustMatPath     = MaterialsDir + "/RocketExhaustMat.mat";
+        const string RocketSmokeTrailMatPath  = MaterialsDir + "/RocketSmokeTrailMat.mat";
         const string EnginePlumePrefabPath = PrefabsDir + "/EnginePlume.prefab";
         const string RcsPuffPrefabPath     = PrefabsDir + "/RcsPuff.prefab";
 
@@ -63,6 +69,19 @@ namespace CubeFly.EditorTools
                 BoostShockMatPath, glow, new Color(0.8f, 0.9f, 1f, 1f));
             Material rcsPuff = EnsureAdditiveParticleMaterial(
                 RcsPuffMatPath, glow, new Color(0.5f, 0.75f, 1f, 1f));
+
+            Material muzzleStarburst   = EnsureAdditiveParticleMaterial(
+                MuzzleStarburstMatPath,  starburst,    new Color(1f,    0.96f, 0.75f, 1f));
+            Material muzzleDisc        = EnsureAdditiveParticleMaterial(
+                MuzzleDiscMatPath,       glow,         new Color(1f,    0.70f, 0.30f, 1f));
+            Material bulletTracer      = EnsureAdditiveParticleMaterial(
+                BulletTracerMatPath,     tracerStripe, new Color(1f,    1f,    1f,    1f));
+            Material bulletImpactDust  = EnsureAlphaBlendedParticleMaterial(
+                BulletImpactDustMatPath, glow,         new Color(0.92f, 0.82f, 0.60f, 1f));
+            Material rocketExhaust     = EnsureAdditiveParticleMaterial(
+                RocketExhaustMatPath,    glow,         new Color(1f,    0.70f, 0.30f, 1f));
+            Material rocketSmokeTrail  = EnsureAlphaBlendedParticleMaterial(
+                RocketSmokeTrailMatPath, glow,         new Color(0.92f, 0.95f, 1f,    1f));
 
             EnsureEnginePlumePrefab(enginePlume, boostShock);
             EnsureRcsPuffPrefab(rcsPuff);

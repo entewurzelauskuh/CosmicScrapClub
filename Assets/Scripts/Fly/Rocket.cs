@@ -1,3 +1,4 @@
+using CubeFly.Core;
 using UnityEngine;
 
 namespace CubeFly.Fly
@@ -89,6 +90,7 @@ namespace CubeFly.Fly
                     out RaycastHit hit))
             {
                 ProjectileHit.ApplyAndLog(hit, _damage, _firingConstruct, TAG);
+                ProjectileHit.SpawnImpactVfx(hit);
                 Destroy(gameObject);
                 return;
             }

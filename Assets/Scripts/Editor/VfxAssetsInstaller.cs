@@ -55,6 +55,8 @@ namespace CubeFly.EditorTools
         const string MuzzleFlashDiscPrefabPath      = PrefabsDir + "/MuzzleFlashDisc.prefab";
         const string BulletImpactSparkPrefabPath = PrefabsDir + "/BulletImpactSpark.prefab";
         const string BulletImpactDustPrefabPath  = PrefabsDir + "/BulletImpactDust.prefab";
+        const string RocketExhaustPlumePrefabPath = PrefabsDir + "/RocketExhaustPlume.prefab";
+        const string RocketSmokePuffPrefabPath    = PrefabsDir + "/RocketSmokePuff.prefab";
 
         [MenuItem(MenuPath)]
         public static void Apply()
@@ -93,6 +95,8 @@ namespace CubeFly.EditorTools
             EnsureMuzzleFlashDiscPrefab(muzzleDisc);
             EnsureBulletImpactSparkPrefab(muzzleStarburst);   // reuses MuzzleStarburstMat
             EnsureBulletImpactDustPrefab(bulletImpactDust);
+            EnsureRocketExhaustPlumePrefab(rocketExhaust);
+            EnsureRocketSmokePuffPrefab(rcsPuff);             // reuses RcsPuffMat from B-1
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -101,7 +105,8 @@ namespace CubeFly.EditorTools
                 "EnginePlumeMat, BoostShockMat, RcsPuffMat, MuzzleStarburstMat, MuzzleDiscMat, " +
                 "BulletTracerMat, BulletImpactDustMat, RocketExhaustMat, RocketSmokeTrailMat; " +
                 "EnginePlume.prefab, RcsPuff.prefab, MuzzleFlashStarburst.prefab, MuzzleFlashDisc.prefab, " +
-                "BulletImpactSpark.prefab, BulletImpactDust.prefab).");
+                "BulletImpactSpark.prefab, BulletImpactDust.prefab, " +
+                "RocketExhaustPlume.prefab, RocketSmokePuff.prefab).");
         }
 
         static void EnsureDir(string assetDir)
@@ -731,6 +736,138 @@ namespace CubeFly.EditorTools
                 renderer.sharedMaterial = dustMat;
 
                 PrefabUtility.SaveAsPrefabAsset(root, BulletImpactDustPrefabPath);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        // Rocket exhaust plume. Continuous looping ParticleSystem, warm
+        // yellow-orange HDR. Mirrors EnginePlume.prefab structure (Stretch
+        // billboard, cone shape, world simulation) minus the ShockDiamond
+        // child — no boost concept for rockets. Instantiated as a child
+        // of Rocket; Rocket.OnDestroy detaches + Stop(KeepParticles) so
+        // alive particles finish naturally.
+        static void EnsureRocketExhaustPlumePrefab(Material exhaustMat)
+        {
+            GameObject root = new GameObject("RocketExhaustPlume");
+            try
+            {
+                ParticleSystem ps = root.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+                var main = ps.main;
+                main.duration = 5f;
+                main.loop = true;
+                main.startLifetime = 0.18f;
+                main.startSpeed = 4f;
+                main.startSize = 0.15f;
+                main.startColor = new Color(1f, 0.70f, 0.30f, 1f) * 2.5f;
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.maxParticles = 60;
+                main.playOnAwake = true;
+                main.stopAction = ParticleSystemStopAction.Destroy;
+
+                var emission = ps.emission;
+                emission.enabled = true;
+                emission.rateOverTime = 35f;
+
+                var shape = ps.shape;
+                shape.enabled = true;
+                shape.shapeType = ParticleSystemShapeType.Cone;
+                shape.angle = 6f;
+                shape.radius = 0.04f;
+
+                var sz = ps.sizeOverLifetime;
+                sz.enabled = true;
+                AnimationCurve szCurve = new AnimationCurve(
+                    new Keyframe(0f, 0.6f), new Keyframe(0.4f, 1.0f), new Keyframe(1f, 0.3f));
+                sz.size = new ParticleSystem.MinMaxCurve(1f, szCurve);
+
+                var col = ps.colorOverLifetime;
+                col.enabled = true;
+                Gradient g = new Gradient();
+                g.SetKeys(
+                    new[]
+                    {
+                        new GradientColorKey(Color.white, 0f),
+                        new GradientColorKey(new Color(1f, 0.45f, 0.10f), 1f),
+                    },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.15f), new GradientAlphaKey(0f, 1f) });
+                col.color = new ParticleSystem.MinMaxGradient(g);
+
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Stretch;
+                renderer.lengthScale = 0f;
+                renderer.velocityScale = 1.2f;
+                renderer.sharedMaterial = exhaustMat;
+
+                PrefabUtility.SaveAsPrefabAsset(root, RocketExhaustPlumePrefabPath);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        // Rocket smoke puff. Continuous looping ParticleSystem of soft
+        // white discrete clouds. Reuses RcsPuffMat from B-1 (no new
+        // material). 10x growth over 1.5 s lifetime per user spec —
+        // start small (0.1), grow large (1.0), alpha-fade throughout.
+        static void EnsureRocketSmokePuffPrefab(Material puffMat)
+        {
+            GameObject root = new GameObject("RocketSmokePuff");
+            try
+            {
+                ParticleSystem ps = root.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+                var main = ps.main;
+                main.duration = 5f;
+                main.loop = true;
+                main.startLifetime = 1.5f;
+                main.startSpeed = 0.3f;
+                main.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.10f);
+                main.startColor = new Color(1f, 1f, 1f, 0.85f);
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.maxParticles = 80;
+                main.playOnAwake = true;
+                main.stopAction = ParticleSystemStopAction.Destroy;
+
+                var emission = ps.emission;
+                emission.enabled = true;
+                emission.rateOverTime = 15f;
+
+                var shape = ps.shape;
+                shape.enabled = true;
+                shape.shapeType = ParticleSystemShapeType.Cone;
+                shape.angle = 5f;
+                shape.radius = 0.06f;
+
+                var sz = ps.sizeOverLifetime;
+                sz.enabled = true;
+                AnimationCurve szCurve = new AnimationCurve(
+                    new Keyframe(0f, 0.1f), new Keyframe(1f, 1f));
+                sz.size = new ParticleSystem.MinMaxCurve(1f, szCurve);
+
+                var col = ps.colorOverLifetime;
+                col.enabled = true;
+                Gradient g = new Gradient();
+                g.SetKeys(
+                    new[]
+                    {
+                        new GradientColorKey(Color.white, 0f),
+                        new GradientColorKey(new Color(0.92f, 0.95f, 1f), 1f),
+                    },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.9f, 0.10f), new GradientAlphaKey(0f, 1f) });
+                col.color = new ParticleSystem.MinMaxGradient(g);
+
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sharedMaterial = puffMat;
+
+                PrefabUtility.SaveAsPrefabAsset(root, RocketSmokePuffPrefabPath);
             }
             finally
             {

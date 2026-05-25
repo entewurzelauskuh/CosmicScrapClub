@@ -1,8 +1,11 @@
-# VFX Pass — Ideas Backlog (draft, uncommitted)
+# VFX Pass — Ideas Backlog
 
-> **Status:** Scratch ideas list, not a spec. We will triage this into a real
-> design via the usual brainstorm → spec → plan → implement loop. The file is
-> kept around as raw input for that brainstorm. No commits yet.
+> **Status:** Tracked backlog. Committed alongside the VFX phase 1 spec / plan
+> (PR #47). Still triaged through the usual brainstorm → spec → plan →
+> implement loop for each subsequent phase; phase-by-phase progress is tracked
+> in `ROADMAP.md` Up Next #1. Tooltip text for the Settings → Debug tab is
+> sourced from this file's one-liners (shortened in the tooltip where needed;
+> this file is the source of truth and is not shortened).
 >
 > **Scope:** Graphics VFX only — SFX and music are explicitly deferred to a
 > later audio pass.
@@ -11,15 +14,19 @@
 
 ## Project context (what we have to build on)
 
-- **URP 17.3** is the active pipeline. Every scene already has a `Volume`
-  GameObject and three URP `VolumeProfile` assets exist
-  (`DefaultVolumeProfile`, `SampleSceneProfile`, `DesertVolumeProfile`) — but
-  they currently have **no overrides** configured. Bloom, vignette, chromatic
-  aberration, tonemapping, colour grading are essentially Inspector toggles
-  away from working.
-- **Zero `TrailRenderer` / `ParticleSystem` usage anywhere in
-  `Assets/Scripts/`.** The VFX pass is greenfield — nothing to migrate, every
-  particle/trail/decal/shader is a new addition.
+- **URP 17.3** is the active pipeline. The main game scenes (MainMenu /
+  HangarSelect / BuildScene / FlyScene) have **no per-scene `Volume`
+  GameObject**; they inherit URP's global default volume profile —
+  `Assets/Settings/DefaultVolumeProfile.asset`, referenced from
+  `UniversalRenderPipelineGlobalSettings` via `URPDefaultVolumeProfileSettings`.
+  `DesertSandbox.unity` is the only main-folder scene with its own scene Volume
+  (`DesertPostVolume` using `DesertVolumeProfile`). Phase 1 of the VFX pass
+  (PR #47) added tuned Bloom / Vignette / Tonemapping / ColorAdjustments /
+  ChromaticAberration overrides to `DefaultVolumeProfile`; subsequent phases
+  add more.
+- **Zero `TrailRenderer` / `ParticleSystem` usage in `Assets/Scripts/` before
+  Phase 1.** The pipeline / behaviours are greenfield — every particle / trail
+  / decal / shader added by Phase B onwards is a new addition.
 - The codebase already exposes clean hook surfaces for VFX to attach to:
   - `WeaponBehavior.TryFire(target)` / per-weapon `Fire(...)` → muzzle
     flashes, shell ejection.

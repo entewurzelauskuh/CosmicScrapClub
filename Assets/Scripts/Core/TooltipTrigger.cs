@@ -26,7 +26,10 @@ namespace CubeFly.Core
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            if (TooltipHud.Instance != null) TooltipHud.Instance.Hide();
+            // Side-effect-free check — don't lazy-spawn the hud just to
+            // call a no-op Hide(). The hud only exists if OnPointerEnter
+            // (or some other consumer) ever called Instance directly.
+            if (TooltipHud.HasInstance) TooltipHud.Instance.Hide();
         }
     }
 }

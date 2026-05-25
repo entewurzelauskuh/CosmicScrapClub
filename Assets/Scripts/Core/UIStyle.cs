@@ -164,6 +164,19 @@ namespace CubeFly.Core
 
             Toggle toggle = containerGO.GetComponent<Toggle>();
 
+            // Match the ColorBlock palette used by BuildLabeledButton /
+            // BuildDropdown so hover / press feedback is visually
+            // consistent across the Settings UI.
+            ColorBlock cb = toggle.colors;
+            cb.normalColor      = TintNormal;
+            cb.highlightedColor = TintHighlight;
+            cb.pressedColor     = TintPressed;
+            cb.selectedColor    = TintHighlight;
+            cb.disabledColor    = TintDisabled;
+            cb.colorMultiplier  = 1f;
+            cb.fadeDuration     = 0.1f;
+            toggle.colors = cb;
+
             // Background — the visible square box on the left.
             GameObject bgGO = new GameObject("Background",
                 typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));

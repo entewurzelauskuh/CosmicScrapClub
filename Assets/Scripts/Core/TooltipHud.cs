@@ -27,6 +27,11 @@ namespace CubeFly.Core
         static TooltipHud _instance;
         public static TooltipHud Instance => _instance != null ? _instance : CreateInstance();
 
+        // Side-effect-free existence check. Use this in early-exit paths
+        // (e.g. OnPointerExit) so consumers don't accidentally lazy-spawn
+        // the hud just to call a no-op Hide() on a never-shown tooltip.
+        public static bool HasInstance => _instance != null;
+
         const string TAG = "TooltipHud";
 
         GameObject _panel;

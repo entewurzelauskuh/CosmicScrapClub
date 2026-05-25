@@ -5,8 +5,8 @@ using UnityEngine.SceneManagement;
 
 namespace CubeFly.Core
 {
-    // DDOL singleton that applies VfxSettings to the active scene's
-    // URP Volume profile. Same shape as PauseMenu / GameOverMenu /
+    // DDOL singleton that applies VfxSettings to the URP volume profile
+    // affecting the active scene. Same shape as PauseMenu / GameOverMenu /
     // SettingsMenu: BeforeSceneLoad self-bootstrap, Instance property,
     // DontDestroyOnLoad.
     //
@@ -15,14 +15,22 @@ namespace CubeFly.Core
     //     VfxSettings.Changed, then Apply() once (handles the initial
     //     scene if it loaded before our Awake).
     //   • On SceneManager.sceneLoaded: Apply() to the newly-loaded
-    //     scene's Volume.
-    //   • On VfxSettings.Changed: Apply() to the active scene's
-    //     Volume (real-time A/B comparison).
+    //     scene.
+    //   • On VfxSettings.Changed: Apply() (real-time A/B comparison).
+    //
+    // Apply() resolves the profile in two steps:
+    //   1. A scene-attached Volume GameObject (custom maps like
+    //      DesertSandbox use this pattern).
+    //   2. URP's global default profile, accessed via
+    //      GraphicsSettings.GetRenderPipelineSettings<URPDefaultVolumeProfileSettings>().
+    //      The main game scenes (MainMenu / HangarSelect / BuildScene /
+    //      FlyScene) have NO scene Volume — they inherit URP's default
+    //      profile via UniversalRenderPipelineGlobalSettings.
     //
     // Apply() is idempotent and profile-agnostic. It probes for each
     // of the five Phase-A overrides via VolumeProfile.TryGet — missing
-    // overrides are silently skipped, so scenes without a Volume (or
-    // with a profile that doesn't have these overrides) don't throw.
+    // overrides are silently skipped, so scenes / profiles that don't
+    // have these overrides don't throw.
     //
     // Execution order is -1500 — between SettingsMenu (-2000) and
     // PauseMenu (-1000); keeps the persistent-UI tier ordering
@@ -74,9 +82,8 @@ namespace CubeFly.Core
 
         void Apply()
         {
-            Volume volume = FindFirstObjectByType<Volume>();
-            if (volume == null || volume.profile == null) return;
-            VolumeProfile profile = volume.profile;
+            VolumeProfile profile = ResolveActiveProfile();
+            if (profile == null) return;
 
             if (profile.TryGet<Bloom>(out var bloom))
                 bloom.active = VfxSettings.Bloom;
@@ -88,6 +95,21 @@ namespace CubeFly.Core
                 color.active = VfxSettings.ColorAdjustments;
             if (profile.TryGet<ChromaticAberration>(out var ca))
                 ca.active = VfxSettings.ChromaticAberration;
+        }
+
+        // Two-step resolution: scene Volume first (custom maps like
+        // DesertSandbox have their own), then URP's global default
+        // profile (used by MainMenu / HangarSelect / BuildScene /
+        // FlyScene which have no scene Volume).
+        static VolumeProfile ResolveActiveProfile()
+        {
+            Volume volume = FindFirstObjectByType<Volume>();
+            if (volume != null && volume.profile != null)
+                return volume.profile;
+
+            URPDefaultVolumeProfileSettings settings =
+                GraphicsSettings.GetRenderPipelineSettings<URPDefaultVolumeProfileSettings>();
+            return settings != null ? settings.volumeProfile : null;
         }
     }
 }

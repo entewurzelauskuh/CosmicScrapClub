@@ -17,6 +17,7 @@ The companion documents are:
 - **[`ROADMAP.md`](ROADMAP.md)** — what is shipped and what is planned next.
 - **[`docs/thruster_boost_spec.md`](docs/thruster_boost_spec.md)** / **[`docs/boost_overboost_tuning_spec.md`](docs/boost_overboost_tuning_spec.md)** — design specs for the thruster cube and its boost mechanic.
 - **[`docs/power_and_energy_spec.md`](docs/power_and_energy_spec.md)** — the reactor / shield / laser power system (production, shields, the energy laser, eject).
+- **[`docs/vfx_pass_ideas.md`](docs/vfx_pass_ideas.md)** — VFX backlog and triage; the authoritative source for what's planned across the VFX pass (post-processing, engines, weapons, destruction, HUD, shaders, cinematic). Hover-tooltip text for the Settings → Debug tab is sourced from this file.
 
 ---
 
@@ -90,12 +91,14 @@ cd "<repo-folder>"
 The build settings have `MainMenu` registered as the first scene
 (index 0), so pressing **Play** anywhere drops you into the menu.
 
-You can also press Play directly on `BuildScene` or `FlyScene` — four
-of the persistent UI scripts (`UIManager`, `PauseMenu`, `GameOverMenu`,
-`LogBootstrapper`) self-bootstrap via `RuntimeInitializeOnLoadMethod`
-before any scene loads, and the shared `PersistentHud` canvas is
-lazy-created on first `Instance` access by whichever of the four
-Awakes first. Direct-Play works regardless of the entry scene.
+You can also press Play directly on `BuildScene` or `FlyScene` — six
+of the persistent singletons (`UIManager`, `PauseMenu`, `GameOverMenu`,
+`SettingsMenu`, `LogBootstrapper`, `VfxApplier`) self-bootstrap via
+`RuntimeInitializeOnLoadMethod` before any scene loads, and the
+shared `PersistentHud` canvas is lazy-created on first `Instance`
+access by whichever of the five UI ones Awakes first (`VfxApplier`
+owns no UI and never touches `PersistentHud`). Direct-Play works
+regardless of the entry scene.
 BuildScene entered this way has no armed save slot
 (`GameData.ActiveSlot = -1`); autosave is disabled and a warning is
 logged. To exercise the save path, start from `MainMenu` and walk

@@ -48,6 +48,22 @@ namespace CubeFly.Fly
         Vector3 _localThrustAxis;
         bool _axisResolved;
 
+        // VFX-side state, pushed by FlyController each FixedUpdate
+        // (CurrentInputLevel = magnitude of the player's thrust input on
+        // this thruster's axis, 0 if the sign mismatches; IsBoosting =
+        // true when this thruster is contributing to an active boost).
+        // ThrusterVfx reads these in LateUpdate to drive its plume's
+        // emission rate / lifetime / colour. No effect on flight logic
+        // itself — purely a data hand-off for VFX.
+        float _currentInputLevel;
+        bool _isBoosting;
+
+        public float CurrentInputLevel => _currentInputLevel;
+        public bool  IsBoosting        => _isBoosting;
+
+        internal void SetInputLevel(float level) => _currentInputLevel = Mathf.Clamp01(level);
+        internal void SetBoosting(bool boosting) => _isBoosting = boosting;
+
         // Convert world-space thrust direction (-transform.up) into the
         // construct's local frame, then snap each component to the
         // nearest integer in {-1, 0, +1}. With 90°-stepped placements

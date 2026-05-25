@@ -311,9 +311,21 @@ namespace CubeFly.Core
 
         // ---------- Debug tab ----------
 
+        // Two-column column-major layout. Content area is ~1060 px wide
+        // (1340 frame - 260 sidebar+pad - 20 right pad); each column is
+        // 500 px wide with a 20 px gap, leaving 20 px margins on both
+        // sides. Stacks ~13 rows × 2 columns = ~26 toggles in ~660 px
+        // of vertical real estate before needing a scrollbar — covers
+        // the projected Phase 1+B+C+D Debug-tab backlog.
+        const float DebugColumnWidth   = 500f;
+        const float DebugColumnGap     = 20f;
+        const float DebugLeftMargin    = 20f;
+        const float DebugTitleClear    = 80f;
+        const float DebugRowHeight     = 50f;
+
         void BuildDebugPanel(RectTransform parent)
         {
-            // Section title at top of the content panel.
+            // Section title spans the full content width.
             Text title = UIStyle.BuildLabel(parent, "VFX Toggles", fontSize: 28,
                 style: FontStyle.Bold);
             RectTransform titleRT = (RectTransform)title.transform;
@@ -323,35 +335,61 @@ namespace CubeFly.Core
             titleRT.sizeDelta = new Vector2(0f, 40f);
             titleRT.anchoredPosition = new Vector2(0f, -20f);
 
-            // Five toggle rows. Each is anchored top-left of the content
-            // area, offset by 50 px per row below the title.
-            BuildDebugToggle(parent, "Bloom",
-                "Globally lifts emissive surfaces (laser beam, reactor glow, muzzle flash). High visual impact for low cost.",
-                0, () => VfxSettings.Bloom, v => VfxSettings.Bloom = v);
-            BuildDebugToggle(parent, "Vignette",
-                "Subtle dark edge that focuses attention on the centre of the screen.",
-                1, () => VfxSettings.Vignette, v => VfxSettings.Vignette = v);
-            BuildDebugToggle(parent, "Tonemapping (ACES)",
-                "Cinematic tone curve. Stops bright effects clipping to pure white.",
-                2, () => VfxSettings.Tonemapping, v => VfxSettings.Tonemapping = v);
-            BuildDebugToggle(parent, "Colour grading",
-                "Light contrast and saturation lift for cinematic colour response.",
-                3, () => VfxSettings.ColorAdjustments, v => VfxSettings.ColorAdjustments = v);
-            BuildDebugToggle(parent, "Chromatic aberration",
-                "Subtle colour-fringe at screen edges. Some find it muddies the picture — toggle off if so.",
-                4, () => VfxSettings.ChromaticAberration, v => VfxSettings.ChromaticAberration = v);
+            // Effect entries. The list grows as VFX phases land — the
+            // column-major split below keeps the panel two-up so we
+            // can fit the whole Phase 1+B+C+D backlog (~26 toggles)
+            // without needing a scrollbar yet. Adding a toggle in a
+            // later phase is a one-line append here.
+            var effects = new (string label, string tooltip,
+                System.Func<bool> getter, System.Action<bool> setter)[]
+            {
+                ("Bloom",
+                    "Globally lifts emissive surfaces (laser beam, reactor glow, muzzle flash). High visual impact for low cost.",
+                    () => VfxSettings.Bloom, v => VfxSettings.Bloom = v),
+                ("Vignette",
+                    "Subtle dark edge that focuses attention on the centre of the screen.",
+                    () => VfxSettings.Vignette, v => VfxSettings.Vignette = v),
+                ("Tonemapping (ACES)",
+                    "Cinematic tone curve. Stops bright effects clipping to pure white.",
+                    () => VfxSettings.Tonemapping, v => VfxSettings.Tonemapping = v),
+                ("Colour grading",
+                    "Light contrast and saturation lift for cinematic colour response.",
+                    () => VfxSettings.ColorAdjustments, v => VfxSettings.ColorAdjustments = v),
+                ("Chromatic aberration",
+                    "Subtle colour-fringe at screen edges. Some find it muddies the picture — toggle off if so.",
+                    () => VfxSettings.ChromaticAberration, v => VfxSettings.ChromaticAberration = v),
+            };
+
+            // Column-major fill: first half of the list goes in the
+            // left column, the rest in the right column. For an odd
+            // count the left column is one row longer than the right
+            // (ceil(N/2) vs floor(N/2)). Future phases just append to
+            // `effects` and the layout rebalances automatically.
+            int leftCount = (effects.Length + 1) / 2;
+            for (int i = 0; i < effects.Length; i++)
+            {
+                int column      = i < leftCount ? 0 : 1;
+                int rowInColumn = i < leftCount ? i : i - leftCount;
+                BuildDebugToggle(parent,
+                    effects[i].label, effects[i].tooltip,
+                    column, rowInColumn,
+                    effects[i].getter, effects[i].setter);
+            }
         }
 
         void BuildDebugToggle(RectTransform parent, string label, string tooltip,
-            int rowIndex, System.Func<bool> getter, System.Action<bool> setter)
+            int column, int rowInColumn,
+            System.Func<bool> getter, System.Action<bool> setter)
         {
-            Toggle toggle = UIStyle.BuildToggle(parent, label, new Vector2(600f, 40f), fontSize: 22);
+            Toggle toggle = UIStyle.BuildToggle(parent, label,
+                new Vector2(DebugColumnWidth, 40f), fontSize: 22);
             RectTransform rt = (RectTransform)toggle.transform;
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
-            // -80 px clearance below the title, then 50 px per row.
-            rt.anchoredPosition = new Vector2(20f, -80f - rowIndex * 50f);
+            float x = DebugLeftMargin + column * (DebugColumnWidth + DebugColumnGap);
+            float y = -DebugTitleClear - rowInColumn * DebugRowHeight;
+            rt.anchoredPosition = new Vector2(x, y);
 
             toggle.isOn = getter();
             toggle.onValueChanged.AddListener(value => setter(value));

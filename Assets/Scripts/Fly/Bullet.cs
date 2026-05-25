@@ -1,3 +1,4 @@
+using CubeFly.Core;
 using UnityEngine;
 
 namespace CubeFly.Fly
@@ -23,10 +24,14 @@ namespace CubeFly.Fly
     {
         [SerializeField] float speed = 80f;
         [SerializeField] float maxRange = 200f;
+        [Tooltip("BulletTracerMat.mat (Assets/VFX/Materials/). Wired by VfxAssetsInstaller. If null, no tracer is attached.")]
+        [SerializeField] Material tracerMaterial;
 
         Vector3 _direction;
         float _traveled;
         bool _armed;
+        TrailRenderer _trail;
+        LingeringTrail _lingeringTrail;
 
         // Set at Launch by the firing WeaponBehavior — the projectile
         // never re-queries these mid-flight.
@@ -67,8 +72,46 @@ namespace CubeFly.Fly
             _armed = true;
         }
 
+        void Awake()
+        {
+            // Tracer setup. Toggle-gated + null-guarded. If either fails
+            // at Awake, no TrailRenderer is added — flipping the toggle
+            // ON later won't retroactively add one (new bullets get
+            // tracers, existing don't), which is the intended behaviour.
+            if (VfxSettings.BulletTracer && tracerMaterial != null)
+            {
+                _trail = gameObject.AddComponent<TrailRenderer>();
+                _trail.time = 0.30f;
+                _trail.startWidth = 0.05f;
+                _trail.endWidth = 0.02f;
+                _trail.minVertexDistance = 0.10f;
+                _trail.material = tracerMaterial;
+                _trail.emitting = true;
+
+                Gradient grad = new Gradient();
+                grad.SetKeys(
+                    new[]
+                    {
+                        new GradientColorKey(new Color(1.00f, 1.00f, 1.00f), 0f),
+                        new GradientColorKey(new Color(1.00f, 0.96f, 0.70f), 0.5f),
+                        new GradientColorKey(new Color(1.00f, 0.40f, 0.75f), 1f),
+                    },
+                    new[]
+                    {
+                        new GradientAlphaKey(1.00f, 0f),
+                        new GradientAlphaKey(0.85f, 0.5f),
+                        new GradientAlphaKey(0.00f, 1f),
+                    });
+                _trail.colorGradient = grad;
+
+                _lingeringTrail = gameObject.AddComponent<LingeringTrail>();
+            }
+        }
+
         void Update()
         {
+            // Poll BulletTracer toggle each frame for live Debug-tab A/B.
+            if (_trail != null) _trail.emitting = VfxSettings.BulletTracer;
             if (!_armed) return;
             float dt = Time.deltaTime;
             float step = speed * dt;
@@ -78,6 +121,7 @@ namespace CubeFly.Fly
                     out RaycastHit hit))
             {
                 ProjectileHit.ApplyAndLog(hit, _damage, _firingConstruct, TAG);
+                ProjectileHit.SpawnImpactVfx(hit);
                 Destroy(gameObject);
                 return;
             }
@@ -85,6 +129,14 @@ namespace CubeFly.Fly
             transform.position = from + _direction * step;
             _traveled += step;
             if (_traveled >= maxRange) Destroy(gameObject);
+        }
+
+        void OnDestroy()
+        {
+            // Detach trail before Unity destroys the hierarchy so the
+            // remaining trail segments fade per TrailRenderer.time instead
+            // of vanishing with the bullet.
+            if (_lingeringTrail != null) _lingeringTrail.DetachAndFade();
         }
     }
 }

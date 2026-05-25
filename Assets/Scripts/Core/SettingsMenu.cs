@@ -53,7 +53,7 @@ namespace CubeFly.Core
         // means appending here + adding a content panel in BuildUI.
         static readonly string[] TabNames = new[]
         {
-            "General", "Display", "Graphics", "Audio", "Controls", "Gameplay"
+            "General", "Display", "Graphics", "Audio", "Controls", "Gameplay", "Debug"
         };
 
         GameObject _root;
@@ -257,7 +257,7 @@ namespace CubeFly.Core
             contentRT.offsetMin = new Vector2(260f, 20f);            // 20 left + 220 sidebar + 20 gap
             contentRT.offsetMax = new Vector2(-20f, -100f);          // 20 right, 100 title clearance
 
-            // Six placeholder content panels — one per tab.
+            // Six placeholder content panels + the Debug tab.
             _tabPanels = new GameObject[TabNames.Length];
             for (int i = 0; i < TabNames.Length; i++)
             {
@@ -272,11 +272,18 @@ namespace CubeFly.Core
                 prt.offsetMin = Vector2.zero;
                 prt.offsetMax = Vector2.zero;
 
-                Text label = UIStyle.BuildLabel(prt, "Coming soon", fontSize: 32);
-                RectTransform lrt = (RectTransform)label.transform;
-                lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 0.5f);
-                lrt.sizeDelta = new Vector2(400f, 80f);
-                lrt.anchoredPosition = Vector2.zero;
+                if (TabNames[i] == "Debug")
+                {
+                    BuildDebugPanel(prt);
+                }
+                else
+                {
+                    Text label = UIStyle.BuildLabel(prt, "Coming soon", fontSize: 32);
+                    RectTransform lrt = (RectTransform)label.transform;
+                    lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 0.5f);
+                    lrt.sizeDelta = new Vector2(400f, 80f);
+                    lrt.anchoredPosition = Vector2.zero;
+                }
 
                 _tabPanels[i] = panel;
             }
@@ -300,6 +307,97 @@ namespace CubeFly.Core
                     }
                 }
             }
+        }
+
+        // ---------- Debug tab ----------
+
+        // Two-column column-major layout. Content area is ~1060 px wide
+        // (1340 frame - 260 sidebar+pad - 20 right pad); each column is
+        // 500 px wide with a 20 px gap, leaving 20 px margins on both
+        // sides. Stacks ~13 rows × 2 columns = ~26 toggles in ~660 px
+        // of vertical real estate before needing a scrollbar — covers
+        // the projected Phase 1+B+C+D Debug-tab backlog.
+        const float DebugColumnWidth   = 500f;
+        const float DebugColumnGap     = 20f;
+        const float DebugLeftMargin    = 20f;
+        const float DebugTitleClear    = 80f;
+        const float DebugRowHeight     = 50f;
+
+        void BuildDebugPanel(RectTransform parent)
+        {
+            // Section title spans the full content width.
+            Text title = UIStyle.BuildLabel(parent, "VFX Toggles", fontSize: 28,
+                style: FontStyle.Bold);
+            RectTransform titleRT = (RectTransform)title.transform;
+            titleRT.anchorMin = new Vector2(0f, 1f);
+            titleRT.anchorMax = new Vector2(1f, 1f);
+            titleRT.pivot = new Vector2(0.5f, 1f);
+            titleRT.sizeDelta = new Vector2(0f, 40f);
+            titleRT.anchoredPosition = new Vector2(0f, -20f);
+
+            // Effect entries. The list grows as VFX phases land — the
+            // column-major split below keeps the panel two-up so we
+            // can fit the whole Phase 1+B+C+D backlog (~26 toggles)
+            // without needing a scrollbar yet. Adding a toggle in a
+            // later phase is a one-line append here.
+            var effects = new (string label, string tooltip,
+                System.Func<bool> getter, System.Action<bool> setter)[]
+            {
+                ("Bloom",
+                    "Globally lifts emissive surfaces (laser beam, reactor glow, muzzle flash). High visual impact for low cost.",
+                    () => VfxSettings.Bloom, v => VfxSettings.Bloom = v),
+                ("Vignette",
+                    "Subtle dark edge that focuses attention on the centre of the screen.",
+                    () => VfxSettings.Vignette, v => VfxSettings.Vignette = v),
+                ("Tonemapping (ACES)",
+                    "Cinematic tone curve. Stops bright effects clipping to pure white.",
+                    () => VfxSettings.Tonemapping, v => VfxSettings.Tonemapping = v),
+                ("Colour grading",
+                    "Light contrast and saturation lift for cinematic colour response.",
+                    () => VfxSettings.ColorAdjustments, v => VfxSettings.ColorAdjustments = v),
+                ("Chromatic aberration",
+                    "Subtle colour-fringe at screen edges. Some find it muddies the picture — toggle off if so.",
+                    () => VfxSettings.ChromaticAberration, v => VfxSettings.ChromaticAberration = v),
+            };
+
+            // Column-major fill: first half of the list goes in the
+            // left column, the rest in the right column. For an odd
+            // count the left column is one row longer than the right
+            // (ceil(N/2) vs floor(N/2)). Future phases just append to
+            // `effects` and the layout rebalances automatically.
+            int leftCount = (effects.Length + 1) / 2;
+            for (int i = 0; i < effects.Length; i++)
+            {
+                int column      = i < leftCount ? 0 : 1;
+                int rowInColumn = i < leftCount ? i : i - leftCount;
+                BuildDebugToggle(parent,
+                    effects[i].label, effects[i].tooltip,
+                    column, rowInColumn,
+                    effects[i].getter, effects[i].setter);
+            }
+        }
+
+        void BuildDebugToggle(RectTransform parent, string label, string tooltip,
+            int column, int rowInColumn,
+            System.Func<bool> getter, System.Action<bool> setter)
+        {
+            Toggle toggle = UIStyle.BuildToggle(parent, label,
+                new Vector2(DebugColumnWidth, 40f), fontSize: 22);
+            RectTransform rt = (RectTransform)toggle.transform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            float x = DebugLeftMargin + column * (DebugColumnWidth + DebugColumnGap);
+            float y = -DebugTitleClear - rowInColumn * DebugRowHeight;
+            rt.anchoredPosition = new Vector2(x, y);
+
+            toggle.isOn = getter();
+            toggle.onValueChanged.AddListener(value => setter(value));
+
+            // Attach a TooltipTrigger to the toggle so hovering anywhere
+            // on the row reveals the description tooltip.
+            TooltipTrigger trigger = toggle.gameObject.AddComponent<TooltipTrigger>();
+            trigger.SetText(tooltip);
         }
     }
 }

@@ -142,6 +142,101 @@ namespace CubeFly.Core
         // The caller sets `.options`, `.value`, and `.onValueChanged`.
         // No scrollbar — intended for short option lists; the template
         // is sized for ~4 visible rows and clamps beyond that.
+        // Builds a labelled checkbox-style Toggle. Container GameObject
+        // holds the Toggle component, a Background Image (the visible
+        // square), a Checkmark Image (the tick) as a child of the
+        // Background, and a Label Text to the right.
+        //
+        // The caller drives the toggle via `.isOn` and listens to
+        // `.onValueChanged`. Hover/press feedback comes from the
+        // Toggle's default ColorTint transition on the Background.
+        public static Toggle BuildToggle(Transform parent, string labelText,
+            Vector2 size, int fontSize = 22)
+        {
+            GameObject containerGO = new GameObject(labelText + "Toggle",
+                typeof(RectTransform), typeof(Toggle));
+            containerGO.transform.SetParent(parent, false);
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0) containerGO.layer = uiLayer;
+
+            RectTransform crt = (RectTransform)containerGO.transform;
+            crt.sizeDelta = size;
+
+            Toggle toggle = containerGO.GetComponent<Toggle>();
+
+            // Match the ColorBlock palette used by BuildLabeledButton /
+            // BuildDropdown so hover / press feedback is visually
+            // consistent across the Settings UI.
+            ColorBlock cb = toggle.colors;
+            cb.normalColor      = TintNormal;
+            cb.highlightedColor = TintHighlight;
+            cb.pressedColor     = TintPressed;
+            cb.selectedColor    = TintHighlight;
+            cb.disabledColor    = TintDisabled;
+            cb.colorMultiplier  = 1f;
+            cb.fadeDuration     = 0.1f;
+            toggle.colors = cb;
+
+            // Background — the visible square box on the left.
+            GameObject bgGO = new GameObject("Background",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            bgGO.transform.SetParent(containerGO.transform, false);
+            if (uiLayer >= 0) bgGO.layer = uiLayer;
+            RectTransform bgRT = (RectTransform)bgGO.transform;
+            bgRT.anchorMin = new Vector2(0f, 0.5f);
+            bgRT.anchorMax = new Vector2(0f, 0.5f);
+            bgRT.pivot = new Vector2(0f, 0.5f);
+            bgRT.sizeDelta = new Vector2(28f, 28f);
+            bgRT.anchoredPosition = new Vector2(4f, 0f);
+            Image bgImage = bgGO.GetComponent<Image>();
+            bgImage.color = BackgroundIdle;
+            toggle.targetGraphic = bgImage;
+
+            // 1-pixel white outline so the checkbox stays visually
+            // distinct against any background (modal panel, tab
+            // content). Unity's Outline replicates the mesh in four
+            // diagonal offsets, producing a uniform outline at the
+            // configured effectDistance regardless of the box's tint
+            // or the checkmark state.
+            Outline bgOutline = bgGO.AddComponent<Outline>();
+            bgOutline.effectColor = Color.white;
+            bgOutline.effectDistance = new Vector2(1f, 1f);
+
+            // Checkmark — child of Background, shown when Toggle.isOn.
+            GameObject checkGO = new GameObject("Checkmark",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            checkGO.transform.SetParent(bgGO.transform, false);
+            if (uiLayer >= 0) checkGO.layer = uiLayer;
+            RectTransform chkRT = (RectTransform)checkGO.transform;
+            chkRT.anchorMin = Vector2.zero;
+            chkRT.anchorMax = Vector2.one;
+            chkRT.offsetMin = new Vector2(6f, 6f);
+            chkRT.offsetMax = new Vector2(-6f, -6f);
+            Image checkImage = checkGO.GetComponent<Image>();
+            checkImage.color = TintHighlight;
+            toggle.graphic = checkImage;
+
+            // Label — text to the right of the box, fills remaining width.
+            GameObject labelGO = new GameObject("Label",
+                typeof(RectTransform), typeof(CanvasRenderer));
+            labelGO.transform.SetParent(containerGO.transform, false);
+            if (uiLayer >= 0) labelGO.layer = uiLayer;
+            RectTransform lrt = (RectTransform)labelGO.transform;
+            lrt.anchorMin = new Vector2(0f, 0f);
+            lrt.anchorMax = new Vector2(1f, 1f);
+            lrt.offsetMin = new Vector2(40f, 0f);
+            lrt.offsetMax = new Vector2(0f, 0f);
+            Text label = labelGO.AddComponent<Text>();
+            label.font = BuiltinFont;
+            label.alignment = TextAnchor.MiddleLeft;
+            label.fontSize = fontSize;
+            label.color = LabelColor;
+            label.text = labelText;
+            label.raycastTarget = true;     // needed for TooltipTrigger to fire on hover
+
+            return toggle;
+        }
+
         public static Dropdown BuildDropdown(Transform parent, Vector2 size, int fontSize = 22)
         {
             int uiLayer = LayerMask.NameToLayer("UI");

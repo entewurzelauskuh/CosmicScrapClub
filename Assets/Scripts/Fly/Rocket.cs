@@ -38,6 +38,16 @@ namespace CubeFly.Fly
 
         const string TAG = "Rocket";
 
+        // The Rocket prefab uses Unity's primitive Cylinder mesh,
+        // whose long axis is local +Y. Quaternion.LookRotation aligns
+        // the transform's +Z with flight direction by default, which
+        // would leave the cylinder's long axis perpendicular to
+        // travel (rocket appears "standing upright" along the path).
+        // Multiplying by this offset rotates the mesh so its +Y ends
+        // up along the transform's +Z (= flight direction), pointing
+        // the rocket where it's going.
+        static readonly Quaternion MeshAlignment = Quaternion.Euler(90f, 0f, 0f);
+
         public void Launch(Vector3 spawnPos, Vector3 launchDir,
             Vector3 exitWorld, Vector3 crosshairTarget,
             Transform firingConstruct, float damage)
@@ -45,7 +55,7 @@ namespace CubeFly.Fly
             transform.position = spawnPos;
             _launchDir = launchDir.normalized;
             if (_launchDir.sqrMagnitude > 1e-8f)
-                transform.rotation = Quaternion.LookRotation(_launchDir);
+                transform.rotation = Quaternion.LookRotation(_launchDir) * MeshAlignment;
 
             _exitWorld = exitWorld;
             _target = crosshairTarget;
@@ -95,7 +105,7 @@ namespace CubeFly.Fly
                     if (toTarget.sqrMagnitude > 1e-8f)
                     {
                         _seekDir = toTarget.normalized;
-                        transform.rotation = Quaternion.LookRotation(_seekDir);
+                        transform.rotation = Quaternion.LookRotation(_seekDir) * MeshAlignment;
                     }
                     else
                     {

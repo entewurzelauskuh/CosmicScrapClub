@@ -27,6 +27,8 @@ namespace CubeFly.Fly
         [SerializeField] GameObject exhaustPlumePrefab;
         [Tooltip("RocketSmokePuff.prefab (Assets/VFX/Prefabs/). Wired by VfxAssetsInstaller. Instantiated as a child of the rocket at Awake if VfxRocketSmokePuff is on.")]
         [SerializeField] GameObject smokePuffPrefab;
+        [Tooltip("RocketSmokeTrailMat.mat (Assets/VFX/Materials/). Wired by VfxAssetsInstaller. Used by the TrailRenderer added at Awake if VfxRocketSmokeTrail is on.")]
+        [SerializeField] Material smokeTrailMaterial;
 
         enum Phase { Exit, Seek }
         Phase _phase = Phase.Exit;
@@ -38,6 +40,8 @@ namespace CubeFly.Fly
         bool _armed;
         ParticleSystem _exhaustPlumePs;
         ParticleSystem _smokePuffPs;
+        TrailRenderer _smokeTrail;
+        LingeringTrail _smokeTrailLingering;
 
         Transform _firingConstruct;
         float _damage;
@@ -68,6 +72,37 @@ namespace CubeFly.Fly
                 puffGo.transform.localPosition = Vector3.zero;
                 puffGo.transform.localRotation = Quaternion.LookRotation(Vector3.down);
                 _smokePuffPs = puffGo.GetComponent<ParticleSystem>();
+            }
+
+            // Smoke trail (TrailRenderer + LingeringTrail) added in code
+            // so the toggle gates whether it exists at all — flipping ON
+            // later doesn't retroactively add it.
+            if (VfxSettings.RocketSmokeTrail && smokeTrailMaterial != null)
+            {
+                _smokeTrail = gameObject.AddComponent<TrailRenderer>();
+                _smokeTrail.time = 1.0f;
+                _smokeTrail.startWidth = 0.20f;
+                _smokeTrail.endWidth = 0.05f;
+                _smokeTrail.minVertexDistance = 0.05f;
+                _smokeTrail.material = smokeTrailMaterial;
+                _smokeTrail.emitting = true;
+
+                Color trailColor = new Color(0.92f, 0.95f, 1.00f);
+                Gradient grad = new Gradient();
+                grad.SetKeys(
+                    new[]
+                    {
+                        new GradientColorKey(trailColor, 0f),
+                        new GradientColorKey(trailColor, 1f),
+                    },
+                    new[]
+                    {
+                        new GradientAlphaKey(0.70f, 0f),
+                        new GradientAlphaKey(0.00f, 1f),
+                    });
+                _smokeTrail.colorGradient = grad;
+
+                _smokeTrailLingering = gameObject.AddComponent<LingeringTrail>();
             }
         }
 
@@ -159,9 +194,10 @@ namespace CubeFly.Fly
 
         void OnDestroy()
         {
-            // Detach child ParticleSystems and stop emission, keeping
-            // alive particles. Their stopAction = Destroy auto-cleans
-            // the orphan GameObjects once particles finish.
+            // Detach trail first so its lingering segments outlive the
+            // rocket and fade per TrailRenderer.time, then detach child
+            // ParticleSystems with stop-emitting (alive particles finish).
+            if (_smokeTrailLingering != null) _smokeTrailLingering.DetachAndFade();
             DetachAndStop(_exhaustPlumePs);
             DetachAndStop(_smokePuffPs);
         }

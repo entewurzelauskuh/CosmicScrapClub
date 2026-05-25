@@ -166,18 +166,21 @@ namespace CubeFly.EditorTools
                 var main = ps.main;
                 main.duration = 5f;
                 main.loop = true;
-                main.startLifetime = 0.4f;
+                // Tuning: 0.22 lifetime + 30 rate = ~7 alive particles
+                // at steady-state full thrust (clean jet look). Earlier
+                // values of 0.4 / 60 read as too 'bushy' in play-test.
+                main.startLifetime = 0.22f;
                 main.startSpeed = 6f;
                 main.startSize = 0.2f;
                 // HDR-bright cool blue (Color * 2.5 for bloom interaction).
                 main.startColor = new Color(0.5f, 0.75f, 1f, 1f) * 2.5f;
                 main.simulationSpace = ParticleSystemSimulationSpace.World;
-                main.maxParticles = 200;
+                main.maxParticles = 100;
                 main.playOnAwake = true;
 
                 var emission = ps.emission;
                 emission.enabled = true;
-                emission.rateOverTime = 60f;          // overridden by ThrusterVfx
+                emission.rateOverTime = 30f;          // overridden by ThrusterVfx
 
                 var shape = ps.shape;
                 shape.enabled = true;

@@ -18,9 +18,14 @@ namespace CubeFly.Fly
     // off, the entire prefab root is SetActive(false).
     public class ThrusterVfx : MonoBehaviour
     {
-        const float BasePlumeRate     = 60f;
+        // Per-thruster steady-state plume tuning. Lowered from the
+        // original 60 / 0.4 (which produced ~24 alive particles per
+        // thruster at full thrust and read as too "bushy") to 30 / 0.22
+        // (~7 alive at full thrust) for a cleaner jet look. Boost
+        // multipliers unchanged.
+        const float BasePlumeRate     = 30f;
         const float BoostRateMul      = 1.5f;
-        const float BaseLifetime      = 0.4f;
+        const float BaseLifetime      = 0.22f;
         const float BoostLifetimeMul  = 1.4f;
         static readonly Color BasePlumeColor  = new Color(0.5f, 0.75f, 1f, 1f) * 2.5f;
         static readonly Color BoostPlumeColor = new Color(0.85f, 0.92f, 1f, 1f) * 4f;

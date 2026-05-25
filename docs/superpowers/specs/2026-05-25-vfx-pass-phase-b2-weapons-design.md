@@ -144,9 +144,9 @@ Why three channels and not one: FlyController already holds prefab references fo
 | `Assets/Scripts/Fly/WeaponBehavior.cs` | Add `[SerializeField] GameObject muzzlePrefab` + `public void SetMuzzlePrefab(GameObject)` + `protected void PlayMuzzleVfx(Vector3 pos, Quaternion rot, bool toggle)`. Null-guards prefab and toggle internally. |
 | `Assets/Scripts/Fly/PyramidWeapon.cs` | After `Bullet.Launch(...)` in `Fire`: `PlayMuzzleVfx(tipPos, Quaternion.LookRotation(fireDir), VfxSettings.MuzzleFlashPyramid)`. |
 | `Assets/Scripts/Fly/CylinderWeapon.cs` | After `Rocket.Launch(...)` in `Fire`: `PlayMuzzleVfx(exitPos, Quaternion.LookRotation(launchDir), VfxSettings.MuzzleFlashCylinder)`. Note: muzzle anchors at the open end (`exitPos`), not the cylinder centre where the rocket spawns. |
-| `Assets/Scripts/Fly/Bullet.cs` | Add `[SerializeField] Material tracerMaterial`. In `Awake`: if `VfxSettings.BulletTracer && tracerMaterial != null`, create a child GameObject `Tracer` parented to the bullet (localPosition zero, localRotation identity), then `AddComponent<TrailRenderer>` + `AddComponent<LingeringTrail>` on the **child**. Configure trail params (see section "Per-effect details"). In `Update`: poll `VfxSettings.BulletTracer` and set `_trail.emitting` accordingly each frame. In `OnDestroy`: call `_lingeringTrail?.DetachAndFade()` (detaches the child from the dying bullet). After `ProjectileHit.ApplyAndLog(...)` in `Update`: call `ProjectileHit.SpawnImpactVfx(hit)`. |
-| `Assets/Scripts/Fly/Rocket.cs` | Add `[SerializeField] GameObject exhaustPlumePrefab; smokePuffPrefab; [SerializeField] Material smokeTrailMaterial;`. In `Awake`: instantiate exhaust + puff as children if their toggles are on; if `RocketSmokeTrail` is on, create a child GameObject `SmokeTrail` and add TrailRenderer + LingeringTrail on the **child**. In `Update`: poll each toggle and toggle `emission.enabled` / `TrailRenderer.emitting` accordingly. In `OnDestroy`: detach trail via `LingeringTrail.DetachAndFade()`, detach plume + puff and call `ps.Stop(true, ParticleSystemStopBehavior.StopEmitting)` on each (StopEmitting keeps alive particles by default; StopEmittingAndClear would kill them). After `ProjectileHit.ApplyAndLog(...)` in `Update`: call `ProjectileHit.SpawnImpactVfx(hit)`. |
-| `Assets/Scripts/Fly/ProjectileHit.cs` | Add `public static GameObject SparkPrefab; DustPrefab;`. Add `public static void ConfigureImpactPrefabs(GameObject spark, GameObject dust)` setter. Add `public static void SpawnImpactVfx(in RaycastHit hit)`: gates on `VfxSettings.BulletImpactSpark` / `BulletImpactDust`, picks spark vs dust by `Vector3.Dot(hit.normal, Vector3.up) > 0.7f` (dust is additive — fires alongside spark, not instead of), instantiates at `hit.point` oriented along `hit.normal`. **`ApplyAndLog` itself is unchanged** — Bullet/Rocket call `SpawnImpactVfx(hit)` separately to keep damage and presentation independently call-sited. |
+| `Assets/Scripts/Fly/Bullet.cs` | Add `[SerializeField] Material tracerMaterial`. In `Awake`: if `VfxSettings.BulletTracer && tracerMaterial != null`, create a child GameObject `Tracer` parented to the bullet (localPosition zero, localRotation identity), then `AddComponent<TrailRenderer>` + `AddComponent<LingeringTrail>` on the **child**. Assign the trail's `sharedMaterial = tracerMaterial` (not `.material`, which would clone the asset per bullet). Configure other trail params (see section "Per-effect details"). In `Update`: poll `VfxSettings.BulletTracer` and set `_trail.emitting` accordingly each frame. In `OnDestroy`: call `_lingeringTrail?.DetachAndFade()` (detaches the child from the dying bullet). After `ProjectileHit.ApplyAndLog(...)` in `Update`: call `ProjectileHit.SpawnImpactVfx(hit)` (default scale 1.0). |
+| `Assets/Scripts/Fly/Rocket.cs` | Add `[SerializeField] GameObject exhaustPlumePrefab; smokePuffPrefab; [SerializeField] Material smokeTrailMaterial;`. In `Awake`: instantiate exhaust + puff as children if their toggles are on (each with `localRotation = Quaternion.Euler(90f, 0f, 0f)` to orient the Cone's local +Z emission along the rocket's local -Y = backward); if `RocketSmokeTrail` is on, create a child GameObject `SmokeTrail` and add TrailRenderer + LingeringTrail on the **child**, assigning `sharedMaterial = smokeTrailMaterial` (not `.material`, which would clone per rocket). In `Update`: poll each toggle and toggle `emission.enabled` / `TrailRenderer.emitting` accordingly. In `OnDestroy`: detach trail via `LingeringTrail.DetachAndFade()`, detach plume + puff and call `ps.Stop(true, ParticleSystemStopBehavior.StopEmitting)` on each (StopEmitting keeps alive particles by default; StopEmittingAndClear would kill them). After `ProjectileHit.ApplyAndLog(...)` in `Update`: call `ProjectileHit.SpawnImpactVfx(hit, scale: 1.10f)` — rocket impacts read ~10% bigger than bullet impacts (warhead vs puncture). |
+| `Assets/Scripts/Fly/ProjectileHit.cs` | Add `public static GameObject SparkPrefab; DustPrefab;`. Add `public static void ConfigureImpactPrefabs(GameObject spark, GameObject dust)` setter. Add `public static void SpawnImpactVfx(in RaycastHit hit, float scale = 1.0f)`: gates on `VfxSettings.BulletImpactSpark` / `BulletImpactDust`, picks spark vs dust by `Vector3.Dot(hit.normal, Vector3.up) > 0.7f` (dust is additive — fires alongside spark, not instead of), instantiates at `hit.point` oriented along `hit.normal`; if `scale != 1.0f`, sets the spawned GameObject's `localScale = Vector3.one * scale`. **`ApplyAndLog` itself is unchanged** — Bullet/Rocket call `SpawnImpactVfx(hit, scale)` separately to keep damage and presentation independently call-sited. Bullet passes default 1.0; Rocket passes 1.10. |
 | `Assets/Scripts/Fly/FlyController.cs` | Add 4 new `[SerializeField] GameObject` fields: `muzzleFlashStarburstPrefab`, `muzzleFlashDiscPrefab`, `bulletImpactSparkPrefab`, `bulletImpactDustPrefab`. In `BuildConstruct`, when a weapon is encountered: type-switch and call `weapon.SetMuzzlePrefab(...)`. In `Awake` (or `Start`, before any projectile can spawn): `ProjectileHit.ConfigureImpactPrefabs(bulletImpactSparkPrefab, bulletImpactDustPrefab)`. |
 | `Assets/Scripts/Editor/VfxAssetsInstaller.cs` | Extend `Apply()` with: new `EnsureStarburstTexture()` + `EnsureTracerStripeTexture()` generators; six new material `EnsureAdditiveParticleMaterial` / new `EnsureAlphaBlendedParticleMaterial` calls; six new prefab generators; **two new prefab-patcher steps** (`WireBulletPrefab(tracerMat)`, `WireRocketPrefab(exhaustPrefab, puffPrefab, smokeTrailMat)`) using `PrefabUtility.LoadPrefabContents` + `SerializedObject`. Log line updated to reflect the new assets. |
 
@@ -291,12 +291,17 @@ main:        duration 5.0, loop true, startLifetime 0.18,
              playOnAwake true, stopAction Destroy
 emission:    rateOverTime 35
 shape:       Cone, angle 6°, radius 0.04
-             # Cone emits along its OWN local +Y. The plume's
-             # GameObject is parented to the rocket with
-             # localRotation = Quaternion.Euler(180, 0, 0) — rotating
-             # 180° around X flips the local +Y to point along the
-             # rocket's local -Y (= -transform.up = backward in world,
-             # since MeshAlignment maps rocket local +Y to launchDir).
+             # Cone emits along its OWN local +Z (confirmed by B-1's
+             # ThrusterVfx). After PR #49's MeshAlignment, the rocket's
+             # local +Y = launchDir (forward); so local -Y = backward.
+             # Plume's GameObject is parented to the rocket with
+             # localRotation = Quaternion.Euler(90, 0, 0) — a +90°
+             # rotation around X sends plume's local +Z → -Y in
+             # plume's frame (= rocket's local -Y = -launchDir in
+             # world). Euler(180, 0, 0) would flip +Z → -Z (UP in
+             # world); identity would emit along rocket's local +Z =
+             # transform.forward = DOWN in world (a previous fix
+             // chose the wrong angle and emitted DOWN).
 colorOverLifetime: white → (1, 0.45, 0.10) with alpha 0→1 (0–15%), 1→0 (15–100%)
 sizeOverLifetime: curve (0%, 0.6) → (40%, 1.0) → (100%, 0.3)
 renderer:    Stretch, lengthScale 0, velocityScale 1.2, RocketExhaustMat
@@ -339,8 +344,8 @@ main:        duration 5.0, loop true, startLifetime 1.5,
              playOnAwake true, stopAction Destroy
 emission:    rateOverTime 15
 shape:       Cone, angle 5°, radius 0.06
-             # Same parent + localRotation = Quaternion.Euler(180, 0, 0)
-             # pattern as exhaust plume to flip Cone's local +Y emission
+             # Same parent + localRotation = Quaternion.Euler(90, 0, 0)
+             # pattern as exhaust plume — sends Cone's local +Z emission
              # onto the rocket's local -Y (backward in world).
 colorOverLifetime: white → (0.92, 0.95, 1.0) with alpha 0→0.9 (0–10%), 0.9→0 (10–100%)
 sizeOverLifetime: 0.1 → 1.0    # 10× growth (user-specified)

@@ -460,8 +460,10 @@ namespace CubeFly.EditorTools
         }
 
         // Pyramid muzzle flash. Single-particle one-shot starburst at the
-        // weapon's tip. stopAction = Destroy + duration < lifetime ensures
-        // the instantiated GameObject auto-cleans after its burst.
+        // weapon's tip. main.loop = false + the single-burst emission +
+        // stopAction = Destroy together auto-clean the instantiated
+        // GameObject once the burst's lone particle expires (after
+        // startLifetime ~0.06 s).
         static void EnsureMuzzleFlashStarburstPrefab(Material starburstMat)
         {
             GameObject root = new GameObject("MuzzleFlashStarburst");

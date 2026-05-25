@@ -55,21 +55,25 @@ namespace CubeFly.Fly
             // prefab non-null. Plume fires opposite to rocket flight
             // direction so it trails behind the rocket like a flame.
             //
-            // Orientation derivation. After PR #49's MeshAlignment, the
-            // rocket's transform.up = launchDir (= world flight direction);
-            // so the rocket's local -Y = backward in world. The Cone
-            // particle shape emits along its OWN local +Y by default
-            // (not +Z — that was a previous incorrect assumption). To
-            // make the cone's +Y align with the rocket's local -Y, we
-            // rotate the plume 180° around its local X axis. Identity
-            // rotation would emit along local +Y = forward, and
-            // LookRotation(Vector3.down) is degenerate (forward and
-            // default-up antiparallel) so it falls back to identity too.
+            // Orientation derivation. The Cone particle shape emits along
+            // its OWN local +Z (confirmed by B-1's ThrusterVfx, which
+            // uses LookRotation to align plume +Z with thruster -Y).
+            // After PR #49's MeshAlignment, the rocket's transform.up
+            // (= rocket's local +Y) is aligned with launchDir; so the
+            // rocket's local -Y = backward in world. We need plume's
+            // local +Z to point along the rocket's local -Y after the
+            // parent's transform is applied — that's a +90° rotation
+            // around the plume's local X axis (Quaternion.Euler(90,0,0)
+            // sends local +Z → local -Y in the plume's frame, which
+            // resolves to -launchDir in world). A 180° rotation would
+            // flip +Z → -Z and emit upward; identity (the degenerate
+            // LookRotation(Vector3.down) fallback) leaves +Z = rocket's
+            // local +Z = world DOWN.
             if (VfxSettings.RocketExhaust && exhaustPlumePrefab != null)
             {
                 GameObject plumeGo = Instantiate(exhaustPlumePrefab, transform);
                 plumeGo.transform.localPosition = Vector3.zero;
-                plumeGo.transform.localRotation = Quaternion.Euler(180f, 0f, 0f);
+                plumeGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
                 _exhaustPlumePs = plumeGo.GetComponent<ParticleSystem>();
             }
 
@@ -79,7 +83,7 @@ namespace CubeFly.Fly
             {
                 GameObject puffGo = Instantiate(smokePuffPrefab, transform);
                 puffGo.transform.localPosition = Vector3.zero;
-                puffGo.transform.localRotation = Quaternion.Euler(180f, 0f, 0f);
+                puffGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
                 _smokePuffPs = puffGo.GetComponent<ParticleSystem>();
             }
 
@@ -106,7 +110,12 @@ namespace CubeFly.Fly
                 _smokeTrail.startWidth = 0.20f;
                 _smokeTrail.endWidth = 0.05f;
                 _smokeTrail.minVertexDistance = 0.05f;
-                _smokeTrail.material = smokeTrailMaterial;
+                // sharedMaterial avoids per-rocket material instantiation
+                // (TrailRenderer.material clones the asset for write-
+                // isolation, allocating a new Material per rocket + leaking
+                // it on GameObject destruction). Matches LaserWeapon's
+                // LineRenderer pattern.
+                _smokeTrail.sharedMaterial = smokeTrailMaterial;
                 _smokeTrail.emitting = true;
 
                 Color trailColor = new Color(0.92f, 0.95f, 1.00f);
@@ -194,7 +203,9 @@ namespace CubeFly.Fly
                     out RaycastHit hit))
             {
                 ProjectileHit.ApplyAndLog(hit, _damage, _firingConstruct, TAG);
-                ProjectileHit.SpawnImpactVfx(hit);
+                // Rocket impacts ~10% bigger than bullet impacts — the
+                // rocket warhead is a bigger boom than a bullet's puncture.
+                ProjectileHit.SpawnImpactVfx(hit, scale: 1.10f);
                 Destroy(gameObject);
                 return;
             }

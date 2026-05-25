@@ -146,20 +146,31 @@ namespace CubeFly.Fly
         // FrontalDotThreshold = cos 45°). The two are independent
         // toggles — both, either, or neither can fire.
         //
+        // Optional `scale` uniform-scales the spawned impact prefabs.
+        // Bullet uses the default 1.0; Rocket passes 1.10 so its
+        // warhead-sized impact reads slightly bigger than a bullet
+        // puncture.
+        //
         // Called from Bullet/Rocket right after ApplyAndLog, before
         // the projectile Destroys itself. Kept here (rather than in
         // ApplyAndLog) so damage and presentation stay separately
         // call-sited.
-        public static void SpawnImpactVfx(in RaycastHit hit)
+        public static void SpawnImpactVfx(in RaycastHit hit, float scale = 1.0f)
         {
             Quaternion orientation = Quaternion.LookRotation(hit.normal);
 
             if (VfxSettings.BulletImpactSpark && SparkPrefab != null)
-                Object.Instantiate(SparkPrefab, hit.point, orientation);
+            {
+                GameObject go = Object.Instantiate(SparkPrefab, hit.point, orientation);
+                if (scale != 1.0f) go.transform.localScale = Vector3.one * scale;
+            }
 
             if (VfxSettings.BulletImpactDust && DustPrefab != null
                 && Vector3.Dot(hit.normal, Vector3.up) > 0.7f)
-                Object.Instantiate(DustPrefab, hit.point, orientation);
+            {
+                GameObject go = Object.Instantiate(DustPrefab, hit.point, orientation);
+                if (scale != 1.0f) go.transform.localScale = Vector3.one * scale;
+            }
         }
     }
 }

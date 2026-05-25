@@ -101,7 +101,12 @@ namespace CubeFly.Fly
                 _trail.startWidth = 0.05f;
                 _trail.endWidth = 0.02f;
                 _trail.minVertexDistance = 0.10f;
-                _trail.material = tracerMaterial;
+                // sharedMaterial avoids per-bullet material instantiation
+                // (TrailRenderer.material clones the asset for write-isolation,
+                // allocating a new Material per projectile + leaking it on
+                // GameObject destruction). Matches LaserWeapon's LineRenderer
+                // pattern.
+                _trail.sharedMaterial = tracerMaterial;
                 _trail.emitting = true;
 
                 Gradient grad = new Gradient();

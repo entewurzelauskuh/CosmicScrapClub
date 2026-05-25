@@ -53,35 +53,56 @@ namespace CubeFly.Fly
                 return;
             }
 
-            // Compute a reasonable corner offset from the construct's
-            // child colliders' aggregate bounds. Fallback to 0.5 if
-            // bounds can't be resolved (e.g. alpha-cube-only construct).
-            Bounds aggregate = ResolveConstructBounds();
-            float halfX = Mathf.Max(0.5f, aggregate.extents.x);
-            float halfZ = Mathf.Max(0.5f, aggregate.extents.z);
-            Vector3[] cornerOffsets =
-            {
-                new Vector3(+halfX, 0f, +halfZ),
-                new Vector3(+halfX, 0f, -halfZ),
-                new Vector3(-halfX, 0f, +halfZ),
-                new Vector3(-halfX, 0f, -halfZ),
-            };
-
+            // Instantiate four emitters as children. Their localPositions
+            // get set by RecomputeEmitterPositions() — called now, and
+            // again on every CubeDied event so the corners track the
+            // construct's shrinking bounds as outer cubes are destroyed.
             for (int i = 0; i < 4; i++)
             {
                 GameObject emitterGO = Instantiate(_puffPrefab, transform);
-                emitterGO.transform.localPosition = cornerOffsets[i];
                 emitterGO.transform.localRotation = Quaternion.identity;
                 _emitters[i] = emitterGO.GetComponent<ParticleSystem>();
             }
+            RecomputeEmitterPositions();
 
             VfxSettings.Changed += OnVfxSettingsChanged;
+            CubeDeath.CubeDied  += OnAnyCubeDied;
             ApplyEnabledState();
         }
 
         void OnDestroy()
         {
             VfxSettings.Changed -= OnVfxSettingsChanged;
+            CubeDeath.CubeDied  -= OnAnyCubeDied;
+        }
+
+        void OnAnyCubeDied() => RecomputeEmitterPositions();
+
+        // Place the four corner emitters at the construct's current
+        // local-space bounds. Recomputed on cube death so puffs always
+        // fire from cubes that still exist, rather than empty space
+        // where outer cubes used to be. Uses LOCAL bounds (each cube's
+        // localPosition + unit extent) so the result is invariant
+        // under construct rotation in flight.
+        void RecomputeEmitterPositions()
+        {
+            Bounds local = ResolveConstructLocalBounds();
+            float halfX = Mathf.Max(0.5f, local.extents.x);
+            float halfZ = Mathf.Max(0.5f, local.extents.z);
+            float centerX = local.center.x;
+            float centerZ = local.center.z;
+            Vector3[] cornerOffsets =
+            {
+                new Vector3(centerX + halfX, 0f, centerZ + halfZ),
+                new Vector3(centerX + halfX, 0f, centerZ - halfZ),
+                new Vector3(centerX - halfX, 0f, centerZ + halfZ),
+                new Vector3(centerX - halfX, 0f, centerZ - halfZ),
+            };
+            for (int i = 0; i < 4; i++)
+            {
+                if (_emitters[i] != null)
+                    _emitters[i].transform.localPosition = cornerOffsets[i];
+            }
         }
 
         void Update()
@@ -129,14 +150,45 @@ namespace CubeFly.Fly
             _emitters[emitterIndex].Emit(BurstCount);
         }
 
-        Bounds ResolveConstructBounds()
+        // Compute the construct's bounds in LOCAL space. Iterates only
+        // the direct cube children (the emitter prefabs we instantiate
+        // also live under this transform; they're filtered out by the
+        // ParticleSystem-at-root check). Each cube's localPosition is
+        // its grid cell, so encapsulating a unit Bounds at that point
+        // gives a clean local-space extent.
+        //
+        // Skips cubes whose collider has been disabled — CubeDeath does
+        // that in BeginDeath before the cube drifts away, so this
+        // method naturally excludes a cube whose CubeDied event just
+        // fired (the trigger for this recompute).
+        Bounds ResolveConstructLocalBounds()
         {
-            Bounds b = new Bounds(transform.position, Vector3.zero);
+            Bounds b = new Bounds(Vector3.zero, Vector3.zero);
             bool first = true;
-            foreach (Collider c in GetComponentsInChildren<Collider>())
+            foreach (Transform child in transform)
             {
-                if (first) { b = c.bounds; first = false; }
-                else        { b.Encapsulate(c.bounds); }
+                // Skip the emitter prefabs we instantiated (they carry
+                // a ParticleSystem at their root; cubes don't).
+                if (child.GetComponent<ParticleSystem>() != null) continue;
+
+                // Skip dying cubes — any cube with all colliders
+                // disabled has been killed and is drifting / despawning.
+                bool anyColliderEnabled = false;
+                foreach (Collider col in child.GetComponentsInChildren<Collider>())
+                {
+                    if (col.enabled) { anyColliderEnabled = true; break; }
+                }
+                if (!anyColliderEnabled) continue;
+
+                if (first)
+                {
+                    b = new Bounds(child.localPosition, Vector3.one);
+                    first = false;
+                }
+                else
+                {
+                    b.Encapsulate(new Bounds(child.localPosition, Vector3.one));
+                }
             }
             return b;
         }

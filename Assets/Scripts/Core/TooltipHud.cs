@@ -144,11 +144,18 @@ namespace CubeFly.Core
         {
             if (_panelRT == null) return;
 
-            // Size the panel to its content for this frame.
+            // Size the panel to its content for this frame. The width
+            // matches the text's full unwrapped preferred width so the
+            // dark backdrop always spans the entire label — previously
+            // a 400 px cap clipped the backdrop while Text's Overflow
+            // wrap mode let the text render past it, leaving the tail
+            // of long descriptions shadowless. Wide tooltips that would
+            // run past the screen edge get flipped to the other side
+            // of the cursor by the clamp logic below.
             float textWidth  = _label.preferredWidth  + 16f;
             float textHeight = _label.preferredHeight + 8f;
             _panelRT.sizeDelta = new Vector2(
-                Mathf.Min(textWidth, 400f),
+                textWidth,
                 Mathf.Max(textHeight, 24f));
 
             // Default offset: +20 right, -20 below cursor.

@@ -23,6 +23,10 @@ namespace CubeFly.Fly
     {
         [SerializeField] float speed = 20f;
         [SerializeField] float maxRange = 200f;
+        [Tooltip("RocketExhaustPlume.prefab (Assets/VFX/Prefabs/). Wired by VfxAssetsInstaller. Instantiated as a child of the rocket at Awake if VfxRocketExhaust is on.")]
+        [SerializeField] GameObject exhaustPlumePrefab;
+        [Tooltip("RocketSmokePuff.prefab (Assets/VFX/Prefabs/). Wired by VfxAssetsInstaller. Instantiated as a child of the rocket at Awake if VfxRocketSmokePuff is on.")]
+        [SerializeField] GameObject smokePuffPrefab;
 
         enum Phase { Exit, Seek }
         Phase _phase = Phase.Exit;
@@ -32,12 +36,40 @@ namespace CubeFly.Fly
         Vector3 _target;
         float _seekTraveled;
         bool _armed;
+        ParticleSystem _exhaustPlumePs;
+        ParticleSystem _smokePuffPs;
 
         Transform _firingConstruct;
         float _damage;
         int _hitLayerMask;
 
         const string TAG = "Rocket";
+
+        void Awake()
+        {
+            // Exhaust plume child — instantiated only if toggle on AND
+            // prefab non-null. Plume fires opposite to rocket flight
+            // direction (rocket flies along its local +Y; plume cone
+            // along -Y of its local frame).
+            if (VfxSettings.RocketExhaust && exhaustPlumePrefab != null)
+            {
+                GameObject plumeGo = Instantiate(exhaustPlumePrefab, transform);
+                plumeGo.transform.localPosition = Vector3.zero;
+                // Cone shape emits along its local +Z by default. We want
+                // emission along rocket -Y, so rotate -Z to point along -Y.
+                plumeGo.transform.localRotation = Quaternion.LookRotation(Vector3.down);
+                _exhaustPlumePs = plumeGo.GetComponent<ParticleSystem>();
+            }
+
+            // Smoke puff child — same orientation as plume.
+            if (VfxSettings.RocketSmokePuff && smokePuffPrefab != null)
+            {
+                GameObject puffGo = Instantiate(smokePuffPrefab, transform);
+                puffGo.transform.localPosition = Vector3.zero;
+                puffGo.transform.localRotation = Quaternion.LookRotation(Vector3.down);
+                _smokePuffPs = puffGo.GetComponent<ParticleSystem>();
+            }
+        }
 
         // The Rocket prefab uses Unity's primitive Cylinder mesh,
         // whose long axis is local +Y. Quaternion.LookRotation aligns
@@ -123,6 +155,26 @@ namespace CubeFly.Fly
             transform.position = from + _seekDir * step;
             _seekTraveled += step;
             if (_seekTraveled >= maxRange) Destroy(gameObject);
+        }
+
+        void OnDestroy()
+        {
+            // Detach child ParticleSystems and stop emission, keeping
+            // alive particles. Their stopAction = Destroy auto-cleans
+            // the orphan GameObjects once particles finish.
+            DetachAndStop(_exhaustPlumePs);
+            DetachAndStop(_smokePuffPs);
+        }
+
+        static void DetachAndStop(ParticleSystem ps)
+        {
+            if (ps == null) return;
+            ps.transform.SetParent(null, true);   // worldPositionStays
+            // StopEmitting (not StopEmittingAndClear) keeps already-
+            // alive particles alive to finish their lifetimes; the
+            // prefab's main.stopAction = Destroy then auto-cleans the
+            // orphan GameObject once the last particle expires.
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
         }
     }
 }

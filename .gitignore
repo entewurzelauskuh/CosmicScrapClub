@@ -122,3 +122,6 @@ InitTestScene*.unity*
 
 # Claude Code agent / tooling state (worktrees, local config)
 .claude/
+
+# Superpowers brainstorming visual-companion ephemeral content
+.superpowers/

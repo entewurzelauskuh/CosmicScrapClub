@@ -38,6 +38,8 @@ namespace CubeFly.EditorTools
         const string MaterialsDir    = "Assets/VFX/Materials";
         const string PrefabsDir      = "Assets/VFX/Prefabs";
         const string GlowTexturePath = TexturesDir + "/Glow_64.png";
+        const string StarburstTexturePath    = TexturesDir + "/MuzzleStarburst_64.png";
+        const string TracerStripeTexturePath = TexturesDir + "/BulletTracerStripe_8x32.png";
         const string EnginePlumeMatPath    = MaterialsDir + "/EnginePlumeMat.mat";
         const string BoostShockMatPath     = MaterialsDir + "/BoostShockMat.mat";
         const string RcsPuffMatPath        = MaterialsDir + "/RcsPuffMat.mat";
@@ -52,6 +54,8 @@ namespace CubeFly.EditorTools
             EnsureDir(PrefabsDir);
 
             Texture2D glow = EnsureGlowTexture();
+            Texture2D starburst    = EnsureStarburstTexture();
+            Texture2D tracerStripe = EnsureTracerStripeTexture();
 
             Material enginePlume = EnsureAdditiveParticleMaterial(
                 EnginePlumeMatPath, glow, new Color(0.5f, 0.75f, 1f, 1f));
@@ -117,6 +121,122 @@ namespace CubeFly.EditorTools
                 importer.SaveAndReimport();
             }
             return AssetDatabase.LoadAssetAtPath<Texture2D>(GlowTexturePath);
+        }
+
+        // 64×64 RGBA32 starburst sprite: bright white core + 4 cardinal
+        // spikes + 4 fainter diagonal spikes + radial gradient falloff.
+        // Used by the Pyramid muzzle flash and the bullet impact spark
+        // (both share MuzzleStarburstMat). Procedurally generated for
+        // git-friendliness; skipped on subsequent runs if the PNG exists.
+        static Texture2D EnsureStarburstTexture()
+        {
+            if (File.Exists(StarburstTexturePath))
+                return AssetDatabase.LoadAssetAtPath<Texture2D>(StarburstTexturePath);
+
+            const int size = 64;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            Color[] pixels = new Color[size * size];
+            Vector2 center = new Vector2(size / 2f, size / 2f);
+            float maxDist = size / 2f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    Vector2 d = new Vector2(x - center.x, y - center.y);
+                    float dist = d.magnitude;
+                    float radial = Mathf.Clamp01(dist / maxDist);
+
+                    // Core: tight gaussian falloff.
+                    float core = Mathf.Exp(-radial * radial * 9f);
+
+                    // Cardinal spikes (0°, 90°, 180°, 270°): tight angular
+                    // band perpendicular to each axis, fading along
+                    // length proportional to (1 - radial).
+                    float spikeH = Mathf.Exp(-((d.y * d.y) / 1.2f));
+                    float spikeV = Mathf.Exp(-((d.x * d.x) / 1.2f));
+                    float cardinal = Mathf.Max(spikeH, spikeV) * Mathf.Max(0f, 1f - radial) * 0.85f;
+
+                    // Diagonal spikes (45°): rotate coords by 45°, same
+                    // gaussian-along-axis treatment, fainter (×0.4).
+                    float c = 0.7071f; // cos 45° = sin 45°
+                    float dx45 =  d.x * c + d.y * c;
+                    float dy45 = -d.x * c + d.y * c;
+                    float diagH = Mathf.Exp(-((dy45 * dy45) / 1.2f));
+                    float diagV = Mathf.Exp(-((dx45 * dx45) / 1.2f));
+                    float diagonal = Mathf.Max(diagH, diagV) * Mathf.Max(0f, 1f - radial) * 0.40f;
+
+                    float alpha = Mathf.Clamp01(Mathf.Max(core, Mathf.Max(cardinal, diagonal)));
+                    pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+                }
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            File.WriteAllBytes(StarburstTexturePath, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+
+            AssetDatabase.ImportAsset(StarburstTexturePath, ImportAssetOptions.ForceUpdate);
+            TextureImporter importer = AssetImporter.GetAtPath(StarburstTexturePath) as TextureImporter;
+            if (importer != null)
+            {
+                importer.textureType = TextureImporterType.Default;
+                importer.alphaIsTransparency = true;
+                importer.mipmapEnabled = false;
+                importer.filterMode = FilterMode.Bilinear;
+                importer.wrapMode = TextureWrapMode.Clamp;
+                importer.sRGBTexture = true;
+                importer.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(StarburstTexturePath);
+        }
+
+        // 8×32 RGBA32 cross-section gradient for the bullet TrailRenderer.
+        // V=0.5 → bright white core; V→0 and V→1 → transparent hot pink.
+        // U axis is uniform (no pattern); the TrailRenderer's default UV
+        // mapping stretches U along the trail length, so the cross-
+        // section pink-fringe halo appears across the trail's width.
+        static Texture2D EnsureTracerStripeTexture()
+        {
+            if (File.Exists(TracerStripeTexturePath))
+                return AssetDatabase.LoadAssetAtPath<Texture2D>(TracerStripeTexturePath);
+
+            const int w = 8;
+            const int h = 32;
+            Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            Color[] pixels = new Color[w * h];
+            float center = (h - 1) / 2f;
+            float maxDist = center;
+            Color pink = new Color(1f, 0.4f, 0.75f);
+            for (int y = 0; y < h; y++)
+            {
+                float dist = Mathf.Abs(y - center);
+                float t = Mathf.Clamp01(dist / maxDist);
+                // Gaussian-shaped cross-section: bright white at center,
+                // fading through warm-pink to transparent at edges.
+                float coreWeight = Mathf.Exp(-t * t * 4f);    // 1.0 at center, ~0.02 at edge
+                Color rgb = Color.Lerp(pink, Color.white, coreWeight);
+                float alpha = coreWeight;
+                Color c = new Color(rgb.r, rgb.g, rgb.b, alpha);
+                for (int x = 0; x < w; x++)
+                    pixels[y * w + x] = c;
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            File.WriteAllBytes(TracerStripeTexturePath, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+
+            AssetDatabase.ImportAsset(TracerStripeTexturePath, ImportAssetOptions.ForceUpdate);
+            TextureImporter importer = AssetImporter.GetAtPath(TracerStripeTexturePath) as TextureImporter;
+            if (importer != null)
+            {
+                importer.textureType = TextureImporterType.Default;
+                importer.alphaIsTransparency = true;
+                importer.mipmapEnabled = false;
+                importer.filterMode = FilterMode.Bilinear;
+                importer.wrapMode = TextureWrapMode.Clamp;
+                importer.sRGBTexture = true;
+                importer.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(TracerStripeTexturePath);
         }
 
         // URP Particles/Unlit, additive blend. Bloom (Phase 1) pulls a

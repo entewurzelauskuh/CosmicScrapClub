@@ -17,6 +17,7 @@ The companion documents are:
 - **[`ROADMAP.md`](ROADMAP.md)** — what is shipped and what is planned next.
 - **[`docs/thruster_boost_spec.md`](docs/thruster_boost_spec.md)** / **[`docs/boost_overboost_tuning_spec.md`](docs/boost_overboost_tuning_spec.md)** — design specs for the thruster cube and its boost mechanic.
 - **[`docs/power_and_energy_spec.md`](docs/power_and_energy_spec.md)** — the reactor / shield / laser power system (production, shields, the energy laser, eject).
+- **[`docs/vfx_pass_ideas.md`](docs/vfx_pass_ideas.md)** — VFX backlog and triage; the authoritative source for what's planned across the VFX pass (post-processing, engines, weapons, destruction, HUD, shaders, cinematic). Hover-tooltip text for the Settings → Debug tab is sourced from this file.
 
 ---
 

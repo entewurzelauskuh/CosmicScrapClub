@@ -37,7 +37,7 @@ Read [`docs/cube_fly_spec.md`](docs/cube_fly_spec.md) for the canonical product 
 
 ## Up Next
 
-In running order. Phase 1 (HitContext + HUD consolidation) and phase 2 (Power & Energy + Laser) are done; next is a polish pass (VFX + settings), and finally an experimental merge of the long-standing desert map work. Docs are re-synced at the close-out of each phase.
+In running order. Phase 1 (HitContext + HUD consolidation) and phase 2 (Power & Energy + Laser) are done. The polish pass is in motion: the Settings menu scaffold (six placeholder tabs + Debug) has shipped, VFX phase 1 (post-processing + Debug-tab toggles) has shipped, and VFX phase B-1 (engines + boost flare + RCS puffs) has shipped. Remaining: VFX phases B-2 / B-3 / B-4 / C / D, an AA settings dropdown for the Graphics tab, and finally an experimental merge of the long-standing desert map work. Docs are re-synced at logical close-outs.
 
 ### 1. Extended VFX pass
 
@@ -45,9 +45,9 @@ Engine trails, muzzle flashes, projectile trails, explosion / death particles, h
 
 Phasing per `docs/vfx_pass_ideas.md`:
 
-- **Phase 1 — Post-processing + Debug tab (in-flight).** Bloom, Vignette, Tonemapping (ACES), ColorAdjustments, ChromaticAberration as URP Volume overrides on the main game profile, plus the seventh `Debug` tab in Settings with per-effect toggles backed by PlayerPrefs. Establishes the Debug-tab pattern subsequent phases append to. Plus reusable Tooltip helper.
+- **Phase 1 — Post-processing + Debug tab (shipped).** Bloom, Vignette, Tonemapping (ACES), ColorAdjustments, ChromaticAberration as URP Volume overrides on the main game profile, plus the seventh `Debug` tab in Settings with per-effect toggles backed by PlayerPrefs. Established the Debug-tab pattern subsequent phases append to. Plus reusable Tooltip helper.
 - **Phase B — Small prefabs / new behaviours.** Decomposed into per-area sub-PRs:
-  - **Phase B-1 — Engines + boost flare + RCS puffs (in-flight).** Per-thruster ParticleSystem plumes with input-driven emission, boost-time amplification with shock-diamond sprite, attitude-jet corner puffs.
+  - **Phase B-1 — Engines + boost flare + RCS puffs (shipped).** Per-thruster ParticleSystem plumes with input-driven emission, boost-time amplification with shock-diamond sprite, attitude-jet corner puffs at per-sector best-cube positions that recompute as outer cubes are destroyed. EnginePlume and BoostFlare toggles are independent, with a baseline boost-cue plume in the "main plume off, flare on" case so the shock-diamond has a stream to sit on.
   - **Phase B-2 — Weapons + impacts (planned).** Muzzle flash + bullet tracer + bullet impact spark + rocket exhaust / smoke trail.
   - **Phase B-3 — Destruction + crash (planned).** Cube-death enhancement (flash + spark + debris + flame/smoke trail), sustained smoke + emissive flicker on low-HP cubes, camera shake on crash + nearby detonation.
   - **Phase B-4 — HUD feedback (planned).** Damage vignette pulse, low-HP chromatic-aberration ramp, boost speed lines, crosshair hit-confirm pulse.

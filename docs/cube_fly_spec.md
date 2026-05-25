@@ -491,6 +491,170 @@ section is a summary; the detailed design lives in
 
 ---
 
+## Settings Menu
+
+A tabbed Settings UI reachable from **both** the Main Menu's `Settings`
+button and a new `Settings` button on the ESC pause overlay
+(`PauseMenu`). Same UI from two entry points.
+
+`SettingsMenu` is a third `DontDestroyOnLoad` singleton structured
+exactly like `PauseMenu` / `GameOverMenu` — spawned by a
+`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` hook, no scene
+wiring required, marked `[DefaultExecutionOrder(-2000)]` so its
+`Update` runs before `PauseMenu` (-1000) and owns ESC when open.
+
+- **Seven tabs**: General · Display · Graphics · Audio · Controls · Gameplay · Debug. The first six are placeholder panels showing a centred "Coming soon" label — real controls fill in tab by tab as each becomes relevant. **Debug is the only tab with shipped controls** so far — it holds the per-effect VFX toggles (see *Visual Effects* below).
+- Overlay layout: a full-screen dim panel + centred modal frame (~1340 × 760) with a `Settings` title, a tiny `×` close button top-right, a left-side sidebar (~220 px wide) holding the seven tab buttons, and a content area to its right. Only the active tab's content panel is `SetActive(true)`.
+- Overlay layering: the modal panel sits in `PersistentHud` (the shared `sortingOrder 200` canvas) but gives itself a **per-panel `Canvas` override at `sortingOrder = 350`** so it draws reliably above MainMenu's own scene canvas (also at 200) without bumping `PersistentHud`'s base order. Stays below `GameOverMenu` (sortingOrder 400) — Settings must never appear over the end-of-run overlay.
+- Time handling: `Time.timeScale = 0` while open (the previous scale is captured on `Show` and restored on `Hide`, not blindly set to 1). From MainMenu that's harmless (no game running) and keeps the open/close path identical from both entry points.
+
+### Navigate-to ESC drill-down
+
+`SettingsMenu` and `PauseMenu` are coordinated so a user who opens
+Settings from inside the pause overlay can ESC back through it.
+
+- **From the pause overlay.** Pause overlay is up → click `Settings`: `PauseMenu`'s panel hides but its `IsOpen` stays `true` and `Time.timeScale` stays `0` — the game remains frozen. Settings opens on top. First `Esc` closes Settings → `PauseMenu` re-shows its panel (still paused). Second `Esc` closes `PauseMenu` → time resumes.
+- **From the main menu.** MainMenu → click `Settings`: opens Settings directly. `Esc` closes it back to MainMenu.
+- **Execution-order coordination.** When `Settings` is open or has just consumed ESC this frame (`SettingsMenu.EscConsumedThisFrame`), `PauseMenu.Update` short-circuits so the same key press isn't double-handled.
+
+### Reusable Tooltip helper
+
+The Settings PR also lands a small reusable tooltip pair, used
+initially by the Debug-tab toggles but designed for general UI reuse:
+
+- **`TooltipHud`** — lazy DDOL singleton spawned on first `Show()` (no `BeforeSceneLoad` bootstrap — there are no tooltips until a `TooltipTrigger` is hovered). Owns a small `Image` + `Text` panel parented under `PersistentHud.Instance.Root`, with **its own Canvas override at `sortingOrder = 500`** — above Settings (350) and GameOverMenu (400). Tooltips are always on top.
+- **`TooltipTrigger`** — `MonoBehaviour` implementing `IPointerEnterHandler` / `IPointerExitHandler`. `OnPointerEnter` → `TooltipHud.Show(text, eventData.position)`; `OnPointerExit` → `TooltipHud.Hide()`. `OnDisable` also hides the tooltip so it doesn't get orphaned when its parent UI hides (ESC closes Settings, tab switch, scene transition).
+- The tooltip follows the cursor while shown (position updated each `Update`) with screen-edge clamping. No delay before show, no fade, single-line text — minimal scaffold.
+
+### Persistence layer
+
+`SettingsMenu` itself owns no persistence — saving and restoring
+settings state is each module's own job. The first such module shipped
+is `VfxSettings` (see *Visual Effects*).
+
+- **`VfxSettings`** — a static class in `CubeFly.Core` acting as a typed `PlayerPrefs` facade for the eight VFX flags (`VfxBloom`, `VfxVignette`, `VfxTonemapping`, `VfxColorAdjustments`, `VfxChromaticAberration`, `VfxEnginePlume`, `VfxBoostFlare`, `VfxRcsPuff`). All default ON (`PlayerPrefs.GetInt(key, 1) != 0`). Each setter writes the key, calls `PlayerPrefs.Save()`, and fires a static `Changed` event so consumers (`VfxApplier`, `ThrusterVfx`, `RcsPuffVfx`) re-apply immediately. No batching, no Apply button — the Debug tab is built for real-time A/B comparison.
+- Future Settings modules (audio, display, controls, gameplay) follow the same shape: a typed static facade with a `Changed` event, registered with whichever tab consumes it. No global "settings store".
+
+---
+
+## Visual Effects
+
+A multi-phase VFX layer applied across the project. Two slices have
+shipped so far: **Phase 1** (post-processing) and **Phase B-1**
+(engines + boost flare + RCS puffs). Subsequent phases — B-2 (weapon
+muzzle flash + bullet tracers + impacts), B-3 (destruction + crash
+particles), B-4 (HUD feedback), C (shaders — laser glow, shield dome,
+delete-tool dissolve), and D (alpha-cube cinematic death) — are
+planned per `ROADMAP.md` Up Next #1. AA settings is a sibling PR
+tracked as Phase 1.5 (the Graphics tab's first real control). The
+authoritative backlog is `docs/vfx_pass_ideas.md`.
+
+Every VFX item gets an individual on/off toggle in the
+Settings → Debug tab; all default ON.
+
+### Phase 1 — Post-processing
+
+Five URP `Volume` overrides applied to the project's URP default
+volume profile (`Assets/Settings/DefaultVolumeProfile.asset`, the
+profile referenced by `URPDefaultVolumeProfileSettings`).
+
+| Override | Value |
+|---|---|
+| **Bloom** | Intensity 0.6, Threshold 1.0, Scatter 0.7 — lifts emissive surfaces (laser beam, future reactor glow, future muzzle flash). |
+| **Vignette** | Intensity 0.25, Smoothness 0.4, Colour black — subtle dark edge. |
+| **Tonemapping** | Mode ACES — stops bright effects clipping to pure white. |
+| **ColorAdjustments** | Contrast +5, Saturation +5 — light cinematic lift. |
+| **ChromaticAberration** | Intensity 0.08 — subtle baseline. |
+
+`VfxApplier` is a DDOL singleton that resolves the active profile and
+keeps its overrides in sync with `VfxSettings`:
+
+- **Profile resolution.** First tries a scene-attached `Volume`; if none, falls back to the URP default profile via `GraphicsSettings.GetRenderPipelineSettings<URPDefaultVolumeProfileSettings>().volumeProfile`.
+- **Apply.** For each of the five overrides, `VolumeProfile.TryGet<T>(out var o)` then `o.active = VfxSettings.<Effect>`. Missing overrides on a given profile are silently skipped, so the same code handles any profile shape.
+- **Triggers.** Re-applies on `SceneManager.sceneLoaded` and on `VfxSettings.Changed`. Idempotent.
+
+### Phase B-1 — Engines + boost flare + RCS puffs
+
+Three coordinated effects tied to construct propulsion, all
+particle-system based.
+
+**Engine plume.** Each placed thruster cube gets a `ThrusterVfx`
+component attached by `FlyController.BuildConstruct`, which
+instantiates `EnginePlume.prefab` as a child oriented so emission
+travels along the thruster's exhaust direction (its own local -Y, out
+through the cone's circular placement face). The `ParticleSystem` uses
+`StretchedBillboard` render mode, an HDR-bright cool-blue colour
+(`#80C0FF × 2.5` so bloom pulls a halo), a baseline emission of
+30 particles / sec, and a ~0.22 s lifetime.
+
+Each `FixedUpdate`, `FlyController` pushes the per-thruster input
+contribution into `ThrusterBehavior.CurrentInputLevel` (0..1) and
+`IsBoosting` (bool). `ThrusterVfx.LateUpdate` reads them and scales
+emission linearly with input.
+
+**Boost flare.** When Left-Ctrl boost is active *and* this thruster
+contributes to the boosted axis, the plume amplifies: **×1.5 emission
+rate, ×1.4 lifetime**, colour shifts hotter toward white-blue (HDR
+`#D9EAFF × 4`), and an inner **shock-diamond** child sprite (additive
+billboard, brighter centre) lights up to sell the supersonic-jet beat.
+
+**Independent toggles.** `VfxEnginePlume` and `VfxBoostFlare` are
+independent. When `EnginePlume` is OFF but `BoostFlare` is ON and the
+thruster is boosting, the main plume emits at its **baseline** rate
+(not amplified — colour and lifetime stay baseline) so the
+shock-diamond has a stream to sit on. That moment is the "boost cue" —
+the only time a player who's turned the main plume off sees one.
+
+**RCS puffs.** A construct-level `RcsPuffVfx` component (added to the
+construct root in `FlyController.BuildConstruct`) instantiates four
+`RcsPuff.prefab` one-shot emitters at the construct's four corners.
+
+- **Per-sector best-cube corner algorithm.** For each of the four `(±X, ±Z)` sectors, find the cube `c` maximising `sx·c.x + sz·c.z` — the cube whose outer corner pokes farthest in that diagonal — and place the emitter at *that* cube's outer corner (`p + (sx·0.5, 0, sz·0.5)` in construct-local coordinates). A bounding-box approach would land emitters in empty space for irregular constructs (a T-shape or arrow where the +X-extreme cube and the -Z-extreme cube are different cubes); the best-cube approach makes every emitter sit on a real cube corner.
+- **Lifecycle.** Recomputes on `Start` and on `CubeDeath.CubeDied`, so the four corners track the shrinking construct as outer cubes are destroyed.
+- **Firing.** Each frame reads `FlyController.CurrentAttitudeInput` (a `Vector3` carrying the player's pitch / yaw / roll command magnitude). On any non-zero component, the two corner emitters appropriate to that axis fire a 6-particle burst. Each emitter is throttled to one burst per **0.15 s**, so sustained input reads as a series of rhythmic puffs rather than a continuous stream.
+- **No thruster-coverage exclusion.** Attitude (pitch / yaw / roll) is rotational torque, applied directly by `FlyController.AddTorque` regardless of thruster placement — thrusters don't influence rotation in this codebase. RCS puffs are pure visualisation of the rotation commands, not gated on which axes have thrusters.
+
+### Settings → Debug tab
+
+Eight toggles total — five Phase 1 post-processing + three Phase B-1
+engine VFX — laid out two-column column-major (left column gets the
+ceiling, right column the floor when the count is odd). Each toggle
+has a hover tooltip describing the effect, sourced from the one-liners
+in `docs/vfx_pass_ideas.md`. All default ON.
+
+### Assets folder convention
+
+Phase B-1 establishes a project-wide convention for VFX assets:
+
+```
+Assets/VFX/
+├── Textures/   — Glow_64.png (64×64 gaussian radial gradient)
+├── Materials/  — EnginePlumeMat, BoostShockMat, RcsPuffMat (URP particle additive)
+└── Prefabs/    — EnginePlume.prefab, RcsPuff.prefab (ParticleSystem trees)
+```
+
+These keep VFX assets out of `Assets/Materials/` (per-cube placement
+materials) and `Assets/Prefabs/` (placeable cube prefabs).
+
+All of these assets are generated **procedurally** by an Editor
+`MenuItem` installer at `Tools/CubeFly/Generate VFX assets`
+(`Assets/Scripts/Editor/VfxAssetsInstaller.cs`, namespace
+`CubeFly.EditorTools` — excluded from runtime builds):
+
+- The texture is written by `Texture2D.EncodeToPNG` of a 64×64 gaussian
+  radial gradient, then re-imported with sprite settings.
+- Materials use `Universal Render Pipeline/Particles/Unlit` with
+  additive blend, pointing at `Glow_64`.
+- Prefabs are built by configuring a `ParticleSystem` GameObject
+  hierarchy in code (every module set explicitly), then saved via
+  `PrefabUtility.SaveAsPrefabAsset`.
+
+The installer is idempotent — re-running only overwrites assets that
+have drifted from spec. Subsequent Phase B / C / D PRs append to this
+convention.
+
+---
+
 ## Scenes
 
 ### `MainMenu.unity`

@@ -10,13 +10,17 @@ namespace CubeFly.Fly
     // FlyController.CurrentAttitudeInput and fires bursts on the
     // emitters whose corners correspond to the commanded attitude axis.
     //
-    // Throttle: each corner emitter has a per-axis cooldown (0.15 s)
-    // so a sustained yaw input produces rhythmic pulses rather than a
-    // continuous spray — sells "small jets firing in pulses" instead
-    // of "main engine".
+    // Throttle: each of the 4 corner emitters tracks its own
+    // _lastBurstTime, sharing a single 0.15 s cooldown across all
+    // three attitude axes. So pitching and yawing simultaneously can
+    // suppress one emitter's burst if the other axis just fired it.
+    // Sells "small jets firing in pulses" instead of "main engine".
     //
-    // Toggle: when VfxSettings.RcsPuff == false, the root is
-    // SetActive(false) so emitters don't tick.
+    // Toggle: when VfxSettings.RcsPuff == false, Update early-returns
+    // (no new bursts), and ApplyEnabledState SetActive(false)'s each
+    // corner emitter's GameObject so any in-flight particles fade
+    // out naturally. The RcsPuffVfx component itself stays enabled
+    // so it can re-enable the emitters when the toggle flips back on.
     //
     // No thruster-coverage exclusion in v1: attitude (pitch/yaw/roll)
     // is rotational torque, applied directly by FlyController via

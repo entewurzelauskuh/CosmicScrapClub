@@ -365,7 +365,7 @@ namespace CubeFly.Core
                     "Brighter, longer plume with an inner shock-diamond when Left-Ctrl boost is active on a thrustered axis.",
                     () => VfxSettings.BoostFlare, v => VfxSettings.BoostFlare = v),
                 ("RCS puffs",
-                    "Tiny attitude-jet puffs at construct corners when strafe / yaw / roll is commanded.",
+                    "Tiny attitude-jet puffs at construct corners when pitch / yaw / roll is commanded.",
                     () => VfxSettings.RcsPuff, v => VfxSettings.RcsPuff = v),
             };
 

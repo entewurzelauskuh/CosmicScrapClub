@@ -18,8 +18,13 @@ namespace CubeFly.Fly
     // _thrustInput per FixedUpdate to decide whether this thruster is
     // pushing the way the player is commanding thrust.
     //
-    // This component has no Update — it holds no per-frame state. It is
-    // a passive descriptor; FlyController drives all the boost logic.
+    // This component has no Update — its flight-side behaviour is a
+    // passive descriptor that FlyController reads (LocalThrustAxis) to
+    // drive boost logic. Phase B-1 added per-frame VFX-side state
+    // (CurrentInputLevel + IsBoosting) pushed by FlyController each
+    // FixedUpdate; the sibling ThrusterVfx reads it in LateUpdate to
+    // drive the plume. The state is purely for VFX — no effect on
+    // flight forces or torque.
     public class ThrusterBehavior : MonoBehaviour
     {
         // Set by FlyController.BuildConstruct right after Instantiate,

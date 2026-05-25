@@ -53,10 +53,15 @@ namespace CubeFly.Fly
 
             _plumeInstance = Instantiate(_plumePrefab, transform);
             // Orient the plume so its emission direction points along the
-            // thruster's exhaust direction (-transform.up of the thruster,
-            // which is where the cone's circular face points outward).
+            // thruster's exhaust direction. The plume prefab's Cone shape
+            // emits along its own local +Z; the thruster's exhaust is its
+            // own local -Y (out through the cone's circular placement
+            // face). LookRotation in LOCAL coordinates — Vector3.down /
+            // Vector3.forward are the thruster's own local axes since the
+            // plume is parented to the thruster, so this stays correct
+            // however the construct is rotated in world space.
             _plumeInstance.transform.localPosition = Vector3.zero;
-            _plumeInstance.transform.localRotation = Quaternion.LookRotation(-transform.up, transform.forward);
+            _plumeInstance.transform.localRotation = Quaternion.LookRotation(Vector3.down, Vector3.forward);
 
             _plumePs = _plumeInstance.GetComponent<ParticleSystem>();
             Transform shockChild = _plumeInstance.transform.Find("ShockDiamond");

@@ -8,10 +8,20 @@ namespace CubeFly.EditorTools
     // flare + RCS puffs): a procedural radial-gradient particle texture,
     // three additive particle materials, two ParticleSystem prefabs.
     //
-    // Idempotent — each Ensure* method checks for the existing asset
-    // before writing. Re-running the menu only touches what's missing
-    // or what's drifted. Stays in the repo as insurance: if anyone
-    // deletes a VFX asset, re-running the menu restores it.
+    // Convergent — re-running the menu always lands the same end state:
+    //   • Glow_64.png: skipped if the file already exists (the texture
+    //     content is fixed by the spec; importer settings are written
+    //     only on first creation).
+    //   • Materials: created if missing; tint / blend properties
+    //     reapplied on every run so any drift converges back to spec.
+    //   • Prefabs: unconditionally regenerated and overwritten every
+    //     run via PrefabUtility.SaveAsPrefabAsset. The prefab GUID is
+    //     stable across runs (it's the asset's, not the inner objects),
+    //     so scene references to the prefab stay valid.
+    //
+    // Stays in the repo as insurance: if anyone tweaks an asset and
+    // wants to restore the spec values, re-running the menu does it
+    // cleanly.
     //
     // Folder convention (NEW this PR):
     //   Assets/VFX/Textures/     -- procedural / hand-painted particle sprites

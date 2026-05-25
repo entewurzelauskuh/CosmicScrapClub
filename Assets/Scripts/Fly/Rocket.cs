@@ -146,6 +146,21 @@ namespace CubeFly.Fly
 
         void Update()
         {
+            // Poll toggles each frame for live Debug-tab A/B comparison.
+            // No subscription model — these are short-lived and the read
+            // cost is negligible.
+            if (_exhaustPlumePs != null)
+            {
+                var em = _exhaustPlumePs.emission;
+                em.enabled = VfxSettings.RocketExhaust;
+            }
+            if (_smokePuffPs != null)
+            {
+                var em = _smokePuffPs.emission;
+                em.enabled = VfxSettings.RocketSmokePuff;
+            }
+            if (_smokeTrail != null) _smokeTrail.emitting = VfxSettings.RocketSmokeTrail;
+
             if (!_armed) return;
             float dt = Time.deltaTime;
             float step = speed * dt;

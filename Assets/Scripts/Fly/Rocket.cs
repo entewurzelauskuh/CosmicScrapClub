@@ -77,9 +77,22 @@ namespace CubeFly.Fly
             // Smoke trail (TrailRenderer + LingeringTrail) added in code
             // so the toggle gates whether it exists at all — flipping ON
             // later doesn't retroactively add it.
+            //
+            // The TrailRenderer lives on a dedicated CHILD GameObject for
+            // the same reason as Bullet's tracer: OnDestroy must detach
+            // the child BEFORE Unity destroys the rocket's hierarchy, so
+            // the orphan child can fade per TrailRenderer.time and then
+            // autodestruct. Hosting the trail on the rocket itself would
+            // defeat the detach (the root being destroyed cannot be
+            // SetParent'd away from its own destruction).
             if (VfxSettings.RocketSmokeTrail && smokeTrailMaterial != null)
             {
-                _smokeTrail = gameObject.AddComponent<TrailRenderer>();
+                GameObject trailGo = new GameObject("SmokeTrail");
+                trailGo.transform.SetParent(transform, false);
+                trailGo.transform.localPosition = Vector3.zero;
+                trailGo.transform.localRotation = Quaternion.identity;
+
+                _smokeTrail = trailGo.AddComponent<TrailRenderer>();
                 _smokeTrail.time = 1.0f;
                 _smokeTrail.startWidth = 0.20f;
                 _smokeTrail.endWidth = 0.05f;
@@ -102,7 +115,7 @@ namespace CubeFly.Fly
                     });
                 _smokeTrail.colorGradient = grad;
 
-                _smokeTrailLingering = gameObject.AddComponent<LingeringTrail>();
+                _smokeTrailLingering = trailGo.AddComponent<LingeringTrail>();
             }
         }
 

@@ -4,8 +4,8 @@ using UnityEngine;
 namespace CubeFly.Core
 {
     // PlayerPrefs-backed static facade for the VFX Debug-tab toggles.
-    // The typed bool properties below each Get reads PlayerPrefs
-    // (default 1 = ON), each Set writes + saves + fires Changed. No
+    // The typed bool properties below each read a PlayerPrefs key
+    // (default 1 = ON); each Set writes + saves + fires Changed. No
     // batching, no Apply button: changes take effect immediately
     // because the Debug tab is a real-time A/B comparison surface.
     //

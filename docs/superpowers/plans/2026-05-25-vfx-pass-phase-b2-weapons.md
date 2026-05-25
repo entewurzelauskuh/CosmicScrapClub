@@ -45,7 +45,7 @@
 | `Assets/Scripts/Fly/WeaponBehavior.cs` | Add `[SerializeField] GameObject muzzlePrefab`, `SetMuzzlePrefab` setter, `PlayMuzzleVfx` protected helper. |
 | `Assets/Scripts/Fly/PyramidWeapon.cs` | After `Bullet.Launch(...)`, call `PlayMuzzleVfx(tipPos, Quaternion.LookRotation(fireDir), VfxSettings.MuzzleFlashPyramid)`. |
 | `Assets/Scripts/Fly/CylinderWeapon.cs` | After `Rocket.Launch(...)`, call `PlayMuzzleVfx(exitPos, Quaternion.LookRotation(launchDir), VfxSettings.MuzzleFlashCylinder)`. |
-| `Assets/Scripts/Fly/Bullet.cs` | Add `[SerializeField] Material tracerMaterial`. `Awake` adds TrailRenderer + LingeringTrail (toggle/null-guarded). `Update` polls `VfxSettings.BulletTracer`. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit)`. `OnDestroy` calls `_lingeringTrail?.DetachAndFade()`. |
+| `Assets/Scripts/Fly/Bullet.cs` | Add `[SerializeField] Material tracerMaterial`. `Awake` creates a child GameObject `Tracer` parented to the bullet, then adds TrailRenderer + LingeringTrail to the **child** (toggle/null-guarded). The child-GameObject pattern is required so OnDestroy can detach it from the dying bullet. `Update` polls `VfxSettings.BulletTracer`. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit)`. `OnDestroy` calls `_lingeringTrail?.DetachAndFade()`. |
 | `Assets/Scripts/Fly/Rocket.cs` | Add `[SerializeField] GameObject exhaustPlumePrefab; smokePuffPrefab; [SerializeField] Material smokeTrailMaterial;`. `Awake` instantiates plume + puff children + TrailRenderer + LingeringTrail (each toggle/null-guarded). `Update` polls three toggles. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit)`. `OnDestroy` detaches all child VFX and calls `Stop(ParticleSystemStopBehavior.StopEmitting)` on ParticleSystem children (StopEmitting keeps alive particles; StopEmittingAndClear would kill them). |
 | `Assets/Scripts/Fly/ProjectileHit.cs` | Add `public static GameObject SparkPrefab; DustPrefab;` + `ConfigureImpactPrefabs(spark, dust)` setter + `SpawnImpactVfx(in RaycastHit hit)` static method. **`ApplyAndLog` itself unchanged.** |
 | `Assets/Scripts/Fly/FlyController.cs` | Add 4 new `[SerializeField] GameObject` fields. In `Awake`: `ProjectileHit.ConfigureImpactPrefabs(...)`. In `BuildConstruct`, when a weapon component is found, type-switch on `PyramidWeapon`/`CylinderWeapon` and call `weapon.SetMuzzlePrefab(...)`. |
@@ -1792,9 +1792,22 @@ And among the existing private fields (around lines 27–35), add:
             // at Awake, no TrailRenderer is added — flipping the toggle
             // ON later won't retroactively add one (new bullets get
             // tracers, existing don't), which is the intended behaviour.
+            //
+            // The TrailRenderer lives on a dedicated CHILD GameObject so
+            // OnDestroy can detach the child before Unity destroys the
+            // bullet's hierarchy — the orphan child then fades naturally
+            // per TrailRenderer.time and autodestructs. Hosting the
+            // TrailRenderer on the bullet itself would defeat the
+            // detach pattern: SetParent(null) on the root being destroyed
+            // doesn't preserve it from destruction.
             if (VfxSettings.BulletTracer && tracerMaterial != null)
             {
-                _trail = gameObject.AddComponent<TrailRenderer>();
+                GameObject trailGo = new GameObject("Tracer");
+                trailGo.transform.SetParent(transform, false);
+                trailGo.transform.localPosition = Vector3.zero;
+                trailGo.transform.localRotation = Quaternion.identity;
+
+                _trail = trailGo.AddComponent<TrailRenderer>();
                 _trail.time = 0.30f;
                 _trail.startWidth = 0.05f;
                 _trail.endWidth = 0.02f;
@@ -1818,7 +1831,7 @@ And among the existing private fields (around lines 27–35), add:
                     });
                 _trail.colorGradient = grad;
 
-                _lingeringTrail = gameObject.AddComponent<LingeringTrail>();
+                _lingeringTrail = trailGo.AddComponent<LingeringTrail>();
             }
         }
 ```
@@ -2086,9 +2099,22 @@ Among private fields, after `_smokePuffPs`:
             // Smoke trail (TrailRenderer + LingeringTrail) added in code
             // so the toggle gates whether it exists at all — flipping ON
             // later doesn't retroactively add it.
+            //
+            // The TrailRenderer lives on a dedicated CHILD GameObject for
+            // the same reason as Bullet's tracer: OnDestroy must detach
+            // the child BEFORE Unity destroys the rocket's hierarchy, so
+            // the orphan child can fade per TrailRenderer.time and then
+            // autodestruct. Hosting the trail on the rocket itself would
+            // defeat the detach (the root being destroyed cannot be
+            // SetParent'd away from its own destruction).
             if (VfxSettings.RocketSmokeTrail && smokeTrailMaterial != null)
             {
-                _smokeTrail = gameObject.AddComponent<TrailRenderer>();
+                GameObject trailGo = new GameObject("SmokeTrail");
+                trailGo.transform.SetParent(transform, false);
+                trailGo.transform.localPosition = Vector3.zero;
+                trailGo.transform.localRotation = Quaternion.identity;
+
+                _smokeTrail = trailGo.AddComponent<TrailRenderer>();
                 _smokeTrail.time = 1.0f;
                 _smokeTrail.startWidth = 0.20f;
                 _smokeTrail.endWidth = 0.05f;
@@ -2111,7 +2137,7 @@ Among private fields, after `_smokePuffPs`:
                     });
                 _smokeTrail.colorGradient = grad;
 
-                _smokeTrailLingering = gameObject.AddComponent<LingeringTrail>();
+                _smokeTrailLingering = trailGo.AddComponent<LingeringTrail>();
             }
 ```
 

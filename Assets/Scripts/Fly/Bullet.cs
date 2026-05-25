@@ -78,9 +78,22 @@ namespace CubeFly.Fly
             // at Awake, no TrailRenderer is added — flipping the toggle
             // ON later won't retroactively add one (new bullets get
             // tracers, existing don't), which is the intended behaviour.
+            //
+            // The TrailRenderer lives on a dedicated CHILD GameObject so
+            // OnDestroy can detach the child before Unity destroys the
+            // bullet's hierarchy — the orphan child then fades naturally
+            // per TrailRenderer.time and autodestructs. Hosting the
+            // TrailRenderer on the bullet itself would defeat the
+            // detach pattern: SetParent(null) on the root being destroyed
+            // doesn't preserve it from destruction.
             if (VfxSettings.BulletTracer && tracerMaterial != null)
             {
-                _trail = gameObject.AddComponent<TrailRenderer>();
+                GameObject trailGo = new GameObject("Tracer");
+                trailGo.transform.SetParent(transform, false);
+                trailGo.transform.localPosition = Vector3.zero;
+                trailGo.transform.localRotation = Quaternion.identity;
+
+                _trail = trailGo.AddComponent<TrailRenderer>();
                 _trail.time = 0.30f;
                 _trail.startWidth = 0.05f;
                 _trail.endWidth = 0.02f;
@@ -104,7 +117,7 @@ namespace CubeFly.Fly
                     });
                 _trail.colorGradient = grad;
 
-                _lingeringTrail = gameObject.AddComponent<LingeringTrail>();
+                _lingeringTrail = trailGo.AddComponent<LingeringTrail>();
             }
         }
 

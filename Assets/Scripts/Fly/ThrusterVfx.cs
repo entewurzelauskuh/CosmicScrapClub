@@ -10,23 +10,27 @@ namespace CubeFly.Fly
     // / lifetime / colour each LateUpdate from
     // ThrusterBehavior.CurrentInputLevel + IsBoosting.
     //
-    // The EnginePlume and BoostFlare toggles are independent:
+    // The EnginePlume and BoostFlare toggles are independent, with
+    // one nuance — when EnginePlume is OFF but BoostFlare is ON and
+    // this thruster is contributing to a boost, the main plume emits
+    // at its BASELINE rate (not amplified) so the shock-diamond has
+    // a plume to sit on. That moment is the "boost cue" — the only
+    // time a player who's turned the main plume off sees one.
     //
-    //   • EnginePlume only controls the main plume's emission rate
-    //     (zeroed when the toggle is off — existing particles fade
-    //     out within their lifetime; no new ones spawn). The plume
-    //     prefab itself stays active so the shock-diamond child can
-    //     still render.
-    //   • BoostFlare gates both the boost-time amplification of the
-    //     main plume (×rate, ×lifetime, hotter colour) AND the
-    //     visibility of the shock-diamond child.
-    //   • Boost-flare activation rule: BoostFlare toggle on AND this
-    //     thruster's ThrusterBehavior.IsBoosting (i.e. contributing
-    //     to an active boost this fixed step).
+    //   • EnginePlume ON: main plume emits whenever the thruster is
+    //     commanded (rate scales with input level). Boost amplifies
+    //     (×rate, ×lifetime, hotter colour) only if BoostFlare is
+    //     also ON.
+    //   • EnginePlume OFF + BoostFlare ON + boost engaged on this
+    //     thruster: main plume emits at BASELINE (not amplified) +
+    //     shock-diamond visible. A bounded boost-cue burst.
+    //   • EnginePlume OFF + (BoostFlare OFF or no boost): main plume
+    //     silent.
+    //   • Boost-flare activation rule: BoostFlare toggle on AND
+    //     ThrusterBehavior.IsBoosting AND input > 0.
     //
-    // The shock-diamond is INDEPENDENT of EnginePlume — turning the
-    // main plume off while leaving BoostFlare on still pops the
-    // shock-diamond on boost, just without the surrounding stream.
+    // The shock-diamond child gates on the same BoostFlare-engaged
+    // condition as the boost-cue plume — they appear together.
     public class ThrusterVfx : MonoBehaviour
     {
         // Per-thruster steady-state plume tuning. Lowered from the
@@ -101,35 +105,50 @@ namespace CubeFly.Fly
 
             float input = _thruster.CurrentInputLevel;
             bool boostingThisFrame = _thruster.IsBoosting && VfxSettings.BoostFlare;
+            bool boostCueActive = boostingThisFrame && input > 0f;
 
-            // Main plume emission: gated by EnginePlume toggle. When
-            // off, the rate goes to 0 so no new particles spawn;
-            // existing particles fade out within their lifetime
-            // (~0.22 s baseline). Boost amplification only applies
-            // when EnginePlume is also on — otherwise there's no
-            // plume to amplify.
+            // Main plume emission rate. Three cases:
+            //   1. EnginePlume ON — emits whenever input > 0. Boost
+            //      amplifies (×rate) only if BoostFlare is also on.
+            //   2. EnginePlume OFF + boost cue active — emits at the
+            //      BASELINE rate (no ×BoostRateMul) so the shock-
+            //      diamond has a plume to sit on. Bounded by the
+            //      boost moment.
+            //   3. EnginePlume OFF + no boost cue — silent.
             var emission = _plumePs.emission;
-            emission.rateOverTime = VfxSettings.EnginePlume
-                ? BasePlumeRate * input * (boostingThisFrame ? BoostRateMul : 1f)
-                : 0f;
+            if (VfxSettings.EnginePlume)
+            {
+                emission.rateOverTime =
+                    BasePlumeRate * input * (boostingThisFrame ? BoostRateMul : 1f);
+            }
+            else if (boostCueActive)
+            {
+                emission.rateOverTime = BasePlumeRate * input;
+            }
+            else
+            {
+                emission.rateOverTime = 0f;
+            }
 
-            // Main plume lifetime + colour. Only meaningful when
-            // EnginePlume is on (no emission otherwise), but writing
-            // them unconditionally is harmless.
+            // Lifetime + colour amplification: only when EnginePlume
+            // is ON AND boosting. In the boost-cue case (EnginePlume
+            // OFF), the plume uses baseline lifetime/colour — the
+            // shock-diamond communicates "boost engaged", the plume
+            // itself stays neutral so a player who turned the main
+            // plume off doesn't get a hot boosted plume by surprise.
+            bool amplifyAppearance = VfxSettings.EnginePlume && boostingThisFrame;
             var main = _plumePs.main;
-            main.startLifetime = BaseLifetime * (boostingThisFrame ? BoostLifetimeMul : 1f);
-            main.startColor = boostingThisFrame ? BoostPlumeColor : BasePlumeColor;
+            main.startLifetime = BaseLifetime * (amplifyAppearance ? BoostLifetimeMul : 1f);
+            main.startColor = amplifyAppearance ? BoostPlumeColor : BasePlumeColor;
 
-            // Shock-diamond child: gated on BoostFlare + this
-            // thruster's boost state. INDEPENDENT of EnginePlume — a
-            // player who turns the main plume off while leaving
-            // BoostFlare on still gets a shock-diamond pop on boost
-            // (without the surrounding stream around it).
+            // Shock-diamond child: same condition as the boost cue —
+            // appears together with the baseline plume in the
+            // EnginePlume-OFF case, alongside the amplified plume in
+            // the EnginePlume-ON case.
             if (_shockPs != null)
             {
-                bool shockActive = boostingThisFrame && input > 0f;
-                if (_shockPs.gameObject.activeSelf != shockActive)
-                    _shockPs.gameObject.SetActive(shockActive);
+                if (_shockPs.gameObject.activeSelf != boostCueActive)
+                    _shockPs.gameObject.SetActive(boostCueActive);
             }
         }
     }

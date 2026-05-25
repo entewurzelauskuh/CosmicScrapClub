@@ -59,6 +59,11 @@ MeshRenderer:
   m_ReflectionProbeUsage: 0
   m_RayTracingMode: 2
   m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -80,9 +85,11 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!114 &8100004
 MonoBehaviour:
@@ -94,7 +101,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5b1d2e3f4a6c8d9e0f1a2b3c4d5e6f77, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   speed: 20
   maxRange: 200
+  exhaustPlumePrefab: {fileID: 7410702047067912457, guid: 3c1249d33aebd4acf9a19fa6e1a35cd4, type: 3}
+  smokePuffPrefab: {fileID: 5514769915466238133, guid: 94f3c1a33a56c475da937b2b8e642cd8, type: 3}
+  smokeTrailMaterial: {fileID: 2100000, guid: 57750217a0ff74e778319c9288b42d07, type: 2}

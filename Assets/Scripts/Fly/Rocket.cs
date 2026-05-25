@@ -1,3 +1,4 @@
+using CubeFly.Core;
 using UnityEngine;
 
 namespace CubeFly.Fly
@@ -22,6 +23,12 @@ namespace CubeFly.Fly
     {
         [SerializeField] float speed = 20f;
         [SerializeField] float maxRange = 200f;
+        [Tooltip("RocketExhaustPlume.prefab (Assets/VFX/Prefabs/). Wired by VfxAssetsInstaller. Instantiated as a child of the rocket at Awake if VfxRocketExhaust is on.")]
+        [SerializeField] GameObject exhaustPlumePrefab;
+        [Tooltip("RocketSmokePuff.prefab (Assets/VFX/Prefabs/). Wired by VfxAssetsInstaller. Instantiated as a child of the rocket at Awake if VfxRocketSmokePuff is on.")]
+        [SerializeField] GameObject smokePuffPrefab;
+        [Tooltip("RocketSmokeTrailMat.mat (Assets/VFX/Materials/). Wired by VfxAssetsInstaller. Used by the TrailRenderer added at Awake if VfxRocketSmokeTrail is on.")]
+        [SerializeField] Material smokeTrailMaterial;
 
         enum Phase { Exit, Seek }
         Phase _phase = Phase.Exit;
@@ -31,12 +38,110 @@ namespace CubeFly.Fly
         Vector3 _target;
         float _seekTraveled;
         bool _armed;
+        ParticleSystem _exhaustPlumePs;
+        ParticleSystem _smokePuffPs;
+        TrailRenderer _smokeTrail;
+        LingeringTrail _smokeTrailLingering;
 
         Transform _firingConstruct;
         float _damage;
         int _hitLayerMask;
 
         const string TAG = "Rocket";
+
+        void Awake()
+        {
+            // Exhaust plume child — instantiated only if toggle on AND
+            // prefab non-null. Plume fires opposite to rocket flight
+            // direction so it trails behind the rocket like a flame.
+            //
+            // Orientation derivation (empirically reverse-engineered
+            // through play-test iteration). The Cone shape in this
+            // programmatically-generated prefab emits along plume's
+            // local -Z (not +Z, contrary to docs — likely because
+            // AddComponent<ParticleSystem>() doesn't apply the same
+            // default shape.rotation the Editor uses when creating
+            // Cone shapes manually; EnginePlume.prefab works
+            // differently for the same reason). To make plume's -Z
+            // point along the rocket's local -Y (= -transform.up =
+            // -launchDir = backward in world after PR #49's
+            // MeshAlignment), we use Quaternion.Euler(-90, 0, 0): a
+            // -90° rotation around plume's local X sends plume's
+            // local +Z to local +Y, equivalently plume's local -Z to
+            // local -Y, which resolves to -launchDir in world.
+            //
+            // Verified through play-test trial-and-error:
+            //   Euler(  0, 0, 0) (identity fallback) → forward (wrong)
+            //   Euler(180, 0, 0)                     → downward (wrong)
+            //   Euler( 90, 0, 0)                     → forward (wrong)
+            //   Euler(-90, 0, 0)                     → BACKWARD (correct)
+            if (VfxSettings.RocketExhaust && exhaustPlumePrefab != null)
+            {
+                GameObject plumeGo = Instantiate(exhaustPlumePrefab, transform);
+                plumeGo.transform.localPosition = Vector3.zero;
+                plumeGo.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+                _exhaustPlumePs = plumeGo.GetComponent<ParticleSystem>();
+            }
+
+            // Smoke puff child — same Cone-shape orientation issue as the
+            // exhaust plume, same fix.
+            if (VfxSettings.RocketSmokePuff && smokePuffPrefab != null)
+            {
+                GameObject puffGo = Instantiate(smokePuffPrefab, transform);
+                puffGo.transform.localPosition = Vector3.zero;
+                puffGo.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+                _smokePuffPs = puffGo.GetComponent<ParticleSystem>();
+            }
+
+            // Smoke trail (TrailRenderer + LingeringTrail) added in code
+            // so the toggle gates whether it exists at all — flipping ON
+            // later doesn't retroactively add it.
+            //
+            // The TrailRenderer lives on a dedicated CHILD GameObject for
+            // the same reason as Bullet's tracer: OnDestroy must detach
+            // the child BEFORE Unity destroys the rocket's hierarchy, so
+            // the orphan child can fade per TrailRenderer.time and then
+            // autodestruct. Hosting the trail on the rocket itself would
+            // defeat the detach (the root being destroyed cannot be
+            // SetParent'd away from its own destruction).
+            if (VfxSettings.RocketSmokeTrail && smokeTrailMaterial != null)
+            {
+                GameObject trailGo = new GameObject("SmokeTrail");
+                trailGo.transform.SetParent(transform, false);
+                trailGo.transform.localPosition = Vector3.zero;
+                trailGo.transform.localRotation = Quaternion.identity;
+
+                _smokeTrail = trailGo.AddComponent<TrailRenderer>();
+                _smokeTrail.time = 1.0f;
+                _smokeTrail.startWidth = 0.20f;
+                _smokeTrail.endWidth = 0.05f;
+                _smokeTrail.minVertexDistance = 0.05f;
+                // sharedMaterial avoids per-rocket material instantiation
+                // (TrailRenderer.material clones the asset for write-
+                // isolation, allocating a new Material per rocket + leaking
+                // it on GameObject destruction). Matches LaserWeapon's
+                // LineRenderer pattern.
+                _smokeTrail.sharedMaterial = smokeTrailMaterial;
+                _smokeTrail.emitting = true;
+
+                Color trailColor = new Color(0.92f, 0.95f, 1.00f);
+                Gradient grad = new Gradient();
+                grad.SetKeys(
+                    new[]
+                    {
+                        new GradientColorKey(trailColor, 0f),
+                        new GradientColorKey(trailColor, 1f),
+                    },
+                    new[]
+                    {
+                        new GradientAlphaKey(0.70f, 0f),
+                        new GradientAlphaKey(0.00f, 1f),
+                    });
+                _smokeTrail.colorGradient = grad;
+
+                _smokeTrailLingering = trailGo.AddComponent<LingeringTrail>();
+            }
+        }
 
         // The Rocket prefab uses Unity's primitive Cylinder mesh,
         // whose long axis is local +Y. Quaternion.LookRotation aligns
@@ -78,6 +183,21 @@ namespace CubeFly.Fly
 
         void Update()
         {
+            // Poll toggles each frame for live Debug-tab A/B comparison.
+            // No subscription model — these are short-lived and the read
+            // cost is negligible.
+            if (_exhaustPlumePs != null)
+            {
+                var em = _exhaustPlumePs.emission;
+                em.enabled = VfxSettings.RocketExhaust;
+            }
+            if (_smokePuffPs != null)
+            {
+                var em = _smokePuffPs.emission;
+                em.enabled = VfxSettings.RocketSmokePuff;
+            }
+            if (_smokeTrail != null) _smokeTrail.emitting = VfxSettings.RocketSmokeTrail;
+
             if (!_armed) return;
             float dt = Time.deltaTime;
             float step = speed * dt;
@@ -89,6 +209,11 @@ namespace CubeFly.Fly
                     out RaycastHit hit))
             {
                 ProjectileHit.ApplyAndLog(hit, _damage, _firingConstruct, TAG);
+                // Rocket impacts ~20% bigger than bullet impacts — the
+                // rocket warhead is a bigger boom than a bullet's puncture.
+                // (Tuned from initial 1.10 after play-test; 1.20 reads
+                // more proportionate to the warhead size.)
+                ProjectileHit.SpawnImpactVfx(hit, scale: 1.20f);
                 Destroy(gameObject);
                 return;
             }
@@ -121,6 +246,27 @@ namespace CubeFly.Fly
             transform.position = from + _seekDir * step;
             _seekTraveled += step;
             if (_seekTraveled >= maxRange) Destroy(gameObject);
+        }
+
+        void OnDestroy()
+        {
+            // Detach trail first so its lingering segments outlive the
+            // rocket and fade per TrailRenderer.time, then detach child
+            // ParticleSystems with stop-emitting (alive particles finish).
+            if (_smokeTrailLingering != null) _smokeTrailLingering.DetachAndFade();
+            DetachAndStop(_exhaustPlumePs);
+            DetachAndStop(_smokePuffPs);
+        }
+
+        static void DetachAndStop(ParticleSystem ps)
+        {
+            if (ps == null) return;
+            ps.transform.SetParent(null, true);   // worldPositionStays
+            // StopEmitting (not StopEmittingAndClear) keeps already-
+            // alive particles alive to finish their lifetimes; the
+            // prefab's main.stopAction = Destroy then auto-cleans the
+            // orphan GameObject once the last particle expires.
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
         }
     }
 }

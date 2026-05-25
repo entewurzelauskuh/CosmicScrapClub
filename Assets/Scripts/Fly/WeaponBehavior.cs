@@ -25,6 +25,8 @@ namespace CubeFly.Fly
         [Header("Common")]
         [SerializeField] protected GameObject projectilePrefab;
         [SerializeField] protected float reloadSeconds = 0.2f;
+        [Tooltip("Wired by FlyController.BuildConstruct after weapon instantiation. Per subclass: Pyramid → MuzzleFlashStarburst.prefab; Cylinder → MuzzleFlashDisc.prefab. If null, no muzzle VFX fires.")]
+        [SerializeField] GameObject muzzlePrefab;
 
         [Header("Stats (consumed by v2 damage pass)")]
         [SerializeField] protected float damage = 1f;
@@ -36,6 +38,9 @@ namespace CubeFly.Fly
         public float ReloadSeconds => reloadSeconds;
         public float CooldownRemaining => _cooldown;
         public bool CanFire => _cooldown <= 0f;
+
+        // Wired by FlyController.BuildConstruct, mirroring ThrusterVfx.SetPlumePrefab.
+        public void SetMuzzlePrefab(GameObject prefab) => muzzlePrefab = prefab;
 
         // True while this weapon cube is alive (HP > 0). Polled by
         // FlyShootingController (fire gate) and FlyWeaponToolbarController
@@ -75,5 +80,16 @@ namespace CubeFly.Fly
         }
 
         protected abstract void Fire(Vector3 crosshairWorldTarget);
+
+        // Spawn a one-shot muzzle-flash GameObject from `muzzlePrefab` at
+        // the given world pos/rot. Toggle-gated by `toggle` and null-
+        // guarded against missing prefab. The prefab is expected to have
+        // a ParticleSystem with `main.stopAction = Destroy` so the
+        // instance auto-cleans after its burst finishes.
+        protected void PlayMuzzleVfx(Vector3 worldPos, Quaternion worldRot, bool toggle)
+        {
+            if (!toggle || muzzlePrefab == null) return;
+            Instantiate(muzzlePrefab, worldPos, worldRot);
+        }
     }
 }

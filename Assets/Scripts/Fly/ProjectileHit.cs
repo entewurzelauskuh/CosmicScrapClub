@@ -119,5 +119,58 @@ namespace CubeFly.Fly
                 sourceTag: projectileTag);
             CubeDamage.ApplyAndLog(in context);
         }
+
+        // ---------- B-2 impact VFX dispatch ----------
+
+        // Configured once per FlyScene load by FlyController.Awake.
+        // Static rather than instance because ProjectileHit is itself
+        // static (no MonoBehaviour to hang [SerializeField] off), and
+        // both projectile types (Bullet, Rocket) need to dispatch to
+        // the same prefab references.
+        public static GameObject SparkPrefab;
+        public static GameObject DustPrefab;
+
+        // Called once by FlyController.Awake before any projectile
+        // can possibly spawn. Subsequent calls overwrite; safe to
+        // re-call during scene transitions.
+        public static void ConfigureImpactPrefabs(GameObject spark, GameObject dust)
+        {
+            SparkPrefab = spark;
+            DustPrefab = dust;
+        }
+
+        // Spawn the appropriate impact VFX at the hit point, oriented
+        // along the surface normal. Spark fires on any hit (toggle and
+        // prefab permitting). Dust additionally fires when the hit
+        // surface is roughly upward (matches PyramidWeapon's
+        // FrontalDotThreshold = cos 45°). The two are independent
+        // toggles — both, either, or neither can fire.
+        //
+        // Optional `scale` uniform-scales the spawned impact prefabs.
+        // Bullet uses the default 1.0; Rocket passes 1.20 so its
+        // warhead-sized impact reads slightly bigger than a bullet
+        // puncture.
+        //
+        // Called from Bullet/Rocket right after ApplyAndLog, before
+        // the projectile Destroys itself. Kept here (rather than in
+        // ApplyAndLog) so damage and presentation stay separately
+        // call-sited.
+        public static void SpawnImpactVfx(in RaycastHit hit, float scale = 1.0f)
+        {
+            Quaternion orientation = Quaternion.LookRotation(hit.normal);
+
+            if (VfxSettings.BulletImpactSpark && SparkPrefab != null)
+            {
+                GameObject go = Object.Instantiate(SparkPrefab, hit.point, orientation);
+                if (scale != 1.0f) go.transform.localScale = Vector3.one * scale;
+            }
+
+            if (VfxSettings.BulletImpactDust && DustPrefab != null
+                && Vector3.Dot(hit.normal, Vector3.up) > 0.7f)
+            {
+                GameObject go = Object.Instantiate(DustPrefab, hit.point, orientation);
+                if (scale != 1.0f) go.transform.localScale = Vector3.one * scale;
+            }
+        }
     }
 }

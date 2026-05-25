@@ -46,7 +46,7 @@
 | `Assets/Scripts/Fly/PyramidWeapon.cs` | After `Bullet.Launch(...)`, call `PlayMuzzleVfx(tipPos, Quaternion.LookRotation(fireDir), VfxSettings.MuzzleFlashPyramid)`. |
 | `Assets/Scripts/Fly/CylinderWeapon.cs` | After `Rocket.Launch(...)`, call `PlayMuzzleVfx(exitPos, Quaternion.LookRotation(launchDir), VfxSettings.MuzzleFlashCylinder)`. |
 | `Assets/Scripts/Fly/Bullet.cs` | Add `[SerializeField] Material tracerMaterial`. `Awake` creates a child GameObject `Tracer` parented to the bullet, then adds TrailRenderer + LingeringTrail to the **child** (toggle/null-guarded). The child-GameObject pattern is required so OnDestroy can detach it from the dying bullet. `Update` polls `VfxSettings.BulletTracer`. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit)`. `OnDestroy` calls `_lingeringTrail?.DetachAndFade()`. |
-| `Assets/Scripts/Fly/Rocket.cs` | Add `[SerializeField] GameObject exhaustPlumePrefab; smokePuffPrefab; [SerializeField] Material smokeTrailMaterial;`. `Awake` instantiates plume + puff children (each with `localRotation = Quaternion.Euler(90f, 0f, 0f)` to orient the Cone +Z emission along the rocket's local -Y = backward) + creates a child GameObject `SmokeTrail` parented to the rocket hosting the TrailRenderer + LingeringTrail (each toggle/null-guarded; trail uses `sharedMaterial` to avoid per-rocket Material allocation). `Update` polls three toggles. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit, scale: 1.10f)` — warhead is +10% bigger than a bullet puncture. `OnDestroy` detaches all child VFX and calls `Stop(ParticleSystemStopBehavior.StopEmitting)` on ParticleSystem children (StopEmitting keeps alive particles; StopEmittingAndClear would kill them). |
+| `Assets/Scripts/Fly/Rocket.cs` | Add `[SerializeField] GameObject exhaustPlumePrefab; smokePuffPrefab; [SerializeField] Material smokeTrailMaterial;`. `Awake` instantiates plume + puff children (each with `localRotation = Quaternion.Euler(-90f, 0f, 0f)` to orient the Cone +Z emission along the rocket's local -Y = backward) + creates a child GameObject `SmokeTrail` parented to the rocket hosting the TrailRenderer + LingeringTrail (each toggle/null-guarded; trail uses `sharedMaterial` to avoid per-rocket Material allocation). `Update` polls three toggles. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit, scale: 1.10f)` — warhead is +10% bigger than a bullet puncture. `OnDestroy` detaches all child VFX and calls `Stop(ParticleSystemStopBehavior.StopEmitting)` on ParticleSystem children (StopEmitting keeps alive particles; StopEmittingAndClear would kill them). |
 | `Assets/Scripts/Fly/ProjectileHit.cs` | Add `public static GameObject SparkPrefab; DustPrefab;` + `ConfigureImpactPrefabs(spark, dust)` setter + `SpawnImpactVfx(in RaycastHit hit, float scale = 1.0f)` static method (optional uniform scale on the spawned prefab GameObject — Bullet uses default 1.0, Rocket passes 1.10). **`ApplyAndLog` itself unchanged.** |
 | `Assets/Scripts/Fly/FlyController.cs` | Add 4 new `[SerializeField] GameObject` fields. In `Awake`: `ProjectileHit.ConfigureImpactPrefabs(...)`. In `BuildConstruct`, when a weapon component is found, type-switch on `PyramidWeapon`/`CylinderWeapon` and call `weapon.SetMuzzlePrefab(...)`. |
 | `Assets/Scripts/Editor/VfxAssetsInstaller.cs` | Extend `Apply()`. Add `EnsureAlphaBlendedParticleMaterial` helper. Add `EnsureStarburstTexture` + `EnsureTracerStripeTexture` generators. Add 6 material creation calls + 6 prefab creation calls. Add `WireBulletPrefab` + `WireRocketPrefab` methods that use `PrefabUtility.LoadPrefabContents` + `SerializedObject` to set the new SerializeField references on the existing projectile prefabs. |
@@ -2024,7 +2024,7 @@ Among the private fields (after `_armed` field, around line 33), add:
             {
                 GameObject plumeGo = Instantiate(exhaustPlumePrefab, transform);
                 plumeGo.transform.localPosition = Vector3.zero;
-                plumeGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                plumeGo.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                 _exhaustPlumePs = plumeGo.GetComponent<ParticleSystem>();
             }
 
@@ -2034,7 +2034,7 @@ Among the private fields (after `_armed` field, around line 33), add:
             {
                 GameObject puffGo = Instantiate(smokePuffPrefab, transform);
                 puffGo.transform.localPosition = Vector3.zero;
-                puffGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                puffGo.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                 _smokePuffPs = puffGo.GetComponent<ParticleSystem>();
             }
         }
@@ -2087,10 +2087,12 @@ git commit -m "vfx-b2: instantiate exhaust + smoke puff children on Rocket
 
 Awake conditionally instantiates RocketExhaustPlume.prefab and
 RocketSmokePuff.prefab as children of the rocket, each toggle-gated
-+ null-guarded. Both oriented via Quaternion.Euler(90, 0, 0) so the
-Cone shape's local +Z emission resolves to the rocket's local -Y
-(= backward in world after MeshAlignment maps rocket local +Y to
-launchDir).
++ null-guarded. Both oriented via Quaternion.Euler(-90, 0, 0) so the
+Cone shape's local -Z emission (this Unity build's actual default
+when AddComponent-created without explicit shape.rotation) resolves
+to the rocket's local -Y (= backward in world after MeshAlignment
+maps rocket local +Y to launchDir). See per-effect spec block for
+the full reverse-engineering trail.
 
 OnDestroy detaches the children and calls
 Stop(StopEmitting) on each — alive particles finish

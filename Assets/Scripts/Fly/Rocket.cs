@@ -55,25 +55,31 @@ namespace CubeFly.Fly
             // prefab non-null. Plume fires opposite to rocket flight
             // direction so it trails behind the rocket like a flame.
             //
-            // Orientation derivation. The Cone particle shape emits along
-            // its OWN local +Z (confirmed by B-1's ThrusterVfx, which
-            // uses LookRotation to align plume +Z with thruster -Y).
-            // After PR #49's MeshAlignment, the rocket's transform.up
-            // (= rocket's local +Y) is aligned with launchDir; so the
-            // rocket's local -Y = backward in world. We need plume's
-            // local +Z to point along the rocket's local -Y after the
-            // parent's transform is applied — that's a +90° rotation
-            // around the plume's local X axis (Quaternion.Euler(90,0,0)
-            // sends local +Z → local -Y in the plume's frame, which
-            // resolves to -launchDir in world). A 180° rotation would
-            // flip +Z → -Z and emit upward; identity (the degenerate
-            // LookRotation(Vector3.down) fallback) leaves +Z = rocket's
-            // local +Z = world DOWN.
+            // Orientation derivation (empirically reverse-engineered
+            // through play-test iteration). The Cone shape in this
+            // programmatically-generated prefab emits along plume's
+            // local -Z (not +Z, contrary to docs — likely because
+            // AddComponent<ParticleSystem>() doesn't apply the same
+            // default shape.rotation the Editor uses when creating
+            // Cone shapes manually; EnginePlume.prefab works
+            // differently for the same reason). To make plume's -Z
+            // point along the rocket's local -Y (= -transform.up =
+            // -launchDir = backward in world after PR #49's
+            // MeshAlignment), we use Quaternion.Euler(-90, 0, 0): a
+            // -90° rotation around plume's local X sends plume's
+            // local +Z to local +Y, equivalently plume's local -Z to
+            // local -Y, which resolves to -launchDir in world.
+            //
+            // Verified through play-test trial-and-error:
+            //   Euler(  0, 0, 0) (identity fallback) → forward (wrong)
+            //   Euler(180, 0, 0)                     → downward (wrong)
+            //   Euler( 90, 0, 0)                     → forward (wrong)
+            //   Euler(-90, 0, 0)                     → BACKWARD (correct)
             if (VfxSettings.RocketExhaust && exhaustPlumePrefab != null)
             {
                 GameObject plumeGo = Instantiate(exhaustPlumePrefab, transform);
                 plumeGo.transform.localPosition = Vector3.zero;
-                plumeGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                plumeGo.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                 _exhaustPlumePs = plumeGo.GetComponent<ParticleSystem>();
             }
 
@@ -83,7 +89,7 @@ namespace CubeFly.Fly
             {
                 GameObject puffGo = Instantiate(smokePuffPrefab, transform);
                 puffGo.transform.localPosition = Vector3.zero;
-                puffGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                puffGo.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                 _smokePuffPs = puffGo.GetComponent<ParticleSystem>();
             }
 

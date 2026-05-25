@@ -1,3 +1,4 @@
+using CubeFly.Core;
 using UnityEngine;
 
 namespace CubeFly.Fly
@@ -51,6 +52,8 @@ namespace CubeFly.Fly
                 // prevention and apply the weapon's damage value on hit.
                 // The bullet snapshots both at Launch and never re-queries.
                 bullet.Launch(tipPos, fireDir, Construct, damage);
+                PlayMuzzleVfx(tipPos, Quaternion.LookRotation(fireDir),
+                    VfxSettings.MuzzleFlashPyramid);
             }
             else
             {

@@ -4,10 +4,10 @@ using UnityEngine;
 namespace CubeFly.Core
 {
     // PlayerPrefs-backed static facade for the VFX Debug-tab toggles.
-    // Five typed bool properties; each Get reads PlayerPrefs (default 1
-    // = ON), each Set writes + saves + fires Changed. No batching, no
-    // Apply button: changes take effect immediately because the Debug
-    // tab is a real-time A/B comparison surface.
+    // The typed bool properties below each Get reads PlayerPrefs
+    // (default 1 = ON), each Set writes + saves + fires Changed. No
+    // batching, no Apply button: changes take effect immediately
+    // because the Debug tab is a real-time A/B comparison surface.
     //
     // Default = ON for every key so first-launch matches the spec's
     // "Defaults: ON" rule. PlayerPrefs keys are prefixed `Vfx` so future
@@ -26,6 +26,14 @@ namespace CubeFly.Core
         const string KEnginePlume         = "VfxEnginePlume";
         const string KBoostFlare          = "VfxBoostFlare";
         const string KRcsPuff             = "VfxRcsPuff";
+        const string KMuzzleFlashPyramid  = "VfxMuzzleFlashPyramid";
+        const string KMuzzleFlashCylinder = "VfxMuzzleFlashCylinder";
+        const string KBulletTracer        = "VfxBulletTracer";
+        const string KBulletImpactSpark   = "VfxBulletImpactSpark";
+        const string KBulletImpactDust    = "VfxBulletImpactDust";
+        const string KRocketExhaust       = "VfxRocketExhaust";
+        const string KRocketSmokeTrail    = "VfxRocketSmokeTrail";
+        const string KRocketSmokePuff     = "VfxRocketSmokePuff";
 
         public static event Action Changed;
 
@@ -37,6 +45,14 @@ namespace CubeFly.Core
         public static bool EnginePlume         { get => Get(KEnginePlume); set => Set(KEnginePlume, value); }
         public static bool BoostFlare          { get => Get(KBoostFlare); set => Set(KBoostFlare, value); }
         public static bool RcsPuff             { get => Get(KRcsPuff); set => Set(KRcsPuff, value); }
+        public static bool MuzzleFlashPyramid  { get => Get(KMuzzleFlashPyramid);  set => Set(KMuzzleFlashPyramid,  value); }
+        public static bool MuzzleFlashCylinder { get => Get(KMuzzleFlashCylinder); set => Set(KMuzzleFlashCylinder, value); }
+        public static bool BulletTracer        { get => Get(KBulletTracer);        set => Set(KBulletTracer,        value); }
+        public static bool BulletImpactSpark   { get => Get(KBulletImpactSpark);   set => Set(KBulletImpactSpark,   value); }
+        public static bool BulletImpactDust    { get => Get(KBulletImpactDust);    set => Set(KBulletImpactDust,    value); }
+        public static bool RocketExhaust       { get => Get(KRocketExhaust);       set => Set(KRocketExhaust,       value); }
+        public static bool RocketSmokeTrail    { get => Get(KRocketSmokeTrail);    set => Set(KRocketSmokeTrail,    value); }
+        public static bool RocketSmokePuff     { get => Get(KRocketSmokePuff);     set => Set(KRocketSmokePuff,     value); }
 
         static bool Get(string key) => PlayerPrefs.GetInt(key, 1) != 0;
 

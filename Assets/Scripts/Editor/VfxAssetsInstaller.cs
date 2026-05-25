@@ -154,6 +154,41 @@ namespace CubeFly.EditorTools
             return mat;
         }
 
+        // URP Particles/Unlit, alpha-blended (NOT additive). For VFX
+        // that should darken or soft-overlay (smoke, dust) rather than
+        // pop with bloom. SrcAlpha + OneMinusSrcAlpha standard alpha.
+        static Material EnsureAlphaBlendedParticleMaterial(string path, Texture2D texture, Color tint)
+        {
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                if (shader == null) shader = Shader.Find("Sprites/Default");
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            if (texture != null && mat.HasProperty("_BaseMap"))
+                mat.SetTexture("_BaseMap", texture);
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", tint);
+            if (mat.HasProperty("_Color"))
+                mat.SetColor("_Color", tint);
+            if (mat.HasProperty("_MainTex") && texture != null)
+                mat.SetTexture("_MainTex", texture);
+
+            // Alpha-blend: _Surface = 1 (Transparent) + _Blend = 0 (Alpha).
+            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
+            if (mat.HasProperty("_Blend"))   mat.SetFloat("_Blend", 0f);
+            if (mat.HasProperty("_SrcBlend")) mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (mat.HasProperty("_DstBlend")) mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (mat.HasProperty("_ZWrite"))   mat.SetInt("_ZWrite", 0);
+            mat.renderQueue = 3000;
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
         static void EnsureEnginePlumePrefab(Material plumeMat, Material shockMat)
         {
             GameObject root = new GameObject("EnginePlume");

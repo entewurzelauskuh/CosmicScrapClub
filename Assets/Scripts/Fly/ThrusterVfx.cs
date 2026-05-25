@@ -10,12 +10,23 @@ namespace CubeFly.Fly
     // / lifetime / colour each LateUpdate from
     // ThrusterBehavior.CurrentInputLevel + IsBoosting.
     //
-    // Boost-flare activation rule: requires
-    //   1. ThrusterBehavior.IsBoosting   (i.e. this thruster is actively
-    //      contributing to a boost this fixed step), AND
-    //   2. VfxSettings.BoostFlare         (player has the toggle on).
-    // Engine plume itself is gated on VfxSettings.EnginePlume — when
-    // off, the entire prefab root is SetActive(false).
+    // The EnginePlume and BoostFlare toggles are independent:
+    //
+    //   • EnginePlume only controls the main plume's emission rate
+    //     (zeroed when the toggle is off — existing particles fade
+    //     out within their lifetime; no new ones spawn). The plume
+    //     prefab itself stays active so the shock-diamond child can
+    //     still render.
+    //   • BoostFlare gates both the boost-time amplification of the
+    //     main plume (×rate, ×lifetime, hotter colour) AND the
+    //     visibility of the shock-diamond child.
+    //   • Boost-flare activation rule: BoostFlare toggle on AND this
+    //     thruster's ThrusterBehavior.IsBoosting (i.e. contributing
+    //     to an active boost this fixed step).
+    //
+    // The shock-diamond is INDEPENDENT of EnginePlume — turning the
+    // main plume off while leaving BoostFlare on still pops the
+    // shock-diamond on boost, just without the surrounding stream.
     public class ThrusterVfx : MonoBehaviour
     {
         // Per-thruster steady-state plume tuning. Lowered from the
@@ -72,50 +83,54 @@ namespace CubeFly.Fly
             Transform shockChild = _plumeInstance.transform.Find("ShockDiamond");
             _shockPs = shockChild != null ? shockChild.GetComponent<ParticleSystem>() : null;
 
-            VfxSettings.Changed += OnVfxSettingsChanged;
-            ApplyEnabledState();
-        }
-
-        void OnDestroy()
-        {
-            VfxSettings.Changed -= OnVfxSettingsChanged;
+            // Snap initial emission state to current toggles before any
+            // frame renders — without this, the prefab's default
+            // rateOverTime emits a flash of particles for one frame if
+            // EnginePlume is off at scene load.
+            UpdateEmissionState();
         }
 
         void LateUpdate()
+        {
+            UpdateEmissionState();
+        }
+
+        void UpdateEmissionState()
         {
             if (_plumePs == null || _thruster == null) return;
 
             float input = _thruster.CurrentInputLevel;
             bool boostingThisFrame = _thruster.IsBoosting && VfxSettings.BoostFlare;
 
-            // Emission rate scales linearly with input. Boost amplifies.
+            // Main plume emission: gated by EnginePlume toggle. When
+            // off, the rate goes to 0 so no new particles spawn;
+            // existing particles fade out within their lifetime
+            // (~0.22 s baseline). Boost amplification only applies
+            // when EnginePlume is also on — otherwise there's no
+            // plume to amplify.
             var emission = _plumePs.emission;
-            emission.rateOverTime = BasePlumeRate * input * (boostingThisFrame ? BoostRateMul : 1f);
+            emission.rateOverTime = VfxSettings.EnginePlume
+                ? BasePlumeRate * input * (boostingThisFrame ? BoostRateMul : 1f)
+                : 0f;
 
-            // Lifetime amplifies on boost (longer tail). Colour shifts
-            // hotter on boost.
+            // Main plume lifetime + colour. Only meaningful when
+            // EnginePlume is on (no emission otherwise), but writing
+            // them unconditionally is harmless.
             var main = _plumePs.main;
             main.startLifetime = BaseLifetime * (boostingThisFrame ? BoostLifetimeMul : 1f);
             main.startColor = boostingThisFrame ? BoostPlumeColor : BasePlumeColor;
 
-            // Shock-diamond child active only while boost is engaged on
-            // this thruster.
+            // Shock-diamond child: gated on BoostFlare + this
+            // thruster's boost state. INDEPENDENT of EnginePlume — a
+            // player who turns the main plume off while leaving
+            // BoostFlare on still gets a shock-diamond pop on boost
+            // (without the surrounding stream around it).
             if (_shockPs != null)
             {
                 bool shockActive = boostingThisFrame && input > 0f;
                 if (_shockPs.gameObject.activeSelf != shockActive)
                     _shockPs.gameObject.SetActive(shockActive);
             }
-        }
-
-        void OnVfxSettingsChanged() => ApplyEnabledState();
-
-        void ApplyEnabledState()
-        {
-            if (_plumeInstance == null) return;
-            bool on = VfxSettings.EnginePlume;
-            if (_plumeInstance.activeSelf != on)
-                _plumeInstance.SetActive(on);
         }
     }
 }

@@ -57,6 +57,8 @@ namespace CubeFly.EditorTools
         const string BulletImpactDustPrefabPath  = PrefabsDir + "/BulletImpactDust.prefab";
         const string RocketExhaustPlumePrefabPath = PrefabsDir + "/RocketExhaustPlume.prefab";
         const string RocketSmokePuffPrefabPath    = PrefabsDir + "/RocketSmokePuff.prefab";
+        const string BulletPrefabPath = "Assets/Prefabs/Projectiles/Bullet.prefab";
+        const string RocketPrefabPath = "Assets/Prefabs/Projectiles/Rocket.prefab";
 
         [MenuItem(MenuPath)]
         public static void Apply()
@@ -97,6 +99,14 @@ namespace CubeFly.EditorTools
             EnsureBulletImpactDustPrefab(bulletImpactDust);
             EnsureRocketExhaustPlumePrefab(rocketExhaust);
             EnsureRocketSmokePuffPrefab(rcsPuff);             // reuses RcsPuffMat from B-1
+
+            // Load the just-generated prefabs as assets for wiring into
+            // the projectile prefabs that consume them.
+            GameObject exhaustPlumeAsset = AssetDatabase.LoadAssetAtPath<GameObject>(RocketExhaustPlumePrefabPath);
+            GameObject smokePuffAsset    = AssetDatabase.LoadAssetAtPath<GameObject>(RocketSmokePuffPrefabPath);
+
+            WireBulletPrefab(bulletTracer);
+            WireRocketPrefab(exhaustPlumeAsset, smokePuffAsset, rocketSmokeTrail);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -872,6 +882,104 @@ namespace CubeFly.EditorTools
             finally
             {
                 Object.DestroyImmediate(root);
+            }
+        }
+
+        // Patches Bullet.prefab to set the tracerMaterial SerializeField
+        // reference added in Phase B-2. Uses PrefabUtility.LoadPrefabContents
+        // + SerializedObject so the prefab on disk gets the reference,
+        // surviving a fresh clone of the repo. Idempotent — re-running
+        // sets the same reference again.
+        //
+        // Bullet must have a [SerializeField] Material tracerMaterial
+        // field at this point (added in the per-projectile wiring task).
+        // If the field hasn't been added yet, SerializedObject.FindProperty
+        // returns null and this no-ops with a warning — safe.
+        static void WireBulletPrefab(Material tracerMat)
+        {
+            if (!File.Exists(BulletPrefabPath))
+            {
+                Debug.unityLogger.LogWarning("VfxAssetsInstaller",
+                    $"{BulletPrefabPath} not found; skipping bullet prefab wiring.");
+                return;
+            }
+            GameObject instance = PrefabUtility.LoadPrefabContents(BulletPrefabPath);
+            try
+            {
+                var bullet = instance.GetComponent<CubeFly.Fly.Bullet>();
+                if (bullet == null)
+                {
+                    Debug.unityLogger.LogWarning("VfxAssetsInstaller",
+                        $"{BulletPrefabPath} has no Bullet component; skipping wiring.");
+                    return;
+                }
+                var so = new SerializedObject(bullet);
+                var prop = so.FindProperty("tracerMaterial");
+                if (prop == null)
+                {
+                    Debug.unityLogger.LogWarning("VfxAssetsInstaller",
+                        "Bullet has no 'tracerMaterial' SerializeField yet; " +
+                        "wiring deferred until that field is added.");
+                    return;
+                }
+                prop.objectReferenceValue = tracerMat;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                PrefabUtility.SaveAsPrefabAsset(instance, BulletPrefabPath);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(instance);
+            }
+        }
+
+        // Patches Rocket.prefab to set the exhaustPlumePrefab,
+        // smokePuffPrefab, and smokeTrailMaterial SerializeField references
+        // added in Phase B-2. Same idempotent SerializedObject path as
+        // WireBulletPrefab.
+        static void WireRocketPrefab(
+            GameObject exhaustPlumePrefab, GameObject smokePuffPrefab, Material smokeTrailMat)
+        {
+            if (!File.Exists(RocketPrefabPath))
+            {
+                Debug.unityLogger.LogWarning("VfxAssetsInstaller",
+                    $"{RocketPrefabPath} not found; skipping rocket prefab wiring.");
+                return;
+            }
+            GameObject instance = PrefabUtility.LoadPrefabContents(RocketPrefabPath);
+            try
+            {
+                var rocket = instance.GetComponent<CubeFly.Fly.Rocket>();
+                if (rocket == null)
+                {
+                    Debug.unityLogger.LogWarning("VfxAssetsInstaller",
+                        $"{RocketPrefabPath} has no Rocket component; skipping wiring.");
+                    return;
+                }
+                var so = new SerializedObject(rocket);
+                bool anySet = false;
+
+                var pPlume = so.FindProperty("exhaustPlumePrefab");
+                if (pPlume != null) { pPlume.objectReferenceValue = exhaustPlumePrefab; anySet = true; }
+
+                var pPuff = so.FindProperty("smokePuffPrefab");
+                if (pPuff != null) { pPuff.objectReferenceValue = smokePuffPrefab; anySet = true; }
+
+                var pTrail = so.FindProperty("smokeTrailMaterial");
+                if (pTrail != null) { pTrail.objectReferenceValue = smokeTrailMat; anySet = true; }
+
+                if (!anySet)
+                {
+                    Debug.unityLogger.LogWarning("VfxAssetsInstaller",
+                        "Rocket has no B-2 SerializeFields yet; wiring deferred " +
+                        "until exhaustPlumePrefab/smokePuffPrefab/smokeTrailMaterial are added.");
+                    return;
+                }
+                so.ApplyModifiedPropertiesWithoutUndo();
+                PrefabUtility.SaveAsPrefabAsset(instance, RocketPrefabPath);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(instance);
             }
         }
 

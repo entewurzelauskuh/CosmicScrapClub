@@ -46,7 +46,7 @@
 | `Assets/Scripts/Fly/PyramidWeapon.cs` | After `Bullet.Launch(...)`, call `PlayMuzzleVfx(tipPos, Quaternion.LookRotation(fireDir), VfxSettings.MuzzleFlashPyramid)`. |
 | `Assets/Scripts/Fly/CylinderWeapon.cs` | After `Rocket.Launch(...)`, call `PlayMuzzleVfx(exitPos, Quaternion.LookRotation(launchDir), VfxSettings.MuzzleFlashCylinder)`. |
 | `Assets/Scripts/Fly/Bullet.cs` | Add `[SerializeField] Material tracerMaterial`. `Awake` adds TrailRenderer + LingeringTrail (toggle/null-guarded). `Update` polls `VfxSettings.BulletTracer`. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit)`. `OnDestroy` calls `_lingeringTrail?.DetachAndFade()`. |
-| `Assets/Scripts/Fly/Rocket.cs` | Add `[SerializeField] GameObject exhaustPlumePrefab; smokePuffPrefab; [SerializeField] Material smokeTrailMaterial;`. `Awake` instantiates plume + puff children + TrailRenderer + LingeringTrail (each toggle/null-guarded). `Update` polls three toggles. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit)`. `OnDestroy` detaches all child VFX and calls `Stop(StopEmittingAndKeepParticles)` on ParticleSystem children. |
+| `Assets/Scripts/Fly/Rocket.cs` | Add `[SerializeField] GameObject exhaustPlumePrefab; smokePuffPrefab; [SerializeField] Material smokeTrailMaterial;`. `Awake` instantiates plume + puff children + TrailRenderer + LingeringTrail (each toggle/null-guarded). `Update` polls three toggles. After `ApplyAndLog(...)`, call `ProjectileHit.SpawnImpactVfx(hit)`. `OnDestroy` detaches all child VFX and calls `Stop(ParticleSystemStopBehavior.StopEmitting)` on ParticleSystem children (StopEmitting keeps alive particles; StopEmittingAndClear would kill them). |
 | `Assets/Scripts/Fly/ProjectileHit.cs` | Add `public static GameObject SparkPrefab; DustPrefab;` + `ConfigureImpactPrefabs(spark, dust)` setter + `SpawnImpactVfx(in RaycastHit hit)` static method. **`ApplyAndLog` itself unchanged.** |
 | `Assets/Scripts/Fly/FlyController.cs` | Add 4 new `[SerializeField] GameObject` fields. In `Awake`: `ProjectileHit.ConfigureImpactPrefabs(...)`. In `BuildConstruct`, when a weapon component is found, type-switch on `PyramidWeapon`/`CylinderWeapon` and call `weapon.SetMuzzlePrefab(...)`. |
 | `Assets/Scripts/Editor/VfxAssetsInstaller.cs` | Extend `Apply()`. Add `EnsureAlphaBlendedParticleMaterial` helper. Add `EnsureStarburstTexture` + `EnsureTracerStripeTexture` generators. Add 6 material creation calls + 6 prefab creation calls. Add `WireBulletPrefab` + `WireRocketPrefab` methods that use `PrefabUtility.LoadPrefabContents` + `SerializedObject` to set the new SerializeField references on the existing projectile prefabs. |
@@ -2016,7 +2016,11 @@ Among the private fields (after `_armed` field, around line 33), add:
         {
             if (ps == null) return;
             ps.transform.SetParent(null, true);   // worldPositionStays
-            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndKeepParticles);
+            // StopEmitting (not StopEmittingAndClear) keeps already-
+            // alive particles alive to finish their lifetimes; the
+            // prefab's main.stopAction = Destroy then auto-cleans the
+            // orphan GameObject once the last particle expires.
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
         }
 ```
 
@@ -2046,7 +2050,7 @@ RocketSmokePuff.prefab as children of the rocket, each toggle-gated
 cone shape emits opposite to rocket flight direction.
 
 OnDestroy detaches the children and calls
-Stop(StopEmittingAndKeepParticles) on each — alive particles finish
+Stop(StopEmitting) on each — alive particles finish
 naturally, prefab stopAction=Destroy auto-cleans orphan GameObjects.
 
 Re-runs installer to populate exhaustPlumePrefab + smokePuffPrefab

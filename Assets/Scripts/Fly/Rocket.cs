@@ -209,9 +209,11 @@ namespace CubeFly.Fly
                     out RaycastHit hit))
             {
                 ProjectileHit.ApplyAndLog(hit, _damage, _firingConstruct, TAG);
-                // Rocket impacts ~10% bigger than bullet impacts — the
+                // Rocket impacts ~20% bigger than bullet impacts — the
                 // rocket warhead is a bigger boom than a bullet's puncture.
-                ProjectileHit.SpawnImpactVfx(hit, scale: 1.10f);
+                // (Tuned from initial 1.10 after play-test; 1.20 reads
+                // more proportionate to the warhead size.)
+                ProjectileHit.SpawnImpactVfx(hit, scale: 1.20f);
                 Destroy(gameObject);
                 return;
             }

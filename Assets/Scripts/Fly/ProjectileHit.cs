@@ -147,7 +147,7 @@ namespace CubeFly.Fly
         // toggles — both, either, or neither can fire.
         //
         // Optional `scale` uniform-scales the spawned impact prefabs.
-        // Bullet uses the default 1.0; Rocket passes 1.10 so its
+        // Bullet uses the default 1.0; Rocket passes 1.20 so its
         // warhead-sized impact reads slightly bigger than a bullet
         // puncture.
         //

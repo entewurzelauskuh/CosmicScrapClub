@@ -192,6 +192,16 @@ namespace CubeFly.Core
             bgImage.color = BackgroundIdle;
             toggle.targetGraphic = bgImage;
 
+            // 1-pixel white outline so the checkbox stays visually
+            // distinct against any background (modal panel, tab
+            // content). Unity's Outline replicates the mesh in four
+            // diagonal offsets, producing a uniform outline at the
+            // configured effectDistance regardless of the box's tint
+            // or the checkmark state.
+            Outline bgOutline = bgGO.AddComponent<Outline>();
+            bgOutline.effectColor = Color.white;
+            bgOutline.effectDistance = new Vector2(1f, 1f);
+
             // Checkmark — child of Background, shown when Toggle.isOn.
             GameObject checkGO = new GameObject("Checkmark",
                 typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));

@@ -51,6 +51,8 @@ namespace CubeFly.EditorTools
         const string RocketSmokeTrailMatPath  = MaterialsDir + "/RocketSmokeTrailMat.mat";
         const string EnginePlumePrefabPath = PrefabsDir + "/EnginePlume.prefab";
         const string RcsPuffPrefabPath     = PrefabsDir + "/RcsPuff.prefab";
+        const string MuzzleFlashStarburstPrefabPath = PrefabsDir + "/MuzzleFlashStarburst.prefab";
+        const string MuzzleFlashDiscPrefabPath      = PrefabsDir + "/MuzzleFlashDisc.prefab";
 
         [MenuItem(MenuPath)]
         public static void Apply()
@@ -85,11 +87,16 @@ namespace CubeFly.EditorTools
 
             EnsureEnginePlumePrefab(enginePlume, boostShock);
             EnsureRcsPuffPrefab(rcsPuff);
+            EnsureMuzzleFlashStarburstPrefab(muzzleStarburst);
+            EnsureMuzzleFlashDiscPrefab(muzzleDisc);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log("VfxAssetsInstaller: applied Phase B-1 VFX assets " +
-                "(Glow_64, EnginePlumeMat, BoostShockMat, RcsPuffMat, EnginePlume.prefab, RcsPuff.prefab).");
+            Debug.Log("VfxAssetsInstaller: applied Phase B-1 + B-2 VFX assets " +
+                "(Glow_64, MuzzleStarburst_64, BulletTracerStripe_8x32; " +
+                "EnginePlumeMat, BoostShockMat, RcsPuffMat, MuzzleStarburstMat, MuzzleDiscMat, " +
+                "BulletTracerMat, BulletImpactDustMat, RocketExhaustMat, RocketSmokeTrailMat; " +
+                "EnginePlume.prefab, RcsPuff.prefab, MuzzleFlashStarburst.prefab, MuzzleFlashDisc.prefab).");
         }
 
         static void EnsureDir(string assetDir)
@@ -425,6 +432,124 @@ namespace CubeFly.EditorTools
                 sRenderer.sharedMaterial = shockMat;
 
                 PrefabUtility.SaveAsPrefabAsset(root, EnginePlumePrefabPath);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        // Pyramid muzzle flash. Single-particle one-shot starburst at the
+        // weapon's tip. stopAction = Destroy + duration < lifetime ensures
+        // the instantiated GameObject auto-cleans after its burst.
+        static void EnsureMuzzleFlashStarburstPrefab(Material starburstMat)
+        {
+            GameObject root = new GameObject("MuzzleFlashStarburst");
+            try
+            {
+                ParticleSystem ps = root.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+                var main = ps.main;
+                main.duration = 0.10f;
+                main.loop = false;
+                main.startLifetime = 0.06f;
+                main.startSpeed = 0f;
+                main.startSize = 0.18f;
+                main.startColor = new Color(1f, 0.96f, 0.75f, 1f) * 3f;
+                main.simulationSpace = ParticleSystemSimulationSpace.Local;
+                main.maxParticles = 8;
+                main.playOnAwake = true;
+                main.stopAction = ParticleSystemStopAction.Destroy;
+
+                var emission = ps.emission;
+                emission.enabled = true;
+                emission.rateOverTime = 0f;
+                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+
+                var shape = ps.shape;
+                shape.enabled = true;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 0.05f;
+
+                var sz = ps.sizeOverLifetime;
+                sz.enabled = true;
+                AnimationCurve szCurve = new AnimationCurve(
+                    new Keyframe(0f, 1f), new Keyframe(1f, 0.4f));
+                sz.size = new ParticleSystem.MinMaxCurve(1f, szCurve);
+
+                var col = ps.colorOverLifetime;
+                col.enabled = true;
+                Gradient g = new Gradient();
+                g.SetKeys(
+                    new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.10f), new GradientAlphaKey(0f, 1f) });
+                col.color = new ParticleSystem.MinMaxGradient(g);
+
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sharedMaterial = starburstMat;
+
+                PrefabUtility.SaveAsPrefabAsset(root, MuzzleFlashStarburstPrefabPath);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        // Cylinder muzzle flash. Single-particle soft disc puff, warmer
+        // orange tint, slight outward expansion (startSpeed > 0 +
+        // expanding sizeOverLifetime). Reuses Glow_64.png via MuzzleDiscMat.
+        static void EnsureMuzzleFlashDiscPrefab(Material discMat)
+        {
+            GameObject root = new GameObject("MuzzleFlashDisc");
+            try
+            {
+                ParticleSystem ps = root.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+                var main = ps.main;
+                main.duration = 0.12f;
+                main.loop = false;
+                main.startLifetime = 0.10f;
+                main.startSpeed = 0.5f;
+                main.startSize = 0.30f;
+                main.startColor = new Color(1f, 0.70f, 0.30f, 1f) * 2.5f;
+                main.simulationSpace = ParticleSystemSimulationSpace.Local;
+                main.maxParticles = 6;
+                main.playOnAwake = true;
+                main.stopAction = ParticleSystemStopAction.Destroy;
+
+                var emission = ps.emission;
+                emission.enabled = true;
+                emission.rateOverTime = 0f;
+                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+
+                var shape = ps.shape;
+                shape.enabled = true;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 0.05f;
+
+                var sz = ps.sizeOverLifetime;
+                sz.enabled = true;
+                AnimationCurve szCurve = new AnimationCurve(
+                    new Keyframe(0f, 0.6f), new Keyframe(1f, 1.4f));
+                sz.size = new ParticleSystem.MinMaxCurve(1f, szCurve);
+
+                var col = ps.colorOverLifetime;
+                col.enabled = true;
+                Gradient g = new Gradient();
+                g.SetKeys(
+                    new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.15f), new GradientAlphaKey(0f, 1f) });
+                col.color = new ParticleSystem.MinMaxGradient(g);
+
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sharedMaterial = discMat;
+
+                PrefabUtility.SaveAsPrefabAsset(root, MuzzleFlashDiscPrefabPath);
             }
             finally
             {

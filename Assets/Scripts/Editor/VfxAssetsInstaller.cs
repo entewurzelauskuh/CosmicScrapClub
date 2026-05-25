@@ -53,6 +53,8 @@ namespace CubeFly.EditorTools
         const string RcsPuffPrefabPath     = PrefabsDir + "/RcsPuff.prefab";
         const string MuzzleFlashStarburstPrefabPath = PrefabsDir + "/MuzzleFlashStarburst.prefab";
         const string MuzzleFlashDiscPrefabPath      = PrefabsDir + "/MuzzleFlashDisc.prefab";
+        const string BulletImpactSparkPrefabPath = PrefabsDir + "/BulletImpactSpark.prefab";
+        const string BulletImpactDustPrefabPath  = PrefabsDir + "/BulletImpactDust.prefab";
 
         [MenuItem(MenuPath)]
         public static void Apply()
@@ -89,6 +91,8 @@ namespace CubeFly.EditorTools
             EnsureRcsPuffPrefab(rcsPuff);
             EnsureMuzzleFlashStarburstPrefab(muzzleStarburst);
             EnsureMuzzleFlashDiscPrefab(muzzleDisc);
+            EnsureBulletImpactSparkPrefab(muzzleStarburst);   // reuses MuzzleStarburstMat
+            EnsureBulletImpactDustPrefab(bulletImpactDust);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -96,7 +100,8 @@ namespace CubeFly.EditorTools
                 "(Glow_64, MuzzleStarburst_64, BulletTracerStripe_8x32; " +
                 "EnginePlumeMat, BoostShockMat, RcsPuffMat, MuzzleStarburstMat, MuzzleDiscMat, " +
                 "BulletTracerMat, BulletImpactDustMat, RocketExhaustMat, RocketSmokeTrailMat; " +
-                "EnginePlume.prefab, RcsPuff.prefab, MuzzleFlashStarburst.prefab, MuzzleFlashDisc.prefab).");
+                "EnginePlume.prefab, RcsPuff.prefab, MuzzleFlashStarburst.prefab, MuzzleFlashDisc.prefab, " +
+                "BulletImpactSpark.prefab, BulletImpactDust.prefab).");
         }
 
         static void EnsureDir(string assetDir)
@@ -550,6 +555,182 @@ namespace CubeFly.EditorTools
                 renderer.sharedMaterial = discMat;
 
                 PrefabUtility.SaveAsPrefabAsset(root, MuzzleFlashDiscPrefabPath);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        // Bullet impact spark. Two-layer prefab:
+        //  Layer 1 (root)  — small bright core, single billboard, white
+        //                     starburst at quarter scale of the muzzle.
+        //  Layer 2 (child) — 6 radial spark streaks flying outward,
+        //                     stretched billboards velocity-aligned.
+        // The whole prefab is instantiated with Quaternion.LookRotation(
+        // hit.normal) by ProjectileHit.SpawnImpactVfx, so the child
+        // hemisphere fires OUTWARD from the surface.
+        static void EnsureBulletImpactSparkPrefab(Material sparkMat)
+        {
+            GameObject root = new GameObject("BulletImpactSpark");
+            try
+            {
+                // Layer 1 — core
+                ParticleSystem ps = root.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var main = ps.main;
+                main.duration = 0.10f;
+                main.loop = false;
+                main.startLifetime = 0.08f;
+                main.startSpeed = 0f;
+                main.startSize = 0.10f;
+                main.startColor = new Color(1f, 0.96f, 0.75f, 1f) * 3f;
+                main.simulationSpace = ParticleSystemSimulationSpace.Local;
+                main.maxParticles = 3;
+                main.playOnAwake = true;
+                main.stopAction = ParticleSystemStopAction.Destroy;
+
+                var emission = ps.emission;
+                emission.enabled = true;
+                emission.rateOverTime = 0f;
+                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+
+                var shape = ps.shape;
+                shape.enabled = true;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 0.02f;
+
+                var sz = ps.sizeOverLifetime;
+                sz.enabled = true;
+                AnimationCurve szCurve = new AnimationCurve(
+                    new Keyframe(0f, 1f), new Keyframe(1f, 0.5f));
+                sz.size = new ParticleSystem.MinMaxCurve(1f, szCurve);
+
+                var col = ps.colorOverLifetime;
+                col.enabled = true;
+                Gradient gCore = new Gradient();
+                gCore.SetKeys(
+                    new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.10f), new GradientAlphaKey(0f, 1f) });
+                col.color = new ParticleSystem.MinMaxGradient(gCore);
+
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sharedMaterial = sparkMat;
+
+                // Layer 2 — sparks (child)
+                GameObject sparksGo = new GameObject("Sparks");
+                sparksGo.transform.SetParent(root.transform, false);
+                ParticleSystem sparksPs = sparksGo.AddComponent<ParticleSystem>();
+                sparksPs.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+                var sm = sparksPs.main;
+                sm.duration = 0.10f;
+                sm.loop = false;
+                sm.startLifetime = new ParticleSystem.MinMaxCurve(0.12f, 0.18f);
+                sm.startSpeed = 2f;
+                sm.startSize = 0.04f;
+                sm.startColor = new Color(1f, 0.96f, 0.70f, 1f) * 2.5f;
+                sm.simulationSpace = ParticleSystemSimulationSpace.World;
+                sm.maxParticles = 8;
+                sm.playOnAwake = true;
+                sm.stopAction = ParticleSystemStopAction.None;
+
+                var se = sparksPs.emission;
+                se.enabled = true;
+                se.rateOverTime = 0f;
+                se.SetBursts(new[] { new ParticleSystem.Burst(0f, 6) });
+
+                var sShape = sparksPs.shape;
+                sShape.enabled = true;
+                sShape.shapeType = ParticleSystemShapeType.Hemisphere;
+                sShape.radius = 0.02f;
+
+                var ssz = sparksPs.sizeOverLifetime;
+                ssz.enabled = true;
+                AnimationCurve sparkSizeCurve = new AnimationCurve(
+                    new Keyframe(0f, 1f), new Keyframe(1f, 0.2f));
+                ssz.size = new ParticleSystem.MinMaxCurve(1f, sparkSizeCurve);
+
+                var scol = sparksPs.colorOverLifetime;
+                scol.enabled = true;
+                Gradient gSparks = new Gradient();
+                gSparks.SetKeys(
+                    new[]
+                    {
+                        new GradientColorKey(Color.white, 0f),
+                        new GradientColorKey(new Color(1f, 0.4f, 0.75f), 1f),
+                    },
+                    new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+                scol.color = new ParticleSystem.MinMaxGradient(gSparks);
+
+                var sRenderer = sparksGo.GetComponent<ParticleSystemRenderer>();
+                sRenderer.renderMode = ParticleSystemRenderMode.Stretch;
+                sRenderer.lengthScale = 0f;
+                sRenderer.velocityScale = 0.4f;
+                sRenderer.sharedMaterial = sparkMat;
+
+                PrefabUtility.SaveAsPrefabAsset(root, BulletImpactSparkPrefabPath);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        // Bullet impact ground dust. Single-layer warm tan puff cluster.
+        // Alpha-blended (not additive) so it darkens/soft-overlays
+        // instead of glowing. Hemisphere shape aligned with hit.normal
+        // at spawn time.
+        static void EnsureBulletImpactDustPrefab(Material dustMat)
+        {
+            GameObject root = new GameObject("BulletImpactDust");
+            try
+            {
+                ParticleSystem ps = root.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+                var main = ps.main;
+                main.duration = 0.30f;
+                main.loop = false;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.40f);
+                main.startSpeed = 0.8f;
+                main.startSize = new ParticleSystem.MinMaxCurve(0.15f, 0.25f);
+                main.startColor = new Color(0.92f, 0.82f, 0.60f, 1f);
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.maxParticles = 8;
+                main.playOnAwake = true;
+                main.stopAction = ParticleSystemStopAction.Destroy;
+
+                var emission = ps.emission;
+                emission.enabled = true;
+                emission.rateOverTime = 0f;
+                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 5) });
+
+                var shape = ps.shape;
+                shape.enabled = true;
+                shape.shapeType = ParticleSystemShapeType.Hemisphere;
+                shape.radius = 0.06f;
+
+                var sz = ps.sizeOverLifetime;
+                sz.enabled = true;
+                AnimationCurve szCurve = new AnimationCurve(
+                    new Keyframe(0f, 0.6f), new Keyframe(1f, 1.6f));
+                sz.size = new ParticleSystem.MinMaxCurve(1f, szCurve);
+
+                var col = ps.colorOverLifetime;
+                col.enabled = true;
+                Gradient g = new Gradient();
+                g.SetKeys(
+                    new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.7f, 0.10f), new GradientAlphaKey(0f, 1f) });
+                col.color = new ParticleSystem.MinMaxGradient(g);
+
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sharedMaterial = dustMat;
+
+                PrefabUtility.SaveAsPrefabAsset(root, BulletImpactDustPrefabPath);
             }
             finally
             {

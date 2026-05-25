@@ -133,6 +133,16 @@ namespace CubeFly.Fly
         [Tooltip("RcsPuff.prefab (Assets/VFX/Prefabs/). One RcsPuffVfx is attached to the construct root, which spawns four corner emitters of this prefab.")]
         [SerializeField] GameObject rcsPuffPrefab;
 
+        [Header("Phase B-2 VFX prefabs")]
+        [Tooltip("MuzzleFlashStarburst.prefab (Assets/VFX/Prefabs/). Wired to each PyramidWeapon at BuildConstruct time. If null, no Pyramid muzzle VFX fires.")]
+        [SerializeField] GameObject muzzleFlashStarburstPrefab;
+        [Tooltip("MuzzleFlashDisc.prefab (Assets/VFX/Prefabs/). Wired to each CylinderWeapon at BuildConstruct time. If null, no Cylinder muzzle VFX fires.")]
+        [SerializeField] GameObject muzzleFlashDiscPrefab;
+        [Tooltip("BulletImpactSpark.prefab (Assets/VFX/Prefabs/). Passed to ProjectileHit.ConfigureImpactPrefabs once in Awake. If null, no spark VFX fires.")]
+        [SerializeField] GameObject bulletImpactSparkPrefab;
+        [Tooltip("BulletImpactDust.prefab (Assets/VFX/Prefabs/). Passed to ProjectileHit.ConfigureImpactPrefabs once in Awake. If null, no dust VFX fires (even on upward hits).")]
+        [SerializeField] GameObject bulletImpactDustPrefab;
+
         CubeFlyInputActions _input;
 
         // Per-frame input snapshots, sampled in Update, applied in FixedUpdate.
@@ -208,6 +218,11 @@ namespace CubeFly.Fly
         void Awake()
         {
             _input = new CubeFlyInputActions();
+            // Configure impact prefabs before any projectile can spawn.
+            // Projectiles can't spawn until BuildConstruct + the player
+            // presses fire, both of which happen after Start; Awake is one
+            // phase earlier, so refs are always set in time.
+            ProjectileHit.ConfigureImpactPrefabs(bulletImpactSparkPrefab, bulletImpactDustPrefab);
             Debug.unityLogger.Log(TAG, "FlyController initialised.");
         }
 
@@ -474,6 +489,14 @@ namespace CubeFly.Fly
                     // Lasers are also power consumers — track them so the
                     // energy system's Eject can shed a reactor-less laser.
                     if (weapon is LaserWeapon laser) _spawnedLasers.Add(laser);
+
+                    // Phase B-2 VFX: wire the right muzzle prefab per
+                    // weapon type. PlayMuzzleVfx in WeaponBehavior null-
+                    // guards if the prefab is unwired in the scene.
+                    if (weapon is PyramidWeapon && muzzleFlashStarburstPrefab != null)
+                        weapon.SetMuzzlePrefab(muzzleFlashStarburstPrefab);
+                    else if (weapon is CylinderWeapon && muzzleFlashDiscPrefab != null)
+                        weapon.SetMuzzlePrefab(muzzleFlashDiscPrefab);
                 }
 
                 // Collect any ThrusterBehavior on this placement — wire

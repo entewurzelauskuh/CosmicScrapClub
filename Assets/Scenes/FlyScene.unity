@@ -282,6 +282,10 @@ MonoBehaviour:
   maxResponsivenessMass: 100
   enginePlumePrefab: {fileID: 4605722308631259017, guid: eb6ef08eef84c4c2d9cd852c7a2b8496, type: 3}
   rcsPuffPrefab: {fileID: 4661517005492168823, guid: f6d3a32549a5c48c4b829d6541866102, type: 3}
+  muzzleFlashStarburstPrefab: {fileID: 3913809438248211409, guid: 9d4706641ec2c492298738966c541908, type: 3}
+  muzzleFlashDiscPrefab: {fileID: 8992904473152764929, guid: f5da28d8c294a43e3aa7a93d041e3ae3, type: 3}
+  bulletImpactSparkPrefab: {fileID: 707531004614925794, guid: 246891c12e0bc4a4885899f9c397e32f, type: 3}
+  bulletImpactDustPrefab: {fileID: 403627228423837864, guid: 2cc79914106174bf38a9c7482a4b6ae9, type: 3}
 --- !u!114 &300003
 MonoBehaviour:
   m_ObjectHideFlags: 0

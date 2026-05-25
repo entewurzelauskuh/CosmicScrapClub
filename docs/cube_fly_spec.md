@@ -497,7 +497,7 @@ A tabbed Settings UI reachable from **both** the Main Menu's `Settings`
 button and a new `Settings` button on the ESC pause overlay
 (`PauseMenu`). Same UI from two entry points.
 
-`SettingsMenu` is a third `DontDestroyOnLoad` singleton structured
+`SettingsMenu` is another `DontDestroyOnLoad` singleton structured
 exactly like `PauseMenu` / `GameOverMenu` — spawned by a
 `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` hook, no scene
 wiring required, marked `[DefaultExecutionOrder(-2000)]` so its
@@ -524,7 +524,7 @@ initially by the Debug-tab toggles but designed for general UI reuse:
 
 - **`TooltipHud`** — lazy DDOL singleton spawned on first `Show()` (no `BeforeSceneLoad` bootstrap — there are no tooltips until a `TooltipTrigger` is hovered). Owns a small `Image` + `Text` panel parented under `PersistentHud.Instance.Root`, with **its own Canvas override at `sortingOrder = 500`** — above Settings (350) and GameOverMenu (400). Tooltips are always on top.
 - **`TooltipTrigger`** — `MonoBehaviour` implementing `IPointerEnterHandler` / `IPointerExitHandler`. `OnPointerEnter` → `TooltipHud.Show(text, eventData.position)`; `OnPointerExit` → `TooltipHud.Hide()`. `OnDisable` also hides the tooltip so it doesn't get orphaned when its parent UI hides (ESC closes Settings, tab switch, scene transition).
-- The tooltip follows the cursor while shown (position updated each `Update`) with screen-edge clamping. No delay before show, no fade, single-line text — minimal scaffold.
+- The tooltip follows the cursor while shown (position updated each `Update`) with screen-edge clamping. No delay before show, no fade; the text panel wraps to multiple lines at a width cap and resizes vertically as needed — minimal scaffold.
 
 ### Persistence layer
 

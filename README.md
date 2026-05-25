@@ -91,12 +91,14 @@ cd "<repo-folder>"
 The build settings have `MainMenu` registered as the first scene
 (index 0), so pressing **Play** anywhere drops you into the menu.
 
-You can also press Play directly on `BuildScene` or `FlyScene` — four
-of the persistent UI scripts (`UIManager`, `PauseMenu`, `GameOverMenu`,
-`LogBootstrapper`) self-bootstrap via `RuntimeInitializeOnLoadMethod`
-before any scene loads, and the shared `PersistentHud` canvas is
-lazy-created on first `Instance` access by whichever of the four
-Awakes first. Direct-Play works regardless of the entry scene.
+You can also press Play directly on `BuildScene` or `FlyScene` — six
+of the persistent singletons (`UIManager`, `PauseMenu`, `GameOverMenu`,
+`SettingsMenu`, `LogBootstrapper`, `VfxApplier`) self-bootstrap via
+`RuntimeInitializeOnLoadMethod` before any scene loads, and the
+shared `PersistentHud` canvas is lazy-created on first `Instance`
+access by whichever of the five UI ones Awakes first (`VfxApplier`
+owns no UI and never touches `PersistentHud`). Direct-Play works
+regardless of the entry scene.
 BuildScene entered this way has no armed save slot
 (`GameData.ActiveSlot = -1`); autosave is disabled and a warning is
 logged. To exercise the save path, start from `MainMenu` and walk

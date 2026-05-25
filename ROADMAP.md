@@ -56,7 +56,7 @@ Phasing per `docs/vfx_pass_ideas.md`:
 
 ### 2. Settings menu
 
-A tabbed settings UI, reachable from **both** the Main Menu's `Settings` button (currently logs and does nothing) and the ESC pause overlay (which gains a new `Settings` button alongside `Menu` / `Back to Desktop`) — same UI from two entry points.
+A tabbed settings UI, reachable from **both** the Main Menu's `Settings` button and the ESC pause overlay (which gains a new `Settings` button alongside `Menu` / `Back to Desktop`) — same UI from two entry points.
 
 Six tabs scaffolded as **placeholders** — the scaffolding is the deliverable; real controls fill in tab by tab later, as each becomes relevant:
 

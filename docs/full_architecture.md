@@ -90,9 +90,11 @@ This document is the implementation map.
                                 │ • VfxApplier — URP profile sync         │
                                 │   (no UI; listens to VfxSettings)       │
                                 │ • LogBootstrapper — file logger         │
-                                │ (all six self-bootstrap BeforeSceneLoad;│
-                                │  the first persistent-UI singleton to   │
-                                │  Awake triggers PersistentHud.Create)   │
+                                │ (PersistentHud is lazy-created; the     │
+                                │  other six self-bootstrap BeforeSceneLoad.│
+                                │  Whichever UI singleton first accesses  │
+                                │  PersistentHud.Instance triggers its    │
+                                │  creation — VfxApplier owns no UI.)     │
                                 │                                         │
                                 │ Lazy DDOL singleton (separate tier)     │
                                 │ • TooltipHud — floating hover tooltip   │

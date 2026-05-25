@@ -1,3 +1,4 @@
+using CubeFly.Core;
 using UnityEngine;
 
 namespace CubeFly.Fly
@@ -40,6 +41,8 @@ namespace CubeFly.Fly
                 // weapon's damage value on hit. Snapshotted at Launch.
                 rocket.Launch(spawnPos, launchDir, exitPos, crosshairWorldTarget,
                     Construct, damage);
+                PlayMuzzleVfx(exitPos, Quaternion.LookRotation(launchDir),
+                    VfxSettings.MuzzleFlashCylinder);
             }
             else
             {

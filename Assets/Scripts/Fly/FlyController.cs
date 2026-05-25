@@ -194,6 +194,11 @@ namespace CubeFly.Fly
         // bottoming out.
         public bool IsBoostCritical => BoostFraction <= criticalBoostFraction;
 
+        // Read-only snapshot of the player's attitude inputs this frame —
+        // pitch / yaw / roll as a single Vector3. Read by RcsPuffVfx each
+        // Update to decide which construct corner emitter should puff.
+        public Vector3 CurrentAttitudeInput => new Vector3(_pitchInput, _yawInput, _rollInput);
+
         void Awake()
         {
             _input = new CubeFlyInputActions();

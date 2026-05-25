@@ -18,8 +18,13 @@ namespace CubeFly.Fly
     // _thrustInput per FixedUpdate to decide whether this thruster is
     // pushing the way the player is commanding thrust.
     //
-    // This component has no Update — it holds no per-frame state. It is
-    // a passive descriptor; FlyController drives all the boost logic.
+    // This component has no Update — its flight-side behaviour is a
+    // passive descriptor that FlyController reads (LocalThrustAxis) to
+    // drive boost logic. Phase B-1 added per-frame VFX-side state
+    // (CurrentInputLevel + IsBoosting) pushed by FlyController each
+    // FixedUpdate; the sibling ThrusterVfx reads it in LateUpdate to
+    // drive the plume. The state is purely for VFX — no effect on
+    // flight forces or torque.
     public class ThrusterBehavior : MonoBehaviour
     {
         // Set by FlyController.BuildConstruct right after Instantiate,
@@ -47,6 +52,22 @@ namespace CubeFly.Fly
 
         Vector3 _localThrustAxis;
         bool _axisResolved;
+
+        // VFX-side state, pushed by FlyController each FixedUpdate
+        // (CurrentInputLevel = magnitude of the player's thrust input on
+        // this thruster's axis, 0 if the sign mismatches; IsBoosting =
+        // true when this thruster is contributing to an active boost).
+        // ThrusterVfx reads these in LateUpdate to drive its plume's
+        // emission rate / lifetime / colour. No effect on flight logic
+        // itself — purely a data hand-off for VFX.
+        float _currentInputLevel;
+        bool _isBoosting;
+
+        public float CurrentInputLevel => _currentInputLevel;
+        public bool  IsBoosting        => _isBoosting;
+
+        internal void SetInputLevel(float level) => _currentInputLevel = Mathf.Clamp01(level);
+        internal void SetBoosting(bool boosting) => _isBoosting = boosting;
 
         // Convert world-space thrust direction (-transform.up) into the
         // construct's local frame, then snap each component to the

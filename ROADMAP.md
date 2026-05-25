@@ -46,7 +46,11 @@ Engine trails, muzzle flashes, projectile trails, explosion / death particles, h
 Phasing per `docs/vfx_pass_ideas.md`:
 
 - **Phase 1 — Post-processing + Debug tab (in-flight).** Bloom, Vignette, Tonemapping (ACES), ColorAdjustments, ChromaticAberration as URP Volume overrides on the main game profile, plus the seventh `Debug` tab in Settings with per-effect toggles backed by PlayerPrefs. Establishes the Debug-tab pattern subsequent phases append to. Plus reusable Tooltip helper.
-- **Phase B — Small prefabs / new behaviours.** Engine plumes per thruster cube (with boost flare), muzzle flash + bullet tracer + impact spark, rocket exhaust + smoke trail, cube death enhancement (flash + spark + debris + trail), camera shake on crash / detonation.
+- **Phase B — Small prefabs / new behaviours.** Decomposed into per-area sub-PRs:
+  - **Phase B-1 — Engines + boost flare + RCS puffs (in-flight).** Per-thruster ParticleSystem plumes with input-driven emission, boost-time amplification with shock-diamond sprite, attitude-jet corner puffs.
+  - **Phase B-2 — Weapons + impacts (planned).** Muzzle flash + bullet tracer + bullet impact spark + rocket exhaust / smoke trail.
+  - **Phase B-3 — Destruction + crash (planned).** Cube-death enhancement (flash + spark + debris + flame/smoke trail), sustained smoke + emissive flicker on low-HP cubes, camera shake on crash + nearby detonation.
+  - **Phase B-4 — HUD feedback (planned).** Damage vignette pulse, low-HP chromatic-aberration ramp, boost speed lines, crosshair hit-confirm pulse.
 - **Phase C — Shaders + scripted sequences.** Laser beam glow + impact heat-distortion + scorch decal, shield dome (hex/fresnel) + hit ripple + collapse, rocket detonation multi-emitter, delete-tool dissolve, reactor inner glow + stress sparks.
 - **Phase D — Alpha-cube cinematic death.** Multi-stage explosion + time-scale dip + radial blur + debris field, before the existing "Construct Destroyed" overlay.
 

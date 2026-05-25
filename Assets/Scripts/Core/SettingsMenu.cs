@@ -358,6 +358,15 @@ namespace CubeFly.Core
                 ("Chromatic aberration",
                     "Subtle colour-fringe at screen edges. Some find it muddies the picture — toggle off if so.",
                     () => VfxSettings.ChromaticAberration, v => VfxSettings.ChromaticAberration = v),
+                ("Engine plume",
+                    "Per-thruster particle stream along the exhaust direction. Length and brightness scale with thrust input.",
+                    () => VfxSettings.EnginePlume, v => VfxSettings.EnginePlume = v),
+                ("Boost flare",
+                    "Brighter, longer plume with an inner shock-diamond when Left-Ctrl boost is active on a thrustered axis.",
+                    () => VfxSettings.BoostFlare, v => VfxSettings.BoostFlare = v),
+                ("RCS puffs",
+                    "Tiny attitude-jet puffs at construct corners when pitch / yaw / roll is commanded.",
+                    () => VfxSettings.RcsPuff, v => VfxSettings.RcsPuff = v),
             };
 
             // Column-major fill: first half of the list goes in the

@@ -23,6 +23,9 @@ namespace CubeFly.Core
         const string KTonemapping         = "VfxTonemapping";
         const string KColorAdjustments    = "VfxColorAdjustments";
         const string KChromaticAberration = "VfxChromaticAberration";
+        const string KEnginePlume         = "VfxEnginePlume";
+        const string KBoostFlare          = "VfxBoostFlare";
+        const string KRcsPuff             = "VfxRcsPuff";
 
         public static event Action Changed;
 
@@ -31,6 +34,9 @@ namespace CubeFly.Core
         public static bool Tonemapping         { get => Get(KTonemapping); set => Set(KTonemapping, value); }
         public static bool ColorAdjustments    { get => Get(KColorAdjustments); set => Set(KColorAdjustments, value); }
         public static bool ChromaticAberration { get => Get(KChromaticAberration); set => Set(KChromaticAberration, value); }
+        public static bool EnginePlume         { get => Get(KEnginePlume); set => Set(KEnginePlume, value); }
+        public static bool BoostFlare          { get => Get(KBoostFlare); set => Set(KBoostFlare, value); }
+        public static bool RcsPuff             { get => Get(KRcsPuff); set => Set(KRcsPuff, value); }
 
         static bool Get(string key) => PlayerPrefs.GetInt(key, 1) != 0;
 

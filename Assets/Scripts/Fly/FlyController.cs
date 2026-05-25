@@ -127,6 +127,12 @@ namespace CubeFly.Fly
         [Tooltip("Above this mass, applied thrust force and torque are scaled UP by mass/maxResponsivenessMass so a very heavy build (e.g. a maxed Tank) doesn't become an unflyable brick. Below it, mass fights flight normally. Effectively: anything heavier than this flies/turns as if it were this mass.")]
         [SerializeField] float maxResponsivenessMass = 100f;
 
+        [Header("Phase B-1 VFX prefabs")]
+        [Tooltip("EnginePlume.prefab (Assets/VFX/Prefabs/). Each thruster gets one instantiated as a child. If null, no engine VFX is attached at all.")]
+        [SerializeField] GameObject enginePlumePrefab;
+        [Tooltip("RcsPuff.prefab (Assets/VFX/Prefabs/). One RcsPuffVfx is attached to the construct root, which spawns four corner emitters of this prefab.")]
+        [SerializeField] GameObject rcsPuffPrefab;
+
         CubeFlyInputActions _input;
 
         // Per-frame input snapshots, sampled in Update, applied in FixedUpdate.
@@ -193,6 +199,11 @@ namespace CubeFly.Fly
         // of _overboosted — it also shows when the player drains low without
         // bottoming out.
         public bool IsBoostCritical => BoostFraction <= criticalBoostFraction;
+
+        // Read-only snapshot of the player's attitude inputs this frame —
+        // pitch / yaw / roll as a single Vector3. Read by RcsPuffVfx each
+        // Update to decide which construct corner emitter should puff.
+        public Vector3 CurrentAttitudeInput => new Vector3(_pitchInput, _yawInput, _rollInput);
 
         void Awake()
         {
@@ -474,6 +485,16 @@ namespace CubeFly.Fly
                 {
                     thruster.Construct = construct;
                     _spawnedThrusters.Add(thruster);
+
+                    // Phase B-1 VFX: each thruster gets a ThrusterVfx
+                    // component that instantiates an EnginePlume prefab
+                    // as a child and drives its ParticleSystem each
+                    // LateUpdate from CurrentInputLevel / IsBoosting.
+                    if (enginePlumePrefab != null)
+                    {
+                        ThrusterVfx tvfx = go.AddComponent<ThrusterVfx>();
+                        tvfx.SetPlumePrefab(enginePlumePrefab);
+                    }
                 }
 
                 // Collect any ReactorBehavior / ShieldBehavior — same
@@ -483,6 +504,16 @@ namespace CubeFly.Fly
 
                 ShieldBehavior shield = go.GetComponent<ShieldBehavior>();
                 if (shield != null) _spawnedShields.Add(shield);
+            }
+
+            // Phase B-1 VFX: attach the construct-level RCS-puff
+            // visualiser. Reads attitude input from this FlyController
+            // and fires four corner emitters on pitch / yaw / roll.
+            if (rcsPuffPrefab != null && construct != null)
+            {
+                RcsPuffVfx rcs = construct.gameObject.AddComponent<RcsPuffVfx>();
+                rcs.SetPuffPrefab(rcsPuffPrefab);
+                rcs.SetFlyController(this);
             }
         }
 
@@ -520,6 +551,13 @@ namespace CubeFly.Fly
             // that input axis, else 0 — a flat OR, no stacking.
             Vector3 boostAxes = EvaluateBoostAxes();
             _boostingThisFrame = boostAxes.x > 0f || boostAxes.y > 0f || boostAxes.z > 0f;
+
+            // Phase B-1: push per-thruster input level + boost state to
+            // each ThrusterBehavior so its sibling ThrusterVfx can drive
+            // plume emission. boostAxes is the per-axis mask already
+            // computed above; mirrors the same axis-match logic against
+            // each thruster's LocalThrustAxis.
+            DriveThrusterVfxState(boostAxes);
             TickBoostResource();
 
             // Linear thrust — local-frame input rotated into world frame,
@@ -671,6 +709,43 @@ namespace CubeFly.Fly
             }
 
             return axes;
+        }
+
+        // Phase B-1: push CurrentInputLevel / IsBoosting onto each
+        // ThrusterBehavior so its sibling ThrusterVfx can drive plume
+        // emission. Called once per FixedUpdate. Mirrors the same
+        // axis-match logic as EvaluateBoostAxes above (same _thrustInput
+        // vs LocalThrustAxis sign check).
+        void DriveThrusterVfxState(Vector3 boostAxes)
+        {
+            for (int i = 0; i < _spawnedThrusters.Count; i++)
+            {
+                ThrusterBehavior thruster = _spawnedThrusters[i];
+                if (thruster == null) continue;
+
+                Vector3 dir = thruster.LocalThrustAxis;
+                float level = 0f;
+                bool boosting = false;
+
+                if (dir.x != 0f && _thrustInput.x * dir.x > 0f)
+                {
+                    level = Mathf.Abs(_thrustInput.x);
+                    boosting = boostAxes.x > 0f;
+                }
+                else if (dir.y != 0f && _thrustInput.y * dir.y > 0f)
+                {
+                    level = Mathf.Abs(_thrustInput.y);
+                    boosting = boostAxes.y > 0f;
+                }
+                else if (dir.z != 0f && _thrustInput.z * dir.z > 0f)
+                {
+                    level = Mathf.Abs(_thrustInput.z);
+                    boosting = boostAxes.z > 0f;
+                }
+
+                thruster.SetInputLevel(level);
+                thruster.SetBoosting(boosting);
+            }
         }
     }
 }

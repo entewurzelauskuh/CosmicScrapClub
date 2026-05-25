@@ -280,6 +280,8 @@ MonoBehaviour:
   linearDrag: 0.5
   angularDrag: 3
   maxResponsivenessMass: 100
+  enginePlumePrefab: {fileID: 4605722308631259017, guid: eb6ef08eef84c4c2d9cd852c7a2b8496, type: 3}
+  rcsPuffPrefab: {fileID: 4661517005492168823, guid: f6d3a32549a5c48c4b829d6541866102, type: 3}
 --- !u!114 &300003
 MonoBehaviour:
   m_ObjectHideFlags: 0

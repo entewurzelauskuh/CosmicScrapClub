@@ -1808,7 +1808,10 @@ And among the existing private fields (around lines 27–35), add:
                 trailGo.transform.localRotation = Quaternion.identity;
 
                 _trail = trailGo.AddComponent<TrailRenderer>();
-                _trail.time = 0.30f;
+                // 0.15 s lifetime — halved from the original 0.30 after
+                // play-test feedback that the longer trail felt overly
+                // smeared at the bullet's 80 u/s speed.
+                _trail.time = 0.15f;
                 _trail.startWidth = 0.05f;
                 _trail.endWidth = 0.02f;
                 _trail.minVertexDistance = 0.10f;
@@ -1989,24 +1992,33 @@ Among the private fields (after `_armed` field, around line 33), add:
         {
             // Exhaust plume child — instantiated only if toggle on AND
             // prefab non-null. Plume fires opposite to rocket flight
-            // direction (rocket flies along its local +Y; plume cone
-            // along -Y of its local frame).
+            // direction so it trails behind the rocket like a flame.
+            //
+            // Orientation derivation. After PR #49's MeshAlignment, the
+            // rocket's transform.up = launchDir (= world flight direction);
+            // so the rocket's local -Y = backward in world. The Cone
+            // particle shape emits along its OWN local +Y by default
+            // (not +Z — that was a previous incorrect assumption). To
+            // make the cone's +Y align with the rocket's local -Y, we
+            // rotate the plume 180° around its local X axis. Identity
+            // rotation would emit along local +Y = forward, and
+            // LookRotation(Vector3.down) is degenerate (forward and
+            // default-up antiparallel) so it falls back to identity too.
             if (VfxSettings.RocketExhaust && exhaustPlumePrefab != null)
             {
                 GameObject plumeGo = Instantiate(exhaustPlumePrefab, transform);
                 plumeGo.transform.localPosition = Vector3.zero;
-                // Cone shape emits along its local +Z by default. We want
-                // emission along rocket -Y, so rotate -Z to point along -Y.
-                plumeGo.transform.localRotation = Quaternion.LookRotation(Vector3.down);
+                plumeGo.transform.localRotation = Quaternion.Euler(180f, 0f, 0f);
                 _exhaustPlumePs = plumeGo.GetComponent<ParticleSystem>();
             }
 
-            // Smoke puff child — same orientation as plume.
+            // Smoke puff child — same Cone-shape orientation issue as the
+            // exhaust plume, same fix.
             if (VfxSettings.RocketSmokePuff && smokePuffPrefab != null)
             {
                 GameObject puffGo = Instantiate(smokePuffPrefab, transform);
                 puffGo.transform.localPosition = Vector3.zero;
-                puffGo.transform.localRotation = Quaternion.LookRotation(Vector3.down);
+                puffGo.transform.localRotation = Quaternion.Euler(180f, 0f, 0f);
                 _smokePuffPs = puffGo.GetComponent<ParticleSystem>();
             }
         }
@@ -2059,8 +2071,9 @@ git commit -m "vfx-b2: instantiate exhaust + smoke puff children on Rocket
 
 Awake conditionally instantiates RocketExhaustPlume.prefab and
 RocketSmokePuff.prefab as children of the rocket, each toggle-gated
-+ null-guarded. Both oriented via LookRotation(Vector3.down) so their
-cone shape emits opposite to rocket flight direction.
++ null-guarded. Both oriented via Quaternion.Euler(180, 0, 0) so the
+Cone shape's local +Y emission flips onto the rocket's local -Y
+(= backward in world after MeshAlignment).
 
 OnDestroy detaches the children and calls
 Stop(StopEmitting) on each — alive particles finish

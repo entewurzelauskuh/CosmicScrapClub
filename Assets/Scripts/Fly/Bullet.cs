@@ -94,7 +94,10 @@ namespace CubeFly.Fly
                 trailGo.transform.localRotation = Quaternion.identity;
 
                 _trail = trailGo.AddComponent<TrailRenderer>();
-                _trail.time = 0.30f;
+                // 0.15 s lifetime — halved from the original 0.30 after
+                // play-test feedback that the longer trail felt overly
+                // smeared at the bullet's 80 u/s speed.
+                _trail.time = 0.15f;
                 _trail.startWidth = 0.05f;
                 _trail.endWidth = 0.02f;
                 _trail.minVertexDistance = 0.10f;

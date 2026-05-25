@@ -76,7 +76,7 @@ Cube Fly's blocky-cube-stack aesthetic pairs best with **clean, readable, bloom-
 | **Cylinder muzzle palette** | Warm orange/yellow HDR ×2.5 | Hotter than Pyramid — reads as "rocket burn lighting up the barrel". |
 | **Cylinder muzzle sprite** | Soft radial disc puff (reuses existing `Glow_64.png`) | More restrained / less videogame-y than starburst. Forward-compatible with future rocket splash-damage visual (disc shape suggests area). Zero new texture cost. |
 | **Bullet tracer palette** | Yellow-white core, hot-pink tail (head-to-tail) + pink fringe (cross-section) | `vfx_pass_ideas.md` recommendation. Hot pink is bloom-friendly + visually distinct from cool engine plumes, cool rocket smoke, warm muzzle flashes, and any future laser. |
-| **Bullet tracer length** | 0.30 s `TrailRenderer.time` | Long enough to read as kinetic at 80 u/s; short enough to fade before the next shot in a sustained volley. |
+| **Bullet tracer length** | 0.15 s `TrailRenderer.time` | Halved from initial 0.30 s after play-test — the longer trail felt smeared at the bullet's 80 u/s speed. 0.15 s reads as a clean kinetic streak that fades before the next shot in sustained fire. |
 | **Bullet impact spark scale** | Small + snappy (core radius ~0.10, spike length ~0.15, ~5–7 streaks, ~0.10 s burst) | User requirement: "reads as weapon hit, not explosion". |
 | **Bullet impact ground-dust palette** | Warm tan/beige (`#EBD299`), alpha-blended | Reads as "sand / debris kicked up", future-proof for the desert level (ROADMAP item 10). |
 | **Spark/dust co-occurrence rule** | Spark always fires; dust additionally fires when `Dot(normal, up) > 0.7` | Matches `PyramidWeapon.FrontalDotThreshold` (cos 45°) for cross-codebase consistency. Both toggles independent — user can have spark-only, dust-only, both, or neither. |
@@ -206,7 +206,7 @@ TrailRenderer added in `Bullet.Awake` when `VfxSettings.BulletTracer && tracerMa
 
 ```
 trail:
-  time:               0.30
+  time:               0.15      # halved from initial 0.30 after play-test (felt smeared at 80 u/s)
   startWidth:         0.05
   endWidth:           0.02
   minVertexDistance:  0.10
@@ -291,7 +291,12 @@ main:        duration 5.0, loop true, startLifetime 0.18,
              playOnAwake true, stopAction Destroy
 emission:    rateOverTime 35
 shape:       Cone, angle 6°, radius 0.04
-             # local axis fires opposite to rocket flight direction
+             # Cone emits along its OWN local +Y. The plume's
+             # GameObject is parented to the rocket with
+             # localRotation = Quaternion.Euler(180, 0, 0) — rotating
+             # 180° around X flips the local +Y to point along the
+             # rocket's local -Y (= -transform.up = backward in world,
+             # since MeshAlignment maps rocket local +Y to launchDir).
 colorOverLifetime: white → (1, 0.45, 0.10) with alpha 0→1 (0–15%), 1→0 (15–100%)
 sizeOverLifetime: curve (0%, 0.6) → (40%, 1.0) → (100%, 0.3)
 renderer:    Stretch, lengthScale 0, velocityScale 1.2, RocketExhaustMat
@@ -334,7 +339,9 @@ main:        duration 5.0, loop true, startLifetime 1.5,
              playOnAwake true, stopAction Destroy
 emission:    rateOverTime 15
 shape:       Cone, angle 5°, radius 0.06
-             # along rocket -Y (tail), same orientation as exhaust plume
+             # Same parent + localRotation = Quaternion.Euler(180, 0, 0)
+             # pattern as exhaust plume to flip Cone's local +Y emission
+             # onto the rocket's local -Y (backward in world).
 colorOverLifetime: white → (0.92, 0.95, 1.0) with alpha 0→0.9 (0–10%), 0.9→0 (10–100%)
 sizeOverLifetime: 0.1 → 1.0    # 10× growth (user-specified)
 renderer:    Billboard, RcsPuffMat   (REUSED from B-1)

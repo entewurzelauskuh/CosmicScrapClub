@@ -53,24 +53,33 @@ namespace CubeFly.Fly
         {
             // Exhaust plume child — instantiated only if toggle on AND
             // prefab non-null. Plume fires opposite to rocket flight
-            // direction (rocket flies along its local +Y; plume cone
-            // along -Y of its local frame).
+            // direction so it trails behind the rocket like a flame.
+            //
+            // Orientation derivation. After PR #49's MeshAlignment, the
+            // rocket's transform.up = launchDir (= world flight direction);
+            // so the rocket's local -Y = backward in world. The Cone
+            // particle shape emits along its OWN local +Y by default
+            // (not +Z — that was a previous incorrect assumption). To
+            // make the cone's +Y align with the rocket's local -Y, we
+            // rotate the plume 180° around its local X axis. Identity
+            // rotation would emit along local +Y = forward, and
+            // LookRotation(Vector3.down) is degenerate (forward and
+            // default-up antiparallel) so it falls back to identity too.
             if (VfxSettings.RocketExhaust && exhaustPlumePrefab != null)
             {
                 GameObject plumeGo = Instantiate(exhaustPlumePrefab, transform);
                 plumeGo.transform.localPosition = Vector3.zero;
-                // Cone shape emits along its local +Z by default. We want
-                // emission along rocket -Y, so rotate -Z to point along -Y.
-                plumeGo.transform.localRotation = Quaternion.LookRotation(Vector3.down);
+                plumeGo.transform.localRotation = Quaternion.Euler(180f, 0f, 0f);
                 _exhaustPlumePs = plumeGo.GetComponent<ParticleSystem>();
             }
 
-            // Smoke puff child — same orientation as plume.
+            // Smoke puff child — same Cone-shape orientation issue as the
+            // exhaust plume, same fix.
             if (VfxSettings.RocketSmokePuff && smokePuffPrefab != null)
             {
                 GameObject puffGo = Instantiate(smokePuffPrefab, transform);
                 puffGo.transform.localPosition = Vector3.zero;
-                puffGo.transform.localRotation = Quaternion.LookRotation(Vector3.down);
+                puffGo.transform.localRotation = Quaternion.Euler(180f, 0f, 0f);
                 _smokePuffPs = puffGo.GetComponent<ParticleSystem>();
             }
 

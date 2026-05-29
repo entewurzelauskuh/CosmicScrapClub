@@ -718,7 +718,7 @@ namespace CubeFly.Fly
             for (int i = 0; i < _spawnedThrusters.Count; i++)
             {
                 ThrusterBehavior thruster = _spawnedThrusters[i];
-                if (thruster == null) continue;
+                if (thruster == null || !thruster.IsAlive) continue; // skip dead cubes (AP-6)
 
                 Vector3 dir = thruster.LocalThrustAxis;
 
@@ -744,7 +744,7 @@ namespace CubeFly.Fly
             for (int i = 0; i < _spawnedThrusters.Count; i++)
             {
                 ThrusterBehavior thruster = _spawnedThrusters[i];
-                if (thruster == null) continue;
+                if (thruster == null || !thruster.IsAlive) continue; // skip dead cubes (AP-6)
 
                 Vector3 dir = thruster.LocalThrustAxis;
                 float level = 0f;

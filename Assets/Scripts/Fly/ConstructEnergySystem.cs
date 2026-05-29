@@ -32,9 +32,9 @@ namespace CubeFly.Fly
         [SerializeField] float regenDelaySeconds = 5f;
 
         [Header("Shield damage-type modifiers")]
-        [Tooltip("Multiplier on projectile damage while the shield absorbs it. <1 = shield resists projectiles.")]
+        [Tooltip("Pool COST per point of raw PROJECTILE damage absorbed (NOT a damage multiplier). <1 = cheap to soak, so the shield resists projectiles and lasts longer. The pool covers ShieldPoints / this much raw damage; any overflow reaches HP as raw. See ApplyToShield.")]
         [SerializeField] float projectileModifier = 0.9f;
-        [Tooltip("Multiplier on energy damage while the shield absorbs it. >1 = shield is weak to energy.")]
+        [Tooltip("Pool COST per point of raw ENERGY damage absorbed (NOT a damage multiplier). >1 = each point drains more pool, so the shield is weak to energy. The pool covers ShieldPoints / this much raw damage; any overflow reaches HP as raw. See ApplyToShield.")]
         [SerializeField] float energyModifier = 1.1f;
         // Kinetic (crash) damage always bypasses the shield entirely — no
         // modifier, no absorption. A shield stops projectiles / energy, not

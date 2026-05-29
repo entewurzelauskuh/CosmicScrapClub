@@ -340,7 +340,7 @@ namespace CubeFly.Fly
             // Hand the weapon list to the shooting controller so it can
             // group by ShapeDefinition for selection + dispatch.
             if (shootingController == null) shootingController = FindAnyObjectByType<FlyShootingController>();
-            if (shootingController != null) shootingController.RegisterWeapons(_spawnedWeapons);
+            if (shootingController != null) shootingController.RegisterWeapons(_spawnedWeapons, _energySystem);
             else Debug.unityLogger.LogWarning(TAG, "No FlyShootingController in scene; weapons won't fire.");
         }
 

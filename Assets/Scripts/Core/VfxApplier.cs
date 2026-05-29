@@ -103,9 +103,25 @@ namespace CubeFly.Core
         // FlyScene which have no scene Volume).
         static VolumeProfile ResolveActiveProfile()
         {
-            Volume volume = FindFirstObjectByType<Volume>();
-            if (volume != null && volume.profile != null)
-                return volume.profile;
+            // Prefer the global Volume with the highest priority (the scene's
+            // "active" profile). FindFirstObjectByType returns an arbitrary
+            // instance when a scene has several Volumes (e.g. a global + a
+            // local trigger), which could apply the toggles to the wrong
+            // profile. Pick global over local, then highest priority; fall
+            // back to URP's default below if no usable scene Volume. (AP-11)
+            Volume[] volumes = FindObjectsByType<Volume>(FindObjectsSortMode.None);
+            Volume best = null;
+            for (int i = 0; i < volumes.Length; i++)
+            {
+                Volume v = volumes[i];
+                if (v == null || v.profile == null) continue;
+                if (best == null
+                    || (v.isGlobal && !best.isGlobal)
+                    || (v.isGlobal == best.isGlobal && v.priority > best.priority))
+                    best = v;
+            }
+            if (best != null && best.profile != null)
+                return best.profile;
 
             URPDefaultVolumeProfileSettings settings =
                 GraphicsSettings.GetRenderPipelineSettings<URPDefaultVolumeProfileSettings>();

@@ -88,7 +88,7 @@ namespace CubeFly.Fly
         // entry per distinct type. Defaults the active selection to
         // the first available type. Fires TypesChanged + SelectedChanged
         // so the toolbar UI rebuilds and highlights correctly.
-        public void RegisterWeapons(IEnumerable<WeaponBehavior> weapons)
+        public void RegisterWeapons(IEnumerable<WeaponBehavior> weapons, ConstructEnergySystem energy)
         {
             _types.Clear();
             Dictionary<ShapeDefinition, WeaponTypeGroup> byShape = new();
@@ -104,7 +104,7 @@ namespace CubeFly.Fly
                 g.Instances.Add(w);
             }
             _selectedTypeIndex = _types.Count > 0 ? 0 : -1;
-            _energy = FindAnyObjectByType<ConstructEnergySystem>();
+            _energy = energy; // the construct's own system, passed by FlyController — not a scene-wide find (AP-11)
             Debug.unityLogger.Log(TAG,
                 $"Registered {_types.Count} weapon type(s) across {CountInstances()} instance(s).");
             TypesChanged?.Invoke();

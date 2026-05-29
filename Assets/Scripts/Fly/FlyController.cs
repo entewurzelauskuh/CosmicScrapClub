@@ -552,6 +552,7 @@ namespace CubeFly.Fly
                 _pitchInput  = 0f;
                 _yawInput    = 0f;
                 _rollInput   = 0f;
+                _boostHeld   = false;   // zero boost too, for symmetry with the other inputs (AP-14 / CR-10)
                 return;
             }
 

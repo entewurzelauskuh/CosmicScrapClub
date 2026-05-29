@@ -63,8 +63,11 @@ namespace CubeFly.Fly
         // --- HUD read-only surface ---
         public float ShieldPoints => _shieldPoints;
         public float ShieldMax => _shieldMax;
-        // Player-facing demand balance: output − total nominal shield draw
-        // (later also − active laser draw). Negative = under-powered.
+        // Player-facing build/HUD readout: reactor output − nominal shield
+        // draw. Negative = under-powered. This is deliberately the steady
+        // demand balance and does NOT subtract active laser draw — weapon
+        // power is contended at firing time in FlyShootingController via
+        // AvailableForWeapons, not folded into this readout. (AP-14 / CR-07)
         public float NetPower => _totalOutput - _shieldDraw;
         public bool ShieldActive => _shieldPowered;
         // Derived from the recomputed ALIVE cube counts (set in

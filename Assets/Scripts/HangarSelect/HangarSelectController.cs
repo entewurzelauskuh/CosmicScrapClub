@@ -275,13 +275,18 @@ namespace CubeFly.HangarSelect
                 else
                 {
                     // The card thought it was filled but the file is now
-                    // missing / unreadable. Disarm autosave first so we do
-                    // NOT overwrite the (possibly recoverable) file with an
-                    // empty construct, then recover by treating as fresh. (AP-1)
+                    // missing / unreadable. Do NOT drop the player into
+                    // BuildScene: with autosave disarmed they would build
+                    // unsaveable work with no visible cue, and entering would
+                    // risk the file. Instead disarm (protect the file),
+                    // refresh the card from disk so it reflects reality, and
+                    // stay in HangarSelect so the player can retry or pick
+                    // another slot. (AP-1; refined per PR #53 review)
                     Debug.unityLogger.LogWarning(TAG,
-                        $"Slot {slot}: load failed at activation — disarming autosave to protect the file, starting fresh.");
+                        $"Slot {slot}: load failed at activation — staying in HangarSelect; autosave disarmed to protect the file.");
                     GameData.DisarmAutosave();
-                    GameData.Clear();
+                    RefreshCard(slot);
+                    return;
                 }
             }
 

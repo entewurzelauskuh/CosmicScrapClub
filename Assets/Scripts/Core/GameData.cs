@@ -386,6 +386,19 @@ namespace CubeFly.Core
             Debug.unityLogger.Log(TAG, $"Active slot set to {slotIndex}.");
         }
 
+        // Disarms autosave so subsequent BuildScene edits are NOT persisted
+        // to any slot. Called when entering a non-slot context (MainMenu) or
+        // when a slot's load failed at activation, so a stale armed slot can
+        // never be overwritten by a later autosave. Deliberately NOT part of
+        // Clear() — HangarSelect's empty-slot path arms a slot and then calls
+        // Clear(), and must stay armed. (AP-1)
+        public static void DisarmAutosave()
+        {
+            if (ActiveSlot < 0) return;
+            ActiveSlot = -1;
+            Debug.unityLogger.Log(TAG, "Autosave disarmed (active slot reset to -1).");
+        }
+
         // Replay a serialised construct into in-memory state. Clears
         // existing placements, then re-adds each PlacementRecord with
         // adjacency / occupancy validation suspended. Unknown shape /

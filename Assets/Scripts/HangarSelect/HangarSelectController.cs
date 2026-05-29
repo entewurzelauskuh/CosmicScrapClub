@@ -275,9 +275,12 @@ namespace CubeFly.HangarSelect
                 else
                 {
                     // The card thought it was filled but the file is now
-                    // missing / unreadable. Recover by treating as fresh.
+                    // missing / unreadable. Disarm autosave first so we do
+                    // NOT overwrite the (possibly recoverable) file with an
+                    // empty construct, then recover by treating as fresh. (AP-1)
                     Debug.unityLogger.LogWarning(TAG,
-                        $"Slot {slot}: load failed at activation, starting fresh.");
+                        $"Slot {slot}: load failed at activation — disarming autosave to protect the file, starting fresh.");
+                    GameData.DisarmAutosave();
                     GameData.Clear();
                 }
             }

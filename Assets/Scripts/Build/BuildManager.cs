@@ -665,8 +665,13 @@ namespace CubeFly.Build
             // would freeze a scaled WaitForSeconds and strand the latest edit
             // in memory until time resumed. (AP-2)
             yield return new WaitForSecondsRealtime(autosaveDebounceSeconds);
-            FlushSaveNow();
+            // Clear the handle BEFORE flushing so a quit/pause/destroy flush
+            // (FlushPendingAutosave no-ops when it's null) can never double-
+            // write this same save. Unity is single-threaded so the two
+            // statements don't actually interleave, but this makes the
+            // no-double-write invariant obvious. (PR review)
             _autosaveRoutine = null;
+            FlushSaveNow();
         }
 
         void FlushSaveNow()

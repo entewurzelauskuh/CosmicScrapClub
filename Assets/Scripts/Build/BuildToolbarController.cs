@@ -133,6 +133,9 @@ namespace CubeFly.Build
             if (buildManager == null)
             {
                 Debug.unityLogger.LogError(TAG, "No BuildManager in scene; toolbar cannot wire up.");
+                // Stop Update() from running — it polls digits / M / Esc and
+                // dereferences buildManager, which would NRE on every keypress. (AP-9)
+                enabled = false;
                 return;
             }
             BuildToolbar();

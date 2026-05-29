@@ -83,11 +83,16 @@ Contribution` (+50 each). Damage is intercepted in `CubeDamage.ApplyAndLog`:
 it resolves the struck cube's `ConstructEnergySystem` (via
 `GetComponentInParent`) and calls `ApplyToShield(amount, type)` before HP.
 
-- **Type modifiers** (applied while the shield absorbs): `Projectile ×0.9`
-  (shields resist projectiles), `Energy ×1.1` (shields are weak to energy).
-- **Overflow to HP:** a hit larger than the remaining pool spills the
-  (already type-scaled) overflow through to the cube's HP via the normal
-  armour-aware path.
+- **Type modifiers** (the pool **cost per unit of raw damage absorbed**, not
+  a scale on the damage): `Projectile ×0.9` (shields resist projectiles —
+  cheap to soak, the pool lasts longer), `Energy ×1.1` (shields are weak to
+  energy — each absorbed point of energy drains 1.1 of the pool). The pool
+  can therefore cover `ShieldPoints / modifier` raw damage of that type.
+- **Overflow to HP:** a hit beyond what the pool can cover spills the
+  **raw** remainder (never the type-scaled value) through to the cube's HP
+  via the normal armour-aware path — so a near-empty shield can never
+  amplify a hit past its raw amount, and there is no 0-vs-1-point
+  discontinuity in damage taken.
 - **Kinetic bypasses entirely:** crash / kinetic damage never touches the
   pool or the regen timer — it always goes straight to HP. A shield stops a
   beam or a bullet, not a physical ram.

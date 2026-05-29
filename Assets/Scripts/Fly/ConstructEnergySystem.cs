@@ -160,10 +160,11 @@ namespace CubeFly.Fly
 
         // Called from CubeDamage.ApplyAndLog for any hit on a construct
         // cube. Resets the regen timer (the construct was hit), absorbs
-        // against the pool if powered, and returns the overflow that should
-        // continue to HP. When the shield is down, returns the amount
-        // unchanged (full overflow, no type modifier — the modifier is a
-        // shield property).
+        // against the pool if powered, and returns the RAW overflow that
+        // should continue to HP. When the shield is down, returns the
+        // amount unchanged. The type modifier scales the pool COST of what
+        // is absorbed (see below), never the overflow, so the value
+        // returned here is always <= amount.
         public float ApplyToShield(float amount, DamageType type)
         {
             // Kinetic (crash) damage bypasses the shield entirely — it
@@ -174,10 +175,21 @@ namespace CubeFly.Fly
             _timeSinceDamage = 0f;
             if (!_shieldPowered || _shieldPoints <= 0f) return amount;
 
-            float scaled = amount * TypeModifier(type);
-            float absorbed = Mathf.Min(scaled, _shieldPoints);
-            _shieldPoints -= absorbed;
-            return scaled - absorbed;
+            // The type modifier is the POOL COST per unit of raw damage
+            // absorbed — NOT a scale on the damage itself. Energy (×1.1)
+            // drains the pool faster per point absorbed (shields are weak to
+            // energy); projectile (×0.9) drains it slower (shields resist
+            // projectiles). So the pool can cover `_shieldPoints / mod` raw
+            // damage; anything beyond that spills to HP as RAW damage.
+            // Applying the modifier only to the absorbed portion (never the
+            // overflow) means a near-empty shield can never amplify a hit
+            // past its raw amount, and there is no 0-vs-1-point
+            // discontinuity. e.g. with 1 pt vs a 100 energy hit: absorbs
+            // ~0.91 raw, ~99.09 reaches HP (never > 100). (AP-4)
+            float mod = Mathf.Max(0.0001f, TypeModifier(type));
+            float absorbedRaw = Mathf.Min(amount, _shieldPoints / mod);
+            _shieldPoints = Mathf.Max(0f, _shieldPoints - absorbedRaw * mod);
+            return amount - absorbedRaw;
         }
 
         // Only projectile + energy reach here (kinetic returns early in

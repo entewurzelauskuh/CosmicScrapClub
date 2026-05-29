@@ -186,6 +186,15 @@ namespace CubeFly.Core
             // PauseMenu (IsOpen stays true, Time.timeScale stays 0).
             // SettingsMenu.Show() takes over; on its close it calls
             // PauseMenu.Instance.ShowUI() to restore the pause panel.
+            if (SettingsMenu.Instance == null)
+            {
+                // SettingsMenu self-bootstraps, so this should never happen —
+                // but if it did, calling HideUI() below would strand the
+                // player on a frozen, button-less screen (IsOpen stays true,
+                // timeScale stays 0). Stay on the pause menu instead. (AP-7)
+                Debug.unityLogger.LogWarning(TAG, "Settings unavailable — staying on the pause menu.");
+                return;
+            }
             HideUI();
             Debug.unityLogger.Log(TAG, "Settings button — opening SettingsMenu.");
             SettingsMenu.Instance.Show();

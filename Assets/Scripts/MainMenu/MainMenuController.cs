@@ -69,6 +69,11 @@ namespace CubeFly.MainMenu
 
         void OnSettings()
         {
+            if (SettingsMenu.Instance == null)
+            {
+                Debug.unityLogger.LogWarning(TAG, "Settings unavailable — SettingsMenu did not initialise.");
+                return;
+            }
             Debug.unityLogger.Log(TAG, "Settings selected — opening Settings menu.");
             SettingsMenu.Instance.Show();
         }

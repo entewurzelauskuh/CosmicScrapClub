@@ -22,7 +22,8 @@ namespace CubeFly.Fly
     //
     // Damage interception: CubeDamage.ApplyAndLog resolves this system via
     // GetComponentInParent on the hit cube and calls ApplyToShield, which
-    // absorbs against the pool (type-scaled) before the overflow reaches HP.
+    // absorbs against the pool (the type modifier scales the pool COST of
+    // what's absorbed, not the damage) before the RAW overflow reaches HP.
     public class ConstructEnergySystem : MonoBehaviour
     {
         [Header("Shield regen")]

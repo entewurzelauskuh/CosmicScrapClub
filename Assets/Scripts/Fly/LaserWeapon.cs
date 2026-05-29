@@ -65,8 +65,9 @@ namespace CubeFly.Fly
         void OnValidate()
         {
             tickInterval = Mathf.Max(0.01f, tickInterval);
-            range = Mathf.Max(0f, range);
+            range = Mathf.Max(0.01f, range);          // 0 would make TrySweep a no-op (dead beam) (AP-8)
             beamWidth = Mathf.Max(0.001f, beamWidth);
+            powerDraw = Mathf.Max(0.01f, powerDraw);  // 0 makes the power-gate budget int.MaxValue (gate bypass) (AP-8)
         }
 
         void Awake()
@@ -112,11 +113,21 @@ namespace CubeFly.Fly
             // interval to whatever the beam currently hits. While loop so a
             // long frame applies all due ticks (matching elapsed time).
             _tickTimer += Time.deltaTime;
+            // Resolve the struck cube once (the swept hit is fixed for this
+            // frame). On a long frame the loop applies several due ticks; if
+            // the cube dies on one of them, stop — further ticks would just
+            // spam the corpse and reset its shield regen timer instead of
+            // moving on (next frame's sweep re-targets). No-hit ticks still
+            // drain the timer so pointing at empty space can't accumulate a
+            // burst that all lands at once on first contact. (AP-8)
+            CubeStats hitStats = didHit && hit.collider != null
+                ? hit.collider.GetComponentInParent<CubeStats>() : null;
             while (tickInterval > 0f && _tickTimer >= tickInterval)
             {
                 _tickTimer -= tickInterval;
-                if (didHit)
-                    ProjectileHit.ApplyAndLog(hit, damage, Construct, TAG, DamageType.Energy);
+                if (!didHit) continue;
+                ProjectileHit.ApplyAndLog(hit, damage, Construct, TAG, DamageType.Energy);
+                if (hitStats == null || hitStats.healthPoints <= 0f) break;
             }
         }
 

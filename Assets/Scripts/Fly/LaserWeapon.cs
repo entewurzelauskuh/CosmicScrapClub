@@ -62,16 +62,23 @@ namespace CubeFly.Fly
 
         // Keep designer-tunable values sane. tickInterval is the decrement
         // step in Fire's while loop — 0 or negative would spin forever.
-        void OnValidate()
+        void OnValidate() => ClampTunables();
+
+        // Shared by OnValidate (editor) and Awake (runtime). OnValidate does
+        // NOT run in player builds, so a prefab/script value of 0 would
+        // otherwise ship as a dead beam (range 0 -> TrySweep no-op) or a
+        // power-gate bypass (powerDraw 0 -> budget int.MaxValue). (AP-8, PR review)
+        void ClampTunables()
         {
             tickInterval = Mathf.Max(0.01f, tickInterval);
-            range = Mathf.Max(0.01f, range);          // 0 would make TrySweep a no-op (dead beam) (AP-8)
+            range = Mathf.Max(0.01f, range);
             beamWidth = Mathf.Max(0.001f, beamWidth);
-            powerDraw = Mathf.Max(0.01f, powerDraw);  // 0 makes the power-gate budget int.MaxValue (gate bypass) (AP-8)
+            powerDraw = Mathf.Max(0.01f, powerDraw);
         }
 
         void Awake()
         {
+            ClampTunables(); // OnValidate doesn't run in player builds (AP-8, PR review)
             // Add + configure the LineRenderer at runtime so the prefab
             // doesn't have to serialize the verbose component.
             _line = GetComponent<LineRenderer>();

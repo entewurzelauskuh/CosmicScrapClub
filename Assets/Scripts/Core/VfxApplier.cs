@@ -114,7 +114,9 @@ namespace CubeFly.Core
             for (int i = 0; i < volumes.Length; i++)
             {
                 Volume v = volumes[i];
-                if (v == null || v.profile == null) continue;
+                // Skip disabled volumes — a disabled global/high-priority
+                // Volume must not win selection and receive the toggles. (AP-11, PR review)
+                if (v == null || !v.isActiveAndEnabled || v.profile == null) continue;
                 if (best == null
                     || (v.isGlobal && !best.isGlobal)
                     || (v.isGlobal == best.isGlobal && v.priority > best.priority))

@@ -159,6 +159,19 @@ namespace CubeFly.Fly
             }
         }
 
+        void OnValidate()
+        {
+            // The modifiers are a pool COST per point of raw damage absorbed
+            // (see ApplyToShield), so they must stay > 0 — a 0/negative value
+            // would let the shield absorb unbounded damage. Clamping the
+            // serialized values keeps builds from leaning on ApplyToShield's
+            // runtime Mathf.Max fallback. (AP-4, PR review)
+            projectileModifier = Mathf.Max(0.01f, projectileModifier);
+            energyModifier = Mathf.Max(0.01f, energyModifier);
+            regenRate = Mathf.Max(0f, regenRate);
+            regenDelaySeconds = Mathf.Max(0f, regenDelaySeconds);
+        }
+
         // Called from CubeDamage.ApplyAndLog for any hit on a construct
         // cube. Resets the regen timer (the construct was hit), absorbs
         // against the pool if powered, and returns the RAW overflow that

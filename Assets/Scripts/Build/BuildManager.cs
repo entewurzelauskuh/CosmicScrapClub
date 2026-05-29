@@ -677,6 +677,19 @@ namespace CubeFly.Build
                 ? $"Slot {slot + 1}"
                 : autosaveSlotName;
             ConstructSave save = GameData.ToSave(slotName, shapeRegistry, materialRegistry);
+            // GameData.ToSave totals only the placed cubes; fold in the alpha
+            // anchor (mass + HP) so the hangar slot card matches the Build/Fly
+            // HUD, which both count the alpha. Reads the same live instance as
+            // SumStat, so the card and the toolbar stat block always agree. (AP-3)
+            if (_alphaCubeInstance != null)
+            {
+                CubeStats alpha = _alphaCubeInstance.GetComponent<CubeStats>();
+                if (alpha != null)
+                {
+                    save.totalMass += alpha.mass;
+                    save.totalHealthPoints += alpha.healthPoints;
+                }
+            }
             SaveManager.Save(slot, save);
         }
 

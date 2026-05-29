@@ -238,12 +238,17 @@ namespace CubeFly.Build
             // If a save was pending, write it now so the slot file
             // ends the session current. The scene tear-down path has
             // already invoked ConstructChanged for any final edits.
-            if (_autosaveRoutine != null && GameData.ActiveSlot >= 0)
-            {
-                StopCoroutine(_autosaveRoutine);
-                _autosaveRoutine = null;
-                FlushSaveNow();
-            }
+            FlushPendingAutosave();
+        }
+
+        // A hard quit or editor-stop can land inside the debounce window
+        // (before the realtime wait elapses), so flush any pending save on
+        // application quit / pause too — not just on scene tear-down. (AP-2)
+        void OnApplicationQuit() => FlushPendingAutosave();
+
+        void OnApplicationPause(bool paused)
+        {
+            if (paused) FlushPendingAutosave();
         }
 
         void Start()
@@ -655,7 +660,11 @@ namespace CubeFly.Build
 
         IEnumerator AutosaveAfterDelay()
         {
-            yield return new WaitForSeconds(autosaveDebounceSeconds);
+            // Realtime so the debounce keeps progressing while the game is
+            // paused — PauseMenu / SettingsMenu set Time.timeScale = 0, which
+            // would freeze a scaled WaitForSeconds and strand the latest edit
+            // in memory until time resumed. (AP-2)
+            yield return new WaitForSecondsRealtime(autosaveDebounceSeconds);
             FlushSaveNow();
             _autosaveRoutine = null;
         }
@@ -669,6 +678,16 @@ namespace CubeFly.Build
                 : autosaveSlotName;
             ConstructSave save = GameData.ToSave(slotName, shapeRegistry, materialRegistry);
             SaveManager.Save(slot, save);
+        }
+
+        // Writes a pending debounced save immediately and cancels the timer.
+        // Shared by scene tear-down (OnDestroy) and app quit/pause. (AP-2)
+        void FlushPendingAutosave()
+        {
+            if (_autosaveRoutine == null || GameData.ActiveSlot < 0) return;
+            StopCoroutine(_autosaveRoutine);
+            _autosaveRoutine = null;
+            FlushSaveNow();
         }
     }
 }

@@ -67,12 +67,14 @@ namespace CubeFly.Core
             // Ordinal case-sensitive, Allrounder fallback for unknown/empty
             // (e.g. a save written before ship classes existed). TryParse is
             // case-sensitive in this 2-arg form and avoids the per-call
-            // Enum.GetValues array allocation + boxing the old loop ran on
-            // every hangar-slot read; IsDefined rejects numeric strings that
-            // TryParse would otherwise accept as an undefined value. (AP-14 / CR-16)
+            // Enum.GetValues allocation + boxing the old loop ran on every
+            // hangar-slot read. TryParse also accepts numeric strings ("5")
+            // and comma-separated flag combos ("Tank, Scout"), so we accept
+            // the result ONLY if it round-trips to the same display name —
+            // save data is always a single DisplayName. (AP-14 / CR-16, PR review)
             if (!string.IsNullOrEmpty(name)
                 && System.Enum.TryParse(name, out ShipClass parsed)
-                && System.Enum.IsDefined(typeof(ShipClass), parsed))
+                && DisplayName(parsed) == name)
                 return parsed;
             return ShipClass.Allrounder;
         }

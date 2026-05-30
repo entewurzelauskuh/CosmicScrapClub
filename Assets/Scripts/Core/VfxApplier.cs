@@ -109,7 +109,7 @@ namespace CubeFly.Core
             // local trigger), which could apply the toggles to the wrong
             // profile. Pick global over local, then highest priority; fall
             // back to URP's default below if no usable scene Volume. (AP-11)
-            Volume[] volumes = FindObjectsByType<Volume>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            Volume[] volumes = FindObjectsByType<Volume>(FindObjectsSortMode.None);
             Volume best = null;
             for (int i = 0; i < volumes.Length; i++)
             {

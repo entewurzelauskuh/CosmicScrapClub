@@ -340,7 +340,7 @@ namespace CubeFly.Fly
             // Hand the weapon list to the shooting controller so it can
             // group by ShapeDefinition for selection + dispatch.
             if (shootingController == null) shootingController = FindAnyObjectByType<FlyShootingController>();
-            if (shootingController != null) shootingController.RegisterWeapons(_spawnedWeapons);
+            if (shootingController != null) shootingController.RegisterWeapons(_spawnedWeapons, _energySystem);
             else Debug.unityLogger.LogWarning(TAG, "No FlyShootingController in scene; weapons won't fire.");
         }
 
@@ -552,6 +552,7 @@ namespace CubeFly.Fly
                 _pitchInput  = 0f;
                 _yawInput    = 0f;
                 _rollInput   = 0f;
+                _boostHeld   = false;   // zero boost too, for symmetry with the other inputs (AP-14 / CR-10)
                 return;
             }
 
@@ -718,7 +719,7 @@ namespace CubeFly.Fly
             for (int i = 0; i < _spawnedThrusters.Count; i++)
             {
                 ThrusterBehavior thruster = _spawnedThrusters[i];
-                if (thruster == null) continue;
+                if (thruster == null || !thruster.IsAlive) continue; // skip dead cubes (AP-6)
 
                 Vector3 dir = thruster.LocalThrustAxis;
 
@@ -744,7 +745,7 @@ namespace CubeFly.Fly
             for (int i = 0; i < _spawnedThrusters.Count; i++)
             {
                 ThrusterBehavior thruster = _spawnedThrusters[i];
-                if (thruster == null) continue;
+                if (thruster == null || !thruster.IsAlive) continue; // skip dead cubes (AP-6)
 
                 Vector3 dir = thruster.LocalThrustAxis;
                 float level = 0f;

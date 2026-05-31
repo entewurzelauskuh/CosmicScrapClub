@@ -36,6 +36,7 @@ namespace CubeFly.Core
 
         GameObject _panel;
         RectTransform _panelRT;
+        Canvas _canvas;
         Text _label;
         bool _showing;
 
@@ -82,9 +83,9 @@ namespace CubeFly.Core
             _panelRT = (RectTransform)panelGO.transform;
 
             // Canvas override: tooltips render above everything.
-            Canvas canvas = panelGO.GetComponent<Canvas>();
-            canvas.overrideSorting = true;
-            canvas.sortingOrder = 500;
+            _canvas = panelGO.GetComponent<Canvas>();
+            _canvas.overrideSorting = true;
+            _canvas.sortingOrder = 500;
 
             // The tooltip itself should not block clicks on whatever
             // is being hovered.
@@ -178,21 +179,34 @@ namespace CubeFly.Core
             float panelH = Mathf.Max(_label.preferredHeight + VPad, 24f);
             _panelRT.sizeDelta = new Vector2(panelW, panelH);
 
-            // Default offset: +20 right, -20 below cursor.
-            // anchoredPosition is in (x, -y) from top-left.
-            float x = screenPos.x + 20f;
-            float y = -(Screen.height - screenPos.y) - 20f;
+            // The panel is anchored to the top-left of the PersistentHud
+            // canvas, which uses ScaleWithScreenSize — so anchoredPosition is
+            // in *canvas* units, not screen pixels. Convert the cursor (pixels,
+            // bottom-left origin) into canvas units via the canvas scale factor
+            // and clamp against the canvas size in the same units. Without this
+            // the tooltip drifts off the cursor and edge-flips at the wrong
+            // place on any non-1920x1080 display. (AP-5)
+            float sf = _canvas != null ? _canvas.rootCanvas.scaleFactor : 1f;
+            if (sf <= 0.0001f) sf = 1f;
+            float canvasW = Screen.width / sf;
+            float canvasH = Screen.height / sf;
+            float cursorX = screenPos.x / sf;                          // from left
+            float cursorYFromTop = (Screen.height - screenPos.y) / sf; // from top
 
-            // Right-edge clamp: flip to the left if it would extend
-            // past the right edge. With the wrap-capped panel width
-            // (<= MaxPanelWidth), the flipped position fits on-screen.
-            if (x + panelW > Screen.width)
-                x = screenPos.x - panelW - 20f;
+            // Default offset: +20 right, -20 below the cursor (canvas units).
+            // anchoredPosition is (x, -y) from the top-left.
+            float x = cursorX + 20f;
+            float y = -cursorYFromTop - 20f;
 
-            // Bottom-edge clamp: flip above the cursor if it would
-            // extend past the bottom edge.
-            if (-(y - panelH) > Screen.height)
-                y = -(Screen.height - screenPos.y) + panelH + 20f;
+            // Right-edge clamp: flip to the left of the cursor if the panel
+            // would run past the right edge.
+            if (x + panelW > canvasW)
+                x = cursorX - panelW - 20f;
+
+            // Bottom-edge clamp: flip above the cursor if it would run past
+            // the bottom edge.
+            if (-(y - panelH) > canvasH)
+                y = -cursorYFromTop + panelH + 20f;
 
             _panelRT.anchoredPosition = new Vector2(x, y);
         }

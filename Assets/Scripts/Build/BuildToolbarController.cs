@@ -133,6 +133,9 @@ namespace CubeFly.Build
             if (buildManager == null)
             {
                 Debug.unityLogger.LogError(TAG, "No BuildManager in scene; toolbar cannot wire up.");
+                // Stop Update() from running — it polls digits / M / Esc and
+                // dereferences buildManager, which would NRE on every keypress. (AP-9)
+                enabled = false;
                 return;
             }
             BuildToolbar();
@@ -549,11 +552,14 @@ namespace CubeFly.Build
             if (buildManager.Shapes == null) return;
             if (shapeIndex < 0 || shapeIndex >= buildManager.Shapes.Count) return;
             if (_shapeButtons == null || shapeIndex >= _shapeButtons.Length) return;
-            // Weapons don't use the material flyout — they have a
-            // dedicated weapons flyout and a coupled material instead.
+            // Coupled-material shapes (weapons AND utilities) don't use the
+            // armour material flyout — they have their own category flyout and
+            // a coupled material instead. Use UsesCoupledMaterial (not just
+            // IsWeapon) so utilities are suppressed too, matching the
+            // Shift+digit arming path. (AP-10)
             if (_shapeButtons[shapeIndex] == null) return;
             ShapeDefinition def = buildManager.Shapes.Get(shapeIndex);
-            if (def == null || def.IsWeapon) return;
+            if (def == null || def.UsesCoupledMaterial) return;
 
             // Mutual exclusion with the category flyouts — opening one
             // must close the others so they never visually overlap.

@@ -64,13 +64,16 @@ namespace CubeFly.Core
         // shape / material name-lookup convention in the registries.
         public static ShipClass Parse(string name)
         {
-            if (!string.IsNullOrEmpty(name))
-            {
-                foreach (ShipClass c in System.Enum.GetValues(typeof(ShipClass)))
-                {
-                    if (c.ToString() == name) return c;
-                }
-            }
+            // Ordinal case-sensitive, Allrounder fallback for unknown/empty
+            // (e.g. a save written before ship classes existed). TryParse is
+            // case-sensitive in this 2-arg form and avoids the per-call
+            // Enum.GetValues array allocation + boxing the old loop ran on
+            // every hangar-slot read; IsDefined rejects numeric strings that
+            // TryParse would otherwise accept as an undefined value. (AP-14 / CR-16)
+            if (!string.IsNullOrEmpty(name)
+                && System.Enum.TryParse(name, out ShipClass parsed)
+                && System.Enum.IsDefined(typeof(ShipClass), parsed))
+                return parsed;
             return ShipClass.Allrounder;
         }
     }

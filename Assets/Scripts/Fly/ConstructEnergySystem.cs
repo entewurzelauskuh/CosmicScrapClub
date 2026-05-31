@@ -22,7 +22,8 @@ namespace CubeFly.Fly
     //
     // Damage interception: CubeDamage.ApplyAndLog resolves this system via
     // GetComponentInParent on the hit cube and calls ApplyToShield, which
-    // absorbs against the pool (type-scaled) before the overflow reaches HP.
+    // absorbs against the pool (the type modifier scales the pool COST of
+    // what's absorbed, not the damage) before the RAW overflow reaches HP.
     public class ConstructEnergySystem : MonoBehaviour
     {
         [Header("Shield regen")]
@@ -32,9 +33,9 @@ namespace CubeFly.Fly
         [SerializeField] float regenDelaySeconds = 5f;
 
         [Header("Shield damage-type modifiers")]
-        [Tooltip("Multiplier on projectile damage while the shield absorbs it. <1 = shield resists projectiles.")]
+        [Tooltip("Pool COST per point of raw PROJECTILE damage absorbed (NOT a damage multiplier). <1 = cheap to soak, so the shield resists projectiles and lasts longer. The pool covers ShieldPoints / this much raw damage; any overflow reaches HP as raw. See ApplyToShield.")]
         [SerializeField] float projectileModifier = 0.9f;
-        [Tooltip("Multiplier on energy damage while the shield absorbs it. >1 = shield is weak to energy.")]
+        [Tooltip("Pool COST per point of raw ENERGY damage absorbed (NOT a damage multiplier). >1 = each point drains more pool, so the shield is weak to energy. The pool covers ShieldPoints / this much raw damage; any overflow reaches HP as raw. See ApplyToShield.")]
         [SerializeField] float energyModifier = 1.1f;
         // Kinetic (crash) damage always bypasses the shield entirely — no
         // modifier, no absorption. A shield stops projectiles / energy, not
@@ -62,8 +63,11 @@ namespace CubeFly.Fly
         // --- HUD read-only surface ---
         public float ShieldPoints => _shieldPoints;
         public float ShieldMax => _shieldMax;
-        // Player-facing demand balance: output − total nominal shield draw
-        // (later also − active laser draw). Negative = under-powered.
+        // Player-facing build/HUD readout: reactor output − nominal shield
+        // draw. Negative = under-powered. This is deliberately the steady
+        // demand balance and does NOT subtract active laser draw — weapon
+        // power is contended at firing time in FlyShootingController via
+        // AvailableForWeapons, not folded into this readout. (AP-14 / CR-07)
         public float NetPower => _totalOutput - _shieldDraw;
         public bool ShieldActive => _shieldPowered;
         // Derived from the recomputed ALIVE cube counts (set in
@@ -158,12 +162,26 @@ namespace CubeFly.Fly
             }
         }
 
+        void OnValidate()
+        {
+            // The modifiers are a pool COST per point of raw damage absorbed
+            // (see ApplyToShield), so they must stay > 0 — a 0/negative value
+            // would let the shield absorb unbounded damage. Clamping the
+            // serialized values keeps builds from leaning on ApplyToShield's
+            // runtime Mathf.Max fallback. (AP-4, PR review)
+            projectileModifier = Mathf.Max(0.01f, projectileModifier);
+            energyModifier = Mathf.Max(0.01f, energyModifier);
+            regenRate = Mathf.Max(0f, regenRate);
+            regenDelaySeconds = Mathf.Max(0f, regenDelaySeconds);
+        }
+
         // Called from CubeDamage.ApplyAndLog for any hit on a construct
         // cube. Resets the regen timer (the construct was hit), absorbs
-        // against the pool if powered, and returns the overflow that should
-        // continue to HP. When the shield is down, returns the amount
-        // unchanged (full overflow, no type modifier — the modifier is a
-        // shield property).
+        // against the pool if powered, and returns the RAW overflow that
+        // should continue to HP. When the shield is down, returns the
+        // amount unchanged. The type modifier scales the pool COST of what
+        // is absorbed (see below), never the overflow, so the value
+        // returned here is always <= amount.
         public float ApplyToShield(float amount, DamageType type)
         {
             // Kinetic (crash) damage bypasses the shield entirely — it
@@ -174,10 +192,21 @@ namespace CubeFly.Fly
             _timeSinceDamage = 0f;
             if (!_shieldPowered || _shieldPoints <= 0f) return amount;
 
-            float scaled = amount * TypeModifier(type);
-            float absorbed = Mathf.Min(scaled, _shieldPoints);
-            _shieldPoints -= absorbed;
-            return scaled - absorbed;
+            // The type modifier is the POOL COST per unit of raw damage
+            // absorbed — NOT a scale on the damage itself. Energy (×1.1)
+            // drains the pool faster per point absorbed (shields are weak to
+            // energy); projectile (×0.9) drains it slower (shields resist
+            // projectiles). So the pool can cover `_shieldPoints / mod` raw
+            // damage; anything beyond that spills to HP as RAW damage.
+            // Applying the modifier only to the absorbed portion (never the
+            // overflow) means a near-empty shield can never amplify a hit
+            // past its raw amount, and there is no 0-vs-1-point
+            // discontinuity. e.g. with 1 pt vs a 100 energy hit: absorbs
+            // ~0.91 raw, ~99.09 reaches HP (never > 100). (AP-4)
+            float mod = Mathf.Max(0.0001f, TypeModifier(type));
+            float absorbedRaw = Mathf.Min(amount, _shieldPoints / mod);
+            _shieldPoints = Mathf.Max(0f, _shieldPoints - absorbedRaw * mod);
+            return amount - absorbedRaw;
         }
 
         // Only projectile + energy reach here (kinetic returns early in

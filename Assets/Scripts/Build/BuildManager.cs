@@ -238,12 +238,17 @@ namespace CubeFly.Build
             // If a save was pending, write it now so the slot file
             // ends the session current. The scene tear-down path has
             // already invoked ConstructChanged for any final edits.
-            if (_autosaveRoutine != null && GameData.ActiveSlot >= 0)
-            {
-                StopCoroutine(_autosaveRoutine);
-                _autosaveRoutine = null;
-                FlushSaveNow();
-            }
+            FlushPendingAutosave();
+        }
+
+        // A hard quit or editor-stop can land inside the debounce window
+        // (before the realtime wait elapses), so flush any pending save on
+        // application quit / pause too — not just on scene tear-down. (AP-2)
+        void OnApplicationQuit() => FlushPendingAutosave();
+
+        void OnApplicationPause(bool paused)
+        {
+            if (paused) FlushPendingAutosave();
         }
 
         void Start()
@@ -655,9 +660,18 @@ namespace CubeFly.Build
 
         IEnumerator AutosaveAfterDelay()
         {
-            yield return new WaitForSeconds(autosaveDebounceSeconds);
-            FlushSaveNow();
+            // Realtime so the debounce keeps progressing while the game is
+            // paused — PauseMenu / SettingsMenu set Time.timeScale = 0, which
+            // would freeze a scaled WaitForSeconds and strand the latest edit
+            // in memory until time resumed. (AP-2)
+            yield return new WaitForSecondsRealtime(autosaveDebounceSeconds);
+            // Clear the handle BEFORE flushing so a quit/pause/destroy flush
+            // (FlushPendingAutosave no-ops when it's null) can never double-
+            // write this same save. Unity is single-threaded so the two
+            // statements don't actually interleave, but this makes the
+            // no-double-write invariant obvious. (PR review)
             _autosaveRoutine = null;
+            FlushSaveNow();
         }
 
         void FlushSaveNow()
@@ -668,7 +682,30 @@ namespace CubeFly.Build
                 ? $"Slot {slot + 1}"
                 : autosaveSlotName;
             ConstructSave save = GameData.ToSave(slotName, shapeRegistry, materialRegistry);
+            // GameData.ToSave totals only the placed cubes; fold in the alpha
+            // anchor (mass + HP) so the hangar slot card matches the Build/Fly
+            // HUD, which both count the alpha. Reads the same live instance as
+            // SumStat, so the card and the toolbar stat block always agree. (AP-3)
+            if (_alphaCubeInstance != null)
+            {
+                CubeStats alpha = _alphaCubeInstance.GetComponent<CubeStats>();
+                if (alpha != null)
+                {
+                    save.totalMass += alpha.mass;
+                    save.totalHealthPoints += alpha.healthPoints;
+                }
+            }
             SaveManager.Save(slot, save);
+        }
+
+        // Writes a pending debounced save immediately and cancels the timer.
+        // Shared by scene tear-down (OnDestroy) and app quit/pause. (AP-2)
+        void FlushPendingAutosave()
+        {
+            if (_autosaveRoutine == null || GameData.ActiveSlot < 0) return;
+            StopCoroutine(_autosaveRoutine);
+            _autosaveRoutine = null;
+            FlushSaveNow();
         }
     }
 }

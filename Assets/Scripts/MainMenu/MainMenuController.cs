@@ -19,6 +19,12 @@ namespace CubeFly.MainMenu
 
         void Awake()
         {
+            // Entering the main menu means no save slot is active. Disarm
+            // autosave so a slot armed earlier this session can't be
+            // overwritten by a later BuildScene autosave. This is the single
+            // chokepoint for every return-to-menu path (PauseMenu "Menu",
+            // GameOver "Return", HangarSelect "Cancel" all load MainMenu). (AP-1)
+            GameData.DisarmAutosave();
             BuildUI();
             Debug.unityLogger.Log(TAG, "Main Menu initialised.");
         }
@@ -63,6 +69,11 @@ namespace CubeFly.MainMenu
 
         void OnSettings()
         {
+            if (SettingsMenu.Instance == null)
+            {
+                Debug.unityLogger.LogWarning(TAG, "Settings unavailable — SettingsMenu did not initialise.");
+                return;
+            }
             Debug.unityLogger.Log(TAG, "Settings selected — opening Settings menu.");
             SettingsMenu.Instance.Show();
         }

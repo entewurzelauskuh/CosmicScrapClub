@@ -62,15 +62,23 @@ namespace CubeFly.Fly
 
         // Keep designer-tunable values sane. tickInterval is the decrement
         // step in Fire's while loop — 0 or negative would spin forever.
-        void OnValidate()
+        void OnValidate() => ClampTunables();
+
+        // Shared by OnValidate (editor) and Awake (runtime). OnValidate does
+        // NOT run in player builds, so a prefab/script value of 0 would
+        // otherwise ship as a dead beam (range 0 -> TrySweep no-op) or a
+        // power-gate bypass (powerDraw 0 -> budget int.MaxValue). (AP-8, PR review)
+        void ClampTunables()
         {
             tickInterval = Mathf.Max(0.01f, tickInterval);
-            range = Mathf.Max(0f, range);
+            range = Mathf.Max(0.01f, range);
             beamWidth = Mathf.Max(0.001f, beamWidth);
+            powerDraw = Mathf.Max(0.01f, powerDraw);
         }
 
         void Awake()
         {
+            ClampTunables(); // OnValidate doesn't run in player builds (AP-8, PR review)
             // Add + configure the LineRenderer at runtime so the prefab
             // doesn't have to serialize the verbose component.
             _line = GetComponent<LineRenderer>();
@@ -112,11 +120,21 @@ namespace CubeFly.Fly
             // interval to whatever the beam currently hits. While loop so a
             // long frame applies all due ticks (matching elapsed time).
             _tickTimer += Time.deltaTime;
+            // Resolve the struck cube once (the swept hit is fixed for this
+            // frame). On a long frame the loop applies several due ticks; if
+            // the cube dies on one of them, stop — further ticks would just
+            // spam the corpse and reset its shield regen timer instead of
+            // moving on (next frame's sweep re-targets). No-hit ticks still
+            // drain the timer so pointing at empty space can't accumulate a
+            // burst that all lands at once on first contact. (AP-8)
+            CubeStats hitStats = didHit && hit.collider != null
+                ? hit.collider.GetComponentInParent<CubeStats>() : null;
             while (tickInterval > 0f && _tickTimer >= tickInterval)
             {
                 _tickTimer -= tickInterval;
-                if (didHit)
-                    ProjectileHit.ApplyAndLog(hit, damage, Construct, TAG, DamageType.Energy);
+                if (!didHit) continue;
+                ProjectileHit.ApplyAndLog(hit, damage, Construct, TAG, DamageType.Energy);
+                if (hitStats == null || hitStats.healthPoints <= 0f) break;
             }
         }
 

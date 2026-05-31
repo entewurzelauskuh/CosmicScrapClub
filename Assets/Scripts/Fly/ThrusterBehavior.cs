@@ -1,3 +1,4 @@
+using CubeFly.Core;
 using UnityEngine;
 
 namespace CubeFly.Fly
@@ -68,6 +69,28 @@ namespace CubeFly.Fly
 
         internal void SetInputLevel(float level) => _currentInputLevel = Mathf.Clamp01(level);
         internal void SetBoosting(bool boosting) => _isBoosting = boosting;
+
+        // True while alive (HP > 0). Lazy-cached sibling CubeStats — same
+        // pattern as ReactorBehavior / ShieldBehavior. FlyController's boost
+        // and VFX loops skip dead thrusters so a destroyed-but-still-drifting
+        // thruster no longer grants its boost axis or emits a plume during the
+        // ~2 s death drift. The construct is rigid for a Fly session, so
+        // resolving the sibling once is safe. (AP-6)
+        public bool IsAlive
+        {
+            get
+            {
+                if (!_statsResolved)
+                {
+                    _stats = GetComponent<CubeStats>();
+                    _statsResolved = true;
+                }
+                return _stats != null && _stats.healthPoints > 0f;
+            }
+        }
+
+        CubeStats _stats;
+        bool _statsResolved;
 
         // Convert world-space thrust direction (-transform.up) into the
         // construct's local frame, then snap each component to the

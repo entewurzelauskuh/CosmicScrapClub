@@ -37,7 +37,9 @@ Read [`docs/cube_fly_spec.md`](docs/cube_fly_spec.md) for the canonical product 
 
 ## Up Next
 
-In running order. Phase 1 (HitContext + HUD consolidation) and phase 2 (Power & Energy + Laser) are done. The polish pass is in motion: the Settings menu scaffold (six placeholder tabs + Debug) has shipped, VFX phase 1 (post-processing + Debug-tab toggles) has shipped, and VFX phase B-1 (engines + boost flare + RCS puffs) has shipped. Remaining: VFX phases B-2 / B-3 / B-4 / C / D, an AA settings dropdown for the Graphics tab, and finally an experimental merge of the long-standing desert map work. Docs are re-synced at logical close-outs.
+In running order. Phase 1 (HitContext + HUD consolidation) and phase 2 (Power & Energy + Laser) are done. The polish pass is in motion: the Settings menu scaffold (six placeholder tabs + Debug) has shipped, VFX phase 1 (post-processing + Debug-tab toggles) has shipped, and VFX phase B-1 (engines + boost flare + RCS puffs) has shipped. Remaining: VFX phases B-2 / B-3 / B-4 / C / D and an AA settings dropdown for the Graphics tab.
+
+**Note (2026-05-31):** item 4 (desert map → FlyScene, then the UI rebrand) has been **pulled forward** ahead of the remaining VFX phases by decision — see that section for the scoped arc. Docs are re-synced at logical close-outs.
 
 ### 1. Extended VFX pass
 
@@ -68,9 +70,53 @@ A seventh **Debug** tab is added during the VFX pass (item 1 above): a per-effec
 
 Refresh `README.md`, `ROADMAP.md`, `docs/full_architecture.md`, `docs/cube_fly_spec.md` to reflect the VFX pass + settings menu. Audit the docs index in `README.md`'s companion-docs list and trim anything that's outlived its usefulness.
 
-### 4. Desert-map FlyScene experiment
+### 4. Desert map → FlyScene, then the UI rebrand  *(pulled forward; arc scoped 2026-05-31)*
 
-After everything above lands. Try merging the long-standing desert map work (see [`docs/desert_level_spec.md`](docs/desert_level_spec.md) and `Assets/Scripts/Desert/`) into the live FlyScene on an experimental branch — replacing or supplementing the current 200×200 ground plane + 20 dummy cubes with the dune terrain + formations. The construct's flight logic should already work in the desert (it's just colliders + Rigidbody); the experiment is whether the existing desert assets compose cleanly with the current FlyScene HUD, world spawns, and physics, and whether the resulting feel is what the desert spec promised. Tagged **experimental** — outcome could be ship, iterate, or shelve.
+The desert demonstrator (`DesertSandbox.unity` + `Assets/Scripts/Desert/` + shaders +
+formation prefabs + `Desert_Renderer`) is **already merged to `main`** as a standalone,
+detached scene — FlyScene has zero desert references today. The remaining work is the
+**integration**, scoped into two milestones with a small housekeeping phase first. This
+is being pulled ahead of the remaining VFX phases (B-2…D) by decision on 2026-05-31.
+
+> One coupling to watch: VFX **Phase C** adds shaders (laser glow, shield dome) that will
+> have to coexist with the desert cel renderer. Not blocking — just sequence-aware.
+
+**Phase 0 — Housekeeping** (done 2026-05-31)
+- Deleted two obsolete stale worktree branches (`fix/flyscene-missing-script`,
+  `fix/buildmanager-input-npe`): both forked from ancient history, and the orphan
+  missing-script the former targeted is already gone from `main` (verified
+  `m_Script: {fileID: 0}` count = 0 in `FlyScene.unity`).
+
+**Milestone A — Desert → FlyScene integration** *(experimental branch; decision gate = ship / iterate / shelve)*
+Terrain-first, cel-look-second — the two risks are split so each gets its own play-test.
+- **A1 — Terrain in, current renderer.** Replace FlyScene's 200×200 plane + 20 dummies
+  with the dune `DesertGround` + the five formation prefabs + perimeter ridge, under the
+  *existing* FlyScene renderer/post-FX. Resolve: construct spawn point (dunes aren't flat
+  at origin), MeshCollider-vs-Rigidbody behaviour, `FlyCamera` bounds, flight bounds.
+  *Play-test: navigates well at the 3–6u ship scale?*
+- **A2 — Scatter targets.** Re-place the destructible `WorldTargetCube`s through the
+  formations (canyons, mesas, the butte-ring arena). *Play-test: plays as a combat arena?*
+- **A3 — Adopt the cel look.** Switch FlyScene to `Desert_Renderer` (cel shader +
+  screen-space outline). Reconcile ship cubes, projectiles, the B-1 VFX particles, and the
+  HUD under the new renderer + outline pass; reconcile `DesertVolumeProfile` with the
+  existing post-FX. *Play-test: coherent, not busy?* (If this fights us, A1+A2 alone is a
+  shippable outcome.)
+- **A4 — Decide + docs.** Land or shelve. If landing: rewrite `docs/desert_level_spec.md`
+  (still written as a detached demonstrator), re-sync ROADMAP + architecture map, and drop
+  the throwaway `FreeFlyCamera`.
+
+**Milestone B — UI rebrand** *(separate milestone, all scenes; after A)*
+Consume the `unity_handoff/` design-system drop (palette `CscPalette` + theme `CscTheme`
++ 12 UI sprites + brand fonts, already fetched into `Assets/Resources/Fonts/`).
+- **B1 — Drop-in groundwork** (zero visual change): copy `CscPalette`/`CscTheme` into
+  `Assets/Scripts/Core/`, import the 12 sprites, commit the staged fonts + add the font
+  bootstrap.
+- **B2 — Wire it up** (HANDOFF Step 4 — *brainstorm before implementing*): refactor
+  `UIStyle` to source colors/fonts from the theme, add toon outlines + primary (ochre)
+  buttons, point the Fly HUD literals at `CscPalette`.
+- **B3 — Sprites into the build toolbar / HUD**, then retire `unity_handoff/`.
+
+Each milestone gets its own spec → plan → implement cycle when reached.
 
 ---
 

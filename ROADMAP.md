@@ -89,11 +89,20 @@ is being pulled ahead of the remaining VFX phases (B-2…D) by decision on 2026-
 
 **Milestone A — Desert → FlyScene integration** *(experimental branch; decision gate = ship / iterate / shelve)*
 Terrain-first, cel-look-second — the two risks are split so each gets its own play-test.
-- **A1 — Terrain in, current renderer.** Replace FlyScene's 200×200 plane + 20 dummies
-  with the dune `DesertGround` + the five formation prefabs + perimeter ridge, under the
-  *existing* FlyScene renderer/post-FX. Resolve: construct spawn point (dunes aren't flat
-  at origin), MeshCollider-vs-Rigidbody behaviour, `FlyCamera` bounds, flight bounds.
-  *Play-test: navigates well at the 3–6u ship scale?*
+- **A1 — Terrain in, current renderer (DONE, 2026-06-11; gate = ITERATE).** Replaced
+  FlyScene's 200×200 plane + 20 dummies + 4 turrets with a single `DesertEnvironment` prefab
+  (dune ground + perimeter ridge + 5 formations, all on a new `World` layer), a
+  `SpawnSurfacePlacer` that raycasts the construct to a safe spawn altitude, and desert
+  atmosphere (warm ambient + gradient sky + subtle fog) under the existing renderer. Verified:
+  safe spawn, zero Play errors, terrain collides, ridge contains. **Play feel liked, but the
+  basin is too tight for large player constructs → iterate at scale (A1.5).** See
+  `docs/superpowers/specs/2026-05-31-desert-flyscene-a1-design.md`.
+- **A1.5 — Scale the basin up (next).** Ground 200→500; keep the 5 formations but scale ×1.2
+  (+×1.1 on Y) and re-space them across the larger basin; add ridge pieces to re-close the
+  500×500 perimeter (don't stretch the existing 20 — unnatural). Goal: huge mesas, deep
+  canyons, a vast central plain wide enough that an oversized construct can still navigate
+  (e.g. fly through the arch). Own brainstorm → spec → plan cycle. *Play-test: do big
+  constructs have room?*
 - **A2 — Scatter targets.** Re-place the destructible `WorldTargetCube`s through the
   formations (canyons, mesas, the butte-ring arena). *Play-test: plays as a combat arena?*
 - **A3 — Adopt the cel look.** Switch FlyScene to `Desert_Renderer` (cel shader +

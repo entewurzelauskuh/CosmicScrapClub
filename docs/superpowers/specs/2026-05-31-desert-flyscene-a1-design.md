@@ -166,6 +166,34 @@ edited files must reach the root checkout to Play-mode-verify; see `CLAUDE.md`):
 
 **Decision gate (end of A1):** ship / iterate / shelve — recorded before moving to A2.
 
+### A1 outcome (2026-06-11) — **ITERATE**
+
+Play-tested. Core integration is a success and the play *feel* is liked:
+- Navigation at ship scale: **partial** — flyable, but the basin reads as a tight arena.
+- Formations read at distance through the subtle fog: **yes**.
+- Ridge contains the sides: **yes**.
+- Ship bounces off terrain (dunes + rock) rather than passing through: **yes**.
+- Feels like the desert the spec promised: **yes**.
+- Automated checks: spawn placer seated the construct at y=8.88 on `DuneGround` (raycast
+  working); zero errors in Play; Valley-of-Fire palette + subtle (non-wall) fog render correctly.
+
+**Iterate reason — scale.** Constructs can be built arbitrarily large, so a tight arena will
+break down (e.g. a construct wider than the Mesa+Arch opening can't fly through). The desert
+needs to feel **vast** — huge mesas, deep canyons, an open central plain.
+
+**Agreed scale-up (→ new sub-phase A1.5, see ROADMAP §4):**
+- Ground extent **200 → 500** (≈ the `DuneGroundGenerator.size`/resolution + the baked mesh).
+- Perimeter ridge: **do not stretch** the existing 20 pieces (unnatural); **add more ridge
+  pieces** as needed to re-close the larger 500×500 perimeter naturally.
+- **Keep the 5 existing formations** (no new archetypes) — scale **×1.2** (XZ + base) plus an
+  **additional ×1.1 on Y** (taller mesas/walls), and re-space them across the larger basin so
+  lanes/canyons/arches are wide enough for big constructs. Accept a sparser, vast-empty-plain
+  feel in the middle by design (per maintainer call 2026-06-11).
+- Re-verify spawn lane clearance + arch/canyon widths at the new scale.
+
+This is a scene-geometry restructuring of its own; tracked as **A1.5** and given its own
+spec → plan cycle (brainstorm starting now, 2026-06-11) rather than folded into A1's commits.
+
 ## 10. Risks & notes
 
 - **Terrain collider cost:** the dune `MeshCollider` + 20 ridge `MeshCollider`s + 5

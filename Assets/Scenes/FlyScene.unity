@@ -131,6 +131,7 @@ GameObject:
   - component: {fileID: 200003}
   - component: {fileID: 200002}
   - component: {fileID: 200004}
+  - component: {fileID: 200005}
   m_Layer: 0
   m_Name: CubeConstruct
   m_TagString: Untagged
@@ -146,8 +147,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 200000}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 10, z: 0}
+  m_LocalRotation: {x: 0, y: -0.47185794, z: -0, w: 0.8816746}
+  m_LocalPosition: {x: -5, y: 30, z: 15}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -212,6 +213,24 @@ MonoBehaviour:
   regenDelaySeconds: 5
   projectileModifier: 0.9
   energyModifier: 1.1
+--- !u!114 &200005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0310aadcd51c4e1d84fb1d907ca0263, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Desert.SpawnSurfacePlacer
+  terrainMask:
+    serializedVersion: 2
+    m_Bits: 512
+  clearance: 9
+  rayStartHeight: 200
+  fallbackHeight: 20
 --- !u!1 &300000
 GameObject:
   m_ObjectHideFlags: 0

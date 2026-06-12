@@ -103,9 +103,14 @@ Terrain-first, cel-look-second — the two risks are split so each gets its own 
   ridge expanded 20→64 pieces (verified closed on all headings); spawn moved to the open
   central plain; fog widened for the longer sightlines. Re-flown: vast open plain ringed by
   huge mesas, big constructs have room. See
-  `docs/superpowers/specs/2026-06-11-desert-flyscene-a1.5-design.md`. **Next: A2.**
-- **A2 — Scatter targets.** Re-place the destructible `WorldTargetCube`s through the
-  formations (canyons, mesas, the butte-ring arena). *Play-test: plays as a combat arena?*
+  `docs/superpowers/specs/2026-06-11-desert-flyscene-a1.5-design.md`.
+- **A2 — Scatter targets (DONE, 2026-06-12; gate = SHIP).** Repopulated the basin via a
+  `DesertTargets` container in FlyScene: 21 destructible `DesertTarget`s (prefab variant of
+  `WorldTargetCube` + a new `SurfaceSnap` placer) in curated clusters at the 5 formations + a
+  thin plain scatter, plus 3 `Turret`s (variant + `AutoTurret`) holding the butte ring and the
+  slot-canyon mouth. Generalised `SpawnSurfacePlacer`→`SurfaceSnap` (one reusable placer).
+  Re-flown: plays as a combat arena, maintainer verdict SHIP. See
+  `docs/superpowers/specs/2026-06-12-desert-flyscene-a2-design.md`. **Next: A3.**
 - **A3 — Adopt the cel look.** Switch FlyScene to `Desert_Renderer` (cel shader +
   screen-space outline). Reconcile ship cubes, projectiles, the B-1 VFX particles, and the
   HUD under the new renderer + outline pass; reconcile `DesertVolumeProfile` with the

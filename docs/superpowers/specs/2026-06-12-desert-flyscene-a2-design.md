@@ -128,6 +128,31 @@ No automated tests. Manual, in the Unity Editor on the **main project root** (pe
 
 **Decision gate (end of A2):** ship / iterate / shelve — recorded before A3.
 
+### A2 outcome (2026-06-12) — **SHIP**
+
+Re-flown by the maintainer — **plays great** ("working great, nothing to change"). FlyScene now
+reads as a combat arena, not an empty flythrough. Built + verified through the per-task checks:
+- `SpawnSurfacePlacer` generalised → `SurfaceSnap` (guid preserved; the construct rebinds with
+  `clearance 9` intact; runtime-seats the construct at surface+9 on the dunes).
+- `DesertTarget` + `Turret` created as **prefab variants** of `WorldTargetCube` (inherit
+  `CubeStats` HP30/AV0, `PlacedCube` layer); both carry `SurfaceSnap` (clearance 0.5 = base
+  rests on the sand). `WorldTargetCube` has no `Rigidbody`, so targets stay put once seated.
+- 21 destructibles: clusters at the 5 formations (5 that snapped onto rock tops / a perimeter
+  ridge were relocated onto the dune apron so all sit at flight level) + a 4-target plain
+  scatter (82–136 u from spawn, all ≥40 u clear).
+- 3 turrets: butte-ring pair re-aimed to fire **across** the arena interior (60–70 u clear
+  traverse) after the first aim splashed on the near wall; slot-canyon turret fires down-lane.
+  All enabled (bullet wired), seated on dune.
+- Automated smoke test confirmed seating + turrets-enabled + clean console; firing/combat
+  confirmed by the maintainer's focused Play session (the headless MCP sim stays frozen at
+  frame 1, so firing can't be auto-verified).
+
+**Known rough edge carried to A3:** turret cubes are visibly tilted — `AutoTurret` fires along
+local +Y, so aiming = tilting the cube. Cosmetic; the A3 cel/visual pass addresses it.
+
+**Next:** A3 (adopt the cel-shader / `Desert_Renderer` outline look). Geometry + gameplay are
+now stable underneath it.
+
 ## 6. Risks & notes
 - **Placer consolidation** re-touches the A1.5/Copilot-reviewed construct wiring (low risk:
   guid-preserved rename + a clearance field). The veto path keeps `SpawnSurfacePlacer`.

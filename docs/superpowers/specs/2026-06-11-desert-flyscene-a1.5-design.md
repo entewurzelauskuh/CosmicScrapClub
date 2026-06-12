@@ -4,7 +4,7 @@
 **Branch:** `explore/desert-flyscene` (experimental — not on `main`)
 **Roadmap:** item 4, Milestone A, sub-phase **A1.5** (`ROADMAP.md §4`).
 **Predecessor:** A1 (`docs/superpowers/specs/2026-05-31-desert-flyscene-a1-design.md`) — done, gate = ITERATE.
-**Status:** Accepted design, pre-implementation.
+**Status:** Implemented — outcome SHIP (see "A1.5 outcome" below).
 
 ## 1. Purpose & scope
 

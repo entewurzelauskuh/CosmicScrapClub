@@ -3,7 +3,7 @@
 **Date:** 2026-05-31
 **Branch:** `explore/desert-flyscene` (experimental — this spec is intentionally NOT on `main`)
 **Roadmap:** item 4, Milestone A, sub-phase **A1** (see `ROADMAP.md §4`).
-**Status:** Accepted design, pre-implementation.
+**Status:** Implemented — outcome ITERATE (see "A1 outcome" below); superseded at scale by A1.5.
 
 ## 1. Purpose & scope
 

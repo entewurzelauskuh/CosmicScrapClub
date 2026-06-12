@@ -97,12 +97,13 @@ Terrain-first, cel-look-second — the two risks are split so each gets its own 
   safe spawn, zero Play errors, terrain collides, ridge contains. **Play feel liked, but the
   basin is too tight for large player constructs → iterate at scale (A1.5).** See
   `docs/superpowers/specs/2026-05-31-desert-flyscene-a1-design.md`.
-- **A1.5 — Scale the basin up (next).** Ground 200→500; keep the 5 formations but scale ×1.2
-  (+×1.1 on Y) and re-space them across the larger basin; add ridge pieces to re-close the
-  500×500 perimeter (don't stretch the existing 20 — unnatural). Goal: huge mesas, deep
-  canyons, a vast central plain wide enough that an oversized construct can still navigate
-  (e.g. fly through the arch). Own brainstorm → spec → plan cycle. *Play-test: do big
-  constructs have room?*
+- **A1.5 — Scale the basin up (DONE, 2026-06-11; gate = SHIP).** Ground regenerated 200→500
+  (new `DesertGround_500.asset`, 361k verts, shared 200 mesh preserved for DesertSandbox); the
+  5 formations scaled ×1.2 (+×1.1 Y), pushed to the rim, re-seated on the new dunes; perimeter
+  ridge expanded 20→64 pieces (verified closed on all headings); spawn moved to the open
+  central plain; fog widened for the longer sightlines. Re-flown: vast open plain ringed by
+  huge mesas, big constructs have room. See
+  `docs/superpowers/specs/2026-06-11-desert-flyscene-a1.5-design.md`. **Next: A2.**
 - **A2 — Scatter targets.** Re-place the destructible `WorldTargetCube`s through the
   formations (canyons, mesas, the butte-ring arena). *Play-test: plays as a combat arena?*
 - **A3 — Adopt the cel look.** Switch FlyScene to `Desert_Renderer` (cel shader +

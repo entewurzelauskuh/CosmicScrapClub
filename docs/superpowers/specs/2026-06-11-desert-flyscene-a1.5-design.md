@@ -135,6 +135,26 @@ No automated tests. Manual, in the Unity Editor on the main project root (per `C
 
 **Decision gate (end of A1.5):** ship / iterate / shelve — recorded before A2.
 
+### A1.5 outcome (2026-06-11) — **SHIP**
+
+Re-flown at the 500×500 scale; **works great** (maintainer verdict). The basin now reads as a
+vast open central plain ringed by huge mesas, with room to navigate large constructs. Build
+verified through the per-task checks:
+- Ground regenerated to `DesertGround_500.asset` (361,201 verts, 500×500, ~15.6u height range);
+  shared `DesertGround.asset` confirmed untouched (DesertSandbox reference intact).
+- 5 formations scaled `(1.2, 1.32, 1.2)`, pushed to the rim, raycast-snapped onto the new dunes
+  (base-vs-surface within ±0.7u; tops now 37–58u).
+- Perimeter ridge expanded 20 → 64 pieces; verified **CLOSED** on all 180 headings (2° sweep).
+- Spawn moved to the open plain (0,30,60) facing the hero; nearest formation 122u — clear.
+- Tightest navigable lanes measured ~17–20u (arch ≈20u, slot canyon inner gap ~17u) — roomier
+  than the A1 arena; a *deliberately enormous* (~20+ cube-wide) build still wouldn't thread the
+  slot canyon, but normal/large builds have room.
+- Fog widened (start 90→180, end 280→520) for the ~2.5× longer sightlines — screenshot- and
+  fly-confirmed the mesas/ridge read across the basin instead of washing out.
+
+**Next:** A2 (scatter destructible targets across the new basin), then A3 (cel-shader/outline
+renderer). The geometry is now stable for both.
+
 ## 9. Risks & notes
 
 - **Collider cost:** a 500×500 @ res 600 `MeshCollider` + ~50 ridge `MeshCollider`s + 5 larger

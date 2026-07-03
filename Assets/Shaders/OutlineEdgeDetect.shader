@@ -25,6 +25,8 @@ Shader "Desert/OutlineEdgeDetect"
             float  _Thickness;
             float  _DepthThreshold;
             float  _NormalThreshold;
+            float  _ThicknessFalloffStart;
+            float  _MinThicknessScale;
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings   { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -40,7 +42,15 @@ Shader "Desert/OutlineEdgeDetect"
             half4 Frag(Varyings IN) : SV_Target
             {
                 float2 uv    = IN.uv;
-                float2 texel = (1.0 / _ScreenParams.xy) * _Thickness;
+
+                // Depth-aware thickness: keep full width up close, then taper
+                // ~inversely with distance (perspective-like) so far, crowded
+                // edges don't merge into black blobs, clamped to a floor so
+                // distant outlines stay visible rather than vanishing.
+                float centerDepth    = LinearEyeDepth(SampleSceneDepth(uv), _ZBufferParams);
+                float thicknessScale = clamp(_ThicknessFalloffStart / max(centerDepth, 1e-4),
+                                             _MinThicknessScale, 1.0);
+                float2 texel = (1.0 / _ScreenParams.xy) * (_Thickness * thicknessScale);
 
                 // Roberts-cross sample offsets
                 float2 uv0 = uv + float2(-1, -1) * texel;

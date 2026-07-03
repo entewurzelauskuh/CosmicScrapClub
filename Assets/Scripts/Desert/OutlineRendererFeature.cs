@@ -21,6 +21,10 @@ namespace CubeFly.Desert
             [Range(0.5f, 4f)] public float thickness = 1f;
             [Range(0f, 5f)] public float depthThreshold = 0.5f;
             [Range(0f, 2f)] public float normalThreshold = 0.4f;
+            [Tooltip("Distance (world units) within which the outline keeps full thickness; beyond it thins with distance so far edges don't blob.")]
+            public float thicknessFalloffStart = 35f;
+            [Tooltip("Floor for the distance-scaled thickness (fraction of full), so far outlines stay visible instead of vanishing.")]
+            [Range(0.05f, 1f)] public float minThicknessScale = 0.4f;
             public RenderPassEvent injectionPoint = RenderPassEvent.BeforeRenderingPostProcessing;
         }
 
@@ -74,6 +78,8 @@ namespace CubeFly.Desert
             static readonly int ThicknessId       = Shader.PropertyToID("_Thickness");
             static readonly int DepthThresholdId  = Shader.PropertyToID("_DepthThreshold");
             static readonly int NormalThresholdId = Shader.PropertyToID("_NormalThreshold");
+            static readonly int ThicknessFalloffStartId = Shader.PropertyToID("_ThicknessFalloffStart");
+            static readonly int MinThicknessScaleId = Shader.PropertyToID("_MinThicknessScale");
 
             class PassData
             {
@@ -101,6 +107,8 @@ namespace CubeFly.Desert
                 _mat.SetFloat(ThicknessId, _s.thickness);
                 _mat.SetFloat(DepthThresholdId, _s.depthThreshold);
                 _mat.SetFloat(NormalThresholdId, _s.normalThreshold);
+                _mat.SetFloat(ThicknessFalloffStartId, _s.thicknessFalloffStart);
+                _mat.SetFloat(MinThicknessScaleId, _s.minThicknessScale);
 
                 TextureHandle activeColor = resourceData.activeColorTexture;
 

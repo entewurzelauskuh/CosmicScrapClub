@@ -37,10 +37,10 @@ namespace CubeFly.Desert
             if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit,
                                  rayStartHeight * 2f, terrainMask, QueryTriggerInteraction.Ignore))
             {
-                float y = hit.point.y + clearance;
-                transform.position = new Vector3(p.x, y, p.z);
-                Debug.unityLogger.Log(TAG,
-                    $"Seated '{name}' at y={y:F2} (surface {hit.point.y:F2} + clearance {clearance:F1}) on '{hit.collider.name}'.");
+                // Snap onto the surface. Deliberately no success log here: with
+                // ~25 seated objects (construct + targets + turrets) it spams the
+                // console every Play and buries real warnings. Only the miss warns.
+                transform.position = new Vector3(p.x, hit.point.y + clearance, p.z);
             }
             else
             {

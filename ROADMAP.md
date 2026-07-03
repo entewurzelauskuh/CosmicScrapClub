@@ -110,14 +110,16 @@ Terrain-first, cel-look-second — the two risks are split so each gets its own 
   thin plain scatter, plus 3 `Turret`s (variant + `AutoTurret`) holding the butte ring and the
   slot-canyon mouth. Generalised `SpawnSurfacePlacer`→`SurfaceSnap` (one reusable placer).
   Re-flown: plays as a combat arena, maintainer verdict SHIP. See
-  `docs/superpowers/specs/2026-06-12-desert-flyscene-a2-design.md`. **Next: A3.**
-- **A3 — Adopt the cel look.** Switch FlyScene to `Desert_Renderer` (cel shader +
-  screen-space outline). Reconcile ship cubes, projectiles, the B-1 VFX particles, and the
-  HUD under the new renderer + outline pass; reconcile `DesertVolumeProfile` with the
-  existing post-FX. **Also** move the A2 shadow-distance bump onto a desert-specific
-  pipeline/quality tier so it's scene-local, and restore the global `PC_RPAsset` default
-  (~50 — currently 300 project-wide; from the Copilot A2 review). *Play-test: coherent, not
-  busy?* (If this fights us, A1+A2 alone is a shippable outcome.)
+  `docs/superpowers/specs/2026-06-12-desert-flyscene-a2-design.md`.
+- **A3 — Adopt the cel look (DONE, 2026-07-04; gate = SHIP).** FlyScene toggles the desert cel
+  look **live from the Settings menu**: activated the built-but-unused `Desert_Renderer` outline
+  + added the `DesertVolumeProfile` grade/bloom, driven by `CelLookSettings` (PlayerPrefs, default
+  on) + `DesertLookController` + a "Cel look (desert)" settings toggle. Fixed `Desert_Renderer`'s
+  null `postProcessData` (the grade wasn't rendering under the cel renderer) and distance-scaled
+  the outline thickness (full up close, tapering with distance — no far blobbing). Lit ship reads
+  fine against the cel world, so no ship-cel conversion needed. See
+  `docs/superpowers/specs/2026-07-03-desert-flyscene-a3-design.md`. **Next: A4** (which also
+  carries the parked A2-review shadow-pipeline split + the tilted-turret cosmetic).
 - **A4 — Decide + docs.** Land or shelve. If landing: rewrite `docs/desert_level_spec.md`
   (still written as a detached demonstrator), re-sync ROADMAP + architecture map, and drop
   the throwaway `FreeFlyCamera`.

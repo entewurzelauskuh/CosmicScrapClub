@@ -117,6 +117,38 @@ No automated tests. Manual, in the Unity Editor on the **main project root** (pe
 
 **Decision gate (end of A3):** ship / iterate / shelve — recorded before A4.
 
+### A3 outcome (2026-07-04) — **SHIP**
+
+Re-flown by the maintainer — cel look adopted, verdict SHIP. FlyScene now toggles between the
+as-is renderer and the desert cel look (screen-space outline + warm grade + bloom) **live** from
+the Settings menu. Built + verified through the per-task checks:
+
+- **Renderer + volume:** the camera switches `PC_Renderer` ↔ `Desert_Renderer` (index 1) at
+  runtime; a global `DesertLook` Volume carries `DesertVolumeProfile`. **Blocker found + fixed:**
+  `Desert_Renderer` had `postProcessData = null`, so the grade/bloom silently didn't render under
+  the cel renderer — proved with a `saturation = -100` grayscale test (no effect until fixed),
+  then assigned it the same `PostProcessData` `PC_Renderer` uses (DesertSandbox renders with
+  `PC_Renderer`, so it's unaffected).
+- **Toggle:** `CelLookSettings` (Core, PlayerPrefs `desert.celLook`, default on) + `OnChanged`;
+  `DesertLookController` (FlyScene) applies it (`SetRenderer` + volume weight) on `Start` + on
+  change; a "Cel look (desert)" toggle in the `SettingsMenu` debug panel. Default-on, live switch,
+  and persistence all confirmed by the maintainer; the runtime Deferred↔Forward switch does not
+  throw (volume weight tracks 1↔0 headlessly).
+- **Refinement — outline distance blobbing:** the uniform-width outline merged into black blobs
+  on distant crowded geometry. Fixed by scaling the sample offset with the center pixel's
+  eye-depth — full within `thicknessFalloffStart` (35 u), tapering ~inversely with distance,
+  clamped to `minThicknessScale` (tuned to **0.2**). Verified via edit-time screenshots (21 u
+  close-up full; distance thin + un-blobbed). Both params exposed on the outline feature.
+- **Ship-vs-cel:** the Lit-but-outlined ship reads fine against the cel world (maintainer call)
+  — **option C (ship-cel materials) NOT needed.**
+
+**Files touched beyond the §8 manifest** (all warranted by the above): `Assets/Settings/Desert_Renderer.asset`
+(postProcessData + the two outline params), `Assets/Shaders/OutlineEdgeDetect.shader`, and
+`Assets/Scripts/Desert/OutlineRendererFeature.cs`.
+
+**Next:** A4 (decide land/shelve + docs; also the parked shadow-pipeline split + turret cosmetic).
+Milestone A's build work (A1–A3) is complete.
+
 ## 7. Risks & notes
 
 - **Live renderer switch (Deferred↔Forward) — the key risk.** Spike `SetRenderer` live-switching

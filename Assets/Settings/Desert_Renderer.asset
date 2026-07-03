@@ -19,6 +19,8 @@ MonoBehaviour:
     thickness: 1.5
     depthThreshold: 0.1
     normalThreshold: 0.6
+    thicknessFalloffStart: 35
+    minThicknessScale: 0.2
     injectionPoint: 550
 --- !u!114 &11400000
 MonoBehaviour:

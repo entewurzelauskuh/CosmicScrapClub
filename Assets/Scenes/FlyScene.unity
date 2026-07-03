@@ -1360,6 +1360,7 @@ GameObject:
   m_Component:
   - component: {fileID: 134176902}
   - component: {fileID: 134176901}
+  - component: {fileID: 134176903}
   m_Layer: 0
   m_Name: DesertLook
   m_TagString: Untagged
@@ -1399,6 +1400,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &134176903
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 134176900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa1b5953adf9542dea8d9f616739acd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Desert.DesertLookController
+  desertVolume: {fileID: 134176901}
+  targetCamera: {fileID: 400002}
+  celRendererIndex: 1
+  asIsRendererIndex: 0
 --- !u!43 &153184604
 Mesh:
   m_ObjectHideFlags: 0

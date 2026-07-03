@@ -114,8 +114,10 @@ Terrain-first, cel-look-second — the two risks are split so each gets its own 
 - **A3 — Adopt the cel look.** Switch FlyScene to `Desert_Renderer` (cel shader +
   screen-space outline). Reconcile ship cubes, projectiles, the B-1 VFX particles, and the
   HUD under the new renderer + outline pass; reconcile `DesertVolumeProfile` with the
-  existing post-FX. *Play-test: coherent, not busy?* (If this fights us, A1+A2 alone is a
-  shippable outcome.)
+  existing post-FX. **Also** move the A2 shadow-distance bump onto a desert-specific
+  pipeline/quality tier so it's scene-local, and restore the global `PC_RPAsset` default
+  (~50 — currently 300 project-wide; from the Copilot A2 review). *Play-test: coherent, not
+  busy?* (If this fights us, A1+A2 alone is a shippable outcome.)
 - **A4 — Decide + docs.** Land or shelve. If landing: rewrite `docs/desert_level_spec.md`
   (still written as a detached demonstrator), re-sync ROADMAP + architecture map, and drop
   the throwaway `FreeFlyCamera`.

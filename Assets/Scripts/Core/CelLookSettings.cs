@@ -30,6 +30,7 @@ namespace CubeFly.Core
                 _enabled = value;
                 _loaded = true;
                 PlayerPrefs.SetInt(Key, value ? 1 : 0);
+                PlayerPrefs.Save();
                 OnChanged?.Invoke();
             }
         }

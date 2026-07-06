@@ -150,7 +150,10 @@ Milestone A (A1–A4) complete; **Milestone B** (the `unity_handoff/` UI rebrand
   scenes aren't left on the desert pipeline. Verify the FlyScene→Menu transition explicitly. A
   runtime pipeline switch causes a one-time rebuild hitch on scene load — acceptable.
 - **Two pipeline assets** (`PC_RPAsset`, `Desert_RPAsset`) can drift if URP settings change later —
-  documented in the architecture map.
+  documented in the architecture map. `Desert_RPAsset` is cloned from the **PC-quality** `PC_RPAsset`,
+  so the override is only exactly right at the PC quality level; on a lower tier (e.g. Mobile) it would
+  swap the PC-grade pipeline in for FlyScene (self-restoring, no leak) — acceptable, the project ships
+  Standalone-only.
 - **Deletions:** re-grep for references before deleting; a stray reference would leave a
   missing-script/asset. (Exploration says only DesertSandbox is affected.)
 - **`CLAUDE.md` untracked:** do not commit it as part of the merge without maintainer sign-off.

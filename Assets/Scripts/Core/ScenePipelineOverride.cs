@@ -18,7 +18,10 @@ namespace CubeFly.Core
 
         void OnEnable()
         {
-            if (overrideAsset == null) return;
+            // `|| _applied` keeps OnEnable idempotent: a second enable without an
+            // intervening OnDisable must not re-capture _previous as the override
+            // itself (which would then "restore" the override into the next scene).
+            if (overrideAsset == null || _applied) return;
             _previous = QualitySettings.renderPipeline;
             QualitySettings.renderPipeline = overrideAsset;
             _applied = true;

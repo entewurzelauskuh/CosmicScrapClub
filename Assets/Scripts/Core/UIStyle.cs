@@ -15,12 +15,12 @@ namespace CubeFly.Core
     // TMP Essential Resources) so a default TMP_FontAsset exists at runtime.
     internal static class UIStyle
     {
-        public static readonly Color BackgroundIdle = new Color(0.13f, 0.13f, 0.18f, 0.9f);
-        public static readonly Color TintNormal     = Color.white;
-        public static readonly Color TintHighlight  = new Color(0.85f, 0.85f, 1f, 1f);
-        public static readonly Color TintPressed    = new Color(0.55f, 0.55f, 0.7f, 1f);
-        public static readonly Color TintDisabled   = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-        public static readonly Color LabelColor     = Color.white;
+        public static readonly Color BackgroundIdle = CscPalette.BackgroundIdle;
+        public static readonly Color TintNormal     = CscPalette.TintNormal;
+        public static readonly Color TintHighlight  = CscPalette.TintHighlight;
+        public static readonly Color TintPressed    = CscPalette.TintPressed;
+        public static readonly Color TintDisabled   = CscPalette.TintDisabled;
+        public static readonly Color LabelColor     = CscPalette.Label;
 
         static Font _builtinFont;
         static Font BuiltinFont

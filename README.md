@@ -47,7 +47,7 @@ The companion documents are:
 - **Cube destruction & death animation.** When a cube's HP hits zero it detaches, disables its colliders, drifts outward at ~2 u/s for 2 s, then despawns. Player-construct cubes are removed from `GameData` at the same time so the mass budget and Hangar re-entry stay consistent.
 - **Crash damage.** `OnCollisionEnter` on the construct's Rigidbody applies kinetic damage scaled to the normal-component impact speed. Both sides of the collision take damage. Bypasses armour because armour mitigates penetration, not raw kinetic energy.
 - **End-of-run.** When the alpha cube (the construct's anchor) reaches 0 HP, a "Construct Destroyed" overlay shows and the run ends back at the main menu.
-- **Basic world map.** 200×200 ground plane plus 20 rusty-orange target dummies in `FlyScene` so you have something to fly around, crash into, and shoot at.
+- **Desert flight level.** A 500×500 cel-shaded desert basin in `FlyScene` — dune ground, a perimeter ridge, and five rock formations (mesa + arch, slot canyon, fin field, hoodoo spires, butte ring) with destructible target cubes + turrets to fight through. A live **Cel look** toggle (Settings) switches the cel-shaded / outlined desert style on and off.
 - **File logging** to `Application.persistentDataPath/Logs/CubeFly_<timestamp>.log` alongside the Editor console.
 
 The project is intentionally MonoBehaviour-driven (no DOTS / ECS) — it is small enough that data-oriented patterns would be overkill.

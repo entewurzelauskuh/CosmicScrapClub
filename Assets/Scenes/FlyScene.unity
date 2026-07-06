@@ -1361,6 +1361,7 @@ GameObject:
   - component: {fileID: 134176902}
   - component: {fileID: 134176901}
   - component: {fileID: 134176903}
+  - component: {fileID: 134176904}
   m_Layer: 0
   m_Name: DesertLook
   m_TagString: Untagged
@@ -1416,6 +1417,19 @@ MonoBehaviour:
   targetCamera: {fileID: 400002}
   celRendererIndex: 1
   asIsRendererIndex: 0
+--- !u!114 &134176904
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 134176900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8cdb6da327d494265b163e14a57fae9a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CubeFly.Core.ScenePipelineOverride
+  overrideAsset: {fileID: 11400000, guid: 83fa8906db9944308a7e8561cca170de, type: 2}
 --- !u!43 &153184604
 Mesh:
   m_ObjectHideFlags: 0

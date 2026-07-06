@@ -123,6 +123,27 @@ No automated tests. Manual, in the Unity Editor on the **main project root** (pe
 **Decision gate (end of A4):** this *is* the landing — the gate is "merge to main," taken after
 verification + an explicit maintainer go.
 
+### A4 outcome (2026-07-04) — **LANDED**
+
+The desert lands on `main`. Everything built + verified:
+- **Cleanup:** deleted `DesertSandbox.unity`, `FreeFlyCamera.cs`, and the orphaned 200 u
+  `DesertGround.asset` (grep-verified that only DesertSandbox referenced the latter two);
+  project compiles clean, no missing scripts/assets; DesertSandbox wasn't a build scene.
+- **Shadow split:** `Desert_RPAsset` (duplicate of `PC_RPAsset`, same renderer list,
+  `shadowDistance 300`) + global `PC_RPAsset` restored to `50`; `ScenePipelineOverride` on
+  FlyScene's `DesertLook` GO swaps to it on load and restores on exit. Verified headlessly:
+  Play FlyScene → active pipeline `Desert_RPAsset`; stop → `PC_RPAsset` (per-scene shadow
+  *visuals* confirmed at the maintainer gate).
+- **Docs:** `desert_level_spec.md` rewritten (demonstrator → integrated level);
+  `full_architecture.md` re-synced (stale DesertSandbox / FlyScene-volume refs fixed,
+  `CelLookSettings` + `ScenePipelineOverride` + a Scripts-Desert section added); `ROADMAP.md`
+  marks Milestone A complete; `README.md`'s world-map line updated; `CLAUDE.md` updated locally
+  (kept untracked, per maintainer).
+- **Turrets:** tilt accepted, no change.
+
+**Terminal action:** PR #54 marked ready + merged to `main` (merge commit, repo convention).
+Milestone A (A1–A4) complete; **Milestone B** (the `unity_handoff/` UI rebrand) is next.
+
 ## 8. Risks & notes
 
 - **Pipeline swap correctness:** `ScenePipelineOverride` must restore on `OnDisable` so other

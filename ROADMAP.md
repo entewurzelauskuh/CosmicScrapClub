@@ -87,23 +87,46 @@ is being pulled ahead of the remaining VFX phases (B-2…D) by decision on 2026-
   missing-script the former targeted is already gone from `main` (verified
   `m_Script: {fileID: 0}` count = 0 in `FlyScene.unity`).
 
-**Milestone A — Desert → FlyScene integration** *(experimental branch; decision gate = ship / iterate / shelve)*
-Terrain-first, cel-look-second — the two risks are split so each gets its own play-test.
-- **A1 — Terrain in, current renderer.** Replace FlyScene's 200×200 plane + 20 dummies
-  with the dune `DesertGround` + the five formation prefabs + perimeter ridge, under the
-  *existing* FlyScene renderer/post-FX. Resolve: construct spawn point (dunes aren't flat
-  at origin), MeshCollider-vs-Rigidbody behaviour, `FlyCamera` bounds, flight bounds.
-  *Play-test: navigates well at the 3–6u ship scale?*
-- **A2 — Scatter targets.** Re-place the destructible `WorldTargetCube`s through the
-  formations (canyons, mesas, the butte-ring arena). *Play-test: plays as a combat arena?*
-- **A3 — Adopt the cel look.** Switch FlyScene to `Desert_Renderer` (cel shader +
-  screen-space outline). Reconcile ship cubes, projectiles, the B-1 VFX particles, and the
-  HUD under the new renderer + outline pass; reconcile `DesertVolumeProfile` with the
-  existing post-FX. *Play-test: coherent, not busy?* (If this fights us, A1+A2 alone is a
-  shippable outcome.)
-- **A4 — Decide + docs.** Land or shelve. If landing: rewrite `docs/desert_level_spec.md`
-  (still written as a detached demonstrator), re-sync ROADMAP + architecture map, and drop
-  the throwaway `FreeFlyCamera`.
+**Milestone A — Desert → FlyScene integration** ✅ *(COMPLETE — A1–A4 landed + merged to `main`, 2026-07-04)*
+Terrain-first, cel-look-second — the two risks were split so each got its own play-test.
+- **A1 — Terrain in, current renderer (DONE, 2026-06-11; gate = ITERATE).** Replaced
+  FlyScene's 200×200 plane + 20 dummies + 4 turrets with a single `DesertEnvironment` prefab
+  (dune ground + perimeter ridge + 5 formations, all on a new `World` layer), a
+  `SpawnSurfacePlacer` that raycasts the construct to a safe spawn altitude, and desert
+  atmosphere (warm ambient + gradient sky + subtle fog) under the existing renderer. Verified:
+  safe spawn, zero Play errors, terrain collides, ridge contains. **Play feel liked, but the
+  basin is too tight for large player constructs → iterate at scale (A1.5).** See
+  `docs/superpowers/specs/2026-05-31-desert-flyscene-a1-design.md`.
+- **A1.5 — Scale the basin up (DONE, 2026-06-11; gate = SHIP).** Ground regenerated 200→500
+  (new `DesertGround_500.asset`, 361k verts, shared 200 mesh preserved for DesertSandbox); the
+  5 formations scaled ×1.2 (+×1.1 Y), pushed to the rim, re-seated on the new dunes; perimeter
+  ridge expanded 20→64 pieces (verified closed on all headings); spawn moved to the open
+  central plain; fog widened for the longer sightlines. Re-flown: vast open plain ringed by
+  huge mesas, big constructs have room. See
+  `docs/superpowers/specs/2026-06-11-desert-flyscene-a1.5-design.md`.
+- **A2 — Scatter targets (DONE, 2026-06-12; gate = SHIP).** Repopulated the basin via a
+  `DesertTargets` container in FlyScene: 21 destructible `DesertTarget`s (prefab variant of
+  `WorldTargetCube` + a new `SurfaceSnap` placer) in curated clusters at the 5 formations + a
+  thin plain scatter, plus 3 `Turret`s (variant + `AutoTurret`) holding the butte ring and the
+  slot-canyon mouth. Generalised `SpawnSurfacePlacer`→`SurfaceSnap` (one reusable placer).
+  Re-flown: plays as a combat arena, maintainer verdict SHIP. See
+  `docs/superpowers/specs/2026-06-12-desert-flyscene-a2-design.md`.
+- **A3 — Adopt the cel look (DONE, 2026-07-04; gate = SHIP).** FlyScene toggles the desert cel
+  look **live from the Settings menu**: activated the built-but-unused `Desert_Renderer` outline
+  + added the `DesertVolumeProfile` grade/bloom, driven by `CelLookSettings` (PlayerPrefs, default
+  on) + `DesertLookController` + a "Cel look (desert)" settings toggle. Fixed `Desert_Renderer`'s
+  null `postProcessData` (the grade wasn't rendering under the cel renderer) and distance-scaled
+  the outline thickness (full up close, tapering with distance — no far blobbing). Lit ship reads
+  fine against the cel world, so no ship-cel conversion needed. See
+  `docs/superpowers/specs/2026-07-03-desert-flyscene-a3-design.md`. **Next: A4** (which also
+  carries the parked A2-review shadow-pipeline split + the tilted-turret cosmetic).
+- **A4 — Decide + docs (DONE, 2026-07-04; gate = LAND).** Decision: **LAND** the desert into the
+  game. Dropped the exploration scaffolding (`DesertSandbox`, `FreeFlyCamera`, the orphaned 200 u
+  `DesertGround`); made the desert's long shadows scene-local (`Desert_RPAsset` 300 via a
+  `ScenePipelineOverride`, global `PC_RPAsset` restored to 50); rewrote `docs/desert_level_spec.md`
+  (demonstrator → integrated level) + re-synced the architecture map; accepted the turret tilt;
+  merged to `main`. See `docs/superpowers/specs/2026-07-04-desert-flyscene-a4-design.md`.
+  **Milestone A complete → Milestone B next.**
 
 **Milestone B — UI rebrand** *(separate milestone, all scenes; after A)*
 Consume the `unity_handoff/` design-system drop (palette `CscPalette` + theme `CscTheme`

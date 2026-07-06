@@ -19,6 +19,8 @@ MonoBehaviour:
     thickness: 1.5
     depthThreshold: 0.1
     normalThreshold: 0.6
+    thicknessFalloffStart: 35
+    minThicknessScale: 0.2
     injectionPoint: 550
 --- !u!114 &11400000
 MonoBehaviour:
@@ -49,7 +51,7 @@ MonoBehaviour:
   m_RendererFeatureMap: 6419a46ca45354ce
   m_UseNativeRenderPass: 0
   xrSystemData: {fileID: 0}
-  postProcessData: {fileID: 0}
+  postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 3
   m_PrepassLayerMask:
     serializedVersion: 2

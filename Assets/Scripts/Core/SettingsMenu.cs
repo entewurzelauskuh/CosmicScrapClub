@@ -343,6 +343,9 @@ namespace CubeFly.Core
             var effects = new (string label, string tooltip,
                 System.Func<bool> getter, System.Action<bool> setter)[]
             {
+                ("Cel look (desert)",
+                    "Desert stylised look in FlyScene: cel-shaded silhouettes with a black screen-space outline + warm colour grade. Toggling live-switches the FlyScene renderer.",
+                    () => CelLookSettings.Enabled, v => CelLookSettings.Enabled = v),
                 ("Bloom",
                     "Globally lifts emissive surfaces (laser beam, reactor glow, muzzle flash). High visual impact for low cost.",
                     () => VfxSettings.Bloom, v => VfxSettings.Bloom = v),

@@ -19,13 +19,13 @@ namespace CubeFly.Core
     //   • On VfxSettings.Changed: Apply() (real-time A/B comparison).
     //
     // Apply() resolves the profile in two steps:
-    //   1. A scene-attached Volume GameObject (custom maps like
-    //      DesertSandbox use this pattern).
+    //   1. A scene-attached Volume GameObject (FlyScene's DesertLook
+    //      volume uses this pattern).
     //   2. URP's global default profile, accessed via
     //      GraphicsSettings.GetRenderPipelineSettings<URPDefaultVolumeProfileSettings>().
-    //      The main game scenes (MainMenu / HangarSelect / BuildScene /
-    //      FlyScene) have NO scene Volume — they inherit URP's default
-    //      profile via UniversalRenderPipelineGlobalSettings.
+    //      MainMenu / HangarSelect / BuildScene have NO scene Volume — they
+    //      inherit URP's default profile via UniversalRenderPipelineGlobalSettings
+    //      (FlyScene now carries the desert Volume).
     //
     // Apply() is idempotent and profile-agnostic. It probes for each
     // of the five Phase-A overrides via VolumeProfile.TryGet — missing
@@ -97,10 +97,9 @@ namespace CubeFly.Core
                 ca.active = VfxSettings.ChromaticAberration;
         }
 
-        // Two-step resolution: scene Volume first (custom maps like
-        // DesertSandbox have their own), then URP's global default
-        // profile (used by MainMenu / HangarSelect / BuildScene /
-        // FlyScene which have no scene Volume).
+        // Two-step resolution: scene Volume first (FlyScene's DesertLook
+        // volume has its own), then URP's global default profile (used by
+        // MainMenu / HangarSelect / BuildScene which have no scene Volume).
         static VolumeProfile ResolveActiveProfile()
         {
             // Prefer the global Volume with the highest priority (the scene's

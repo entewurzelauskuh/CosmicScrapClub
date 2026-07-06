@@ -1,293 +1,152 @@
-# Desert Level Demonstrator — Design Spec
+# Desert Level — Design Spec (integrated FlyScene level)
 
 ## 1. Purpose
 
-A standalone demonstrator level exploring how Cosmic Scrap Club can expand into a
-"real" desert level — proving both a visual style (cel-shaded, Valley-of-Fire
-palette) and a fly-through navigable desert landscape.
+The desert is a **playable level inside `FlyScene`**, flown with the game's real
+construct/ship flight system (`FlyController` physics) — a vast, cel-shaded,
+Valley-of-Fire basin that plays as a combat arena. It began as a standalone
+demonstrator (`explore/desert-level`) and was **integrated into the game** across
+the arc A1–A4 (ROADMAP §4); this spec describes the landed, integrated level.
 
-This is an **exploration**, deliberately detached from the game. It lives on the
-`explore/desert-level` branch in its own scene, with no dependency on the game's
-systems. The goal is to learn what the level can be and to land a concrete,
-flyable artifact we can later choose to wire into the game.
+The per-sub-phase design + implementation records live under
+`docs/superpowers/specs|plans/2026-*-desert-flyscene-*`.
 
-### In scope
-- A 200×200u desert scene: `Assets/Scenes/DesertSandbox.unity`.
-- One reusable cel shader and one screen-space outline render feature.
-- Procedural dune ground + five hand-built ProBuilder hero formations.
-- A self-authored material palette, lighting, sky and atmosphere.
-- A minimal free-fly camera for evaluating the level in play mode.
+## 2. What shipped
 
-### Out of scope
-- Any game wiring: `GameData`, scene-switching, BuildScene/FlyScene integration.
-- Gameplay objectives, scoring, the real player ship, enemies.
-- The scene is kept out of Build Settings.
+- A **500 × 500 u** desert basin in `FlyScene`, centred on the origin, on a
+  dedicated **`World`** layer (slot 9) so projectile raycasts don't treat terrain
+  as targets.
+- A procedural **dune ground** (`DesertGround_500.asset`) + a **64-piece perimeter
+  ridge** closing the basin + **five hand-built ProBuilder hero formations**.
+- A **combat layout**: ~21 destructible target cubes in curated clusters at the
+  formations plus a thin plain scatter, and 3 turrets at strongpoints.
+- A **cel look** (cel-shaded rock + screen-space outline + warm grade) that the
+  player toggles **live from the Settings menu**, against the game's default look.
+- **Desert-scene-local** long shadows so the 500 u basin doesn't force its shadow
+  cost/softness onto the other scenes.
+- The construct spawns in the open central plain facing the Mesa+Arch hero
+  formation; the existing ship flight controls drive the camera (no bespoke
+  camera).
 
-These are intentionally deferred. The demonstrator may be wired into the game
-later as a separate effort, informed by what this exploration produces.
-
-## 2. Established design decisions
-
-Settled during brainstorming:
+## 3. Design decisions (carried from the demonstrator, updated at scale)
 
 | Decision | Choice |
 |---|---|
-| Flight relationship | **Fly-through** — low altitude; geometry is a navigable obstacle course |
-| Map size | 200×200 Unity units, scene centered on the origin (coords ≈ -100..+100) |
-| Reference ship | ~3-6u; canyons 18-35u wide, arch openings 12-18u clearance |
-| Terrain character | Open rolling dunes + five hero formation clusters |
-| Geometry toolchain | All-mesh: procedural ground mesh + ProBuilder formations. **No Unity Terrain** |
-| Shading | One hand-written URP cel shader, used on everything |
-| Outline | One screen-space (depth + normal) edge-detection render feature |
-| Shadows | Min-light floor — fully-shadowed surfaces still render ~30% bright (no pure black) |
-| Assets | All self-authored / procedural. CC0 / public-domain permitted where useful; no other third-party assets |
+| Flight relationship | **Fly-through** — geometry is a navigable obstacle course flown by the construct |
+| Basin size | **500 × 500 u** (scaled up from the original 200 in A1.5), centred on origin |
+| Terrain character | Open rolling dunes + five hero formation clusters around a vast open central plain |
+| Geometry toolchain | All-mesh: procedural ground mesh (`DuneGroundGenerator`) + ProBuilder formations. **No Unity Terrain** (heightfields can't do arches/overhangs; would force a second shader) |
+| Shading | One hand-written URP cel shader (`CelShaded`) on ground + rock; the ship keeps its Lit materials (reads fine under the outline — no ship-cel needed) |
+| Outline | One screen-space depth+normal edge-detect render feature (`OutlineEdgeDetect` on `Desert_Renderer`), **distance-scaled** so far crowded edges don't blob |
+| Shadows | Min-light shader floor (no pure black) + a desert-local pipeline (300 u distance) so far formations cast shadows without pop |
+| Assets | All self-authored / procedural (CC0/public-domain permitted); no other third-party assets |
 
-Rationale for no Unity Terrain: Terrain uses its own dedicated shader path, which
-would force a second shader separate from the unified cel shader; and it is a
-heightfield, so it cannot represent the arches and overhangs that are the
-signature of the target look.
-
-## 3. Section A — Foundation & cel-shading system
-
-### 3.1 Branch & scene
-- Branch `explore/desert-level`, off `main`.
-- New scene `Assets/Scenes/DesertSandbox.unity`. Standalone — no game systems.
-- Kept out of Build Settings so it cannot affect the game's scene flow.
-- Baseline contents: one Directional Light (the sun) and one Camera.
-
-### 3.2 Cel shader
-- A hand-written URP shader, `Assets/Shaders/CelShaded.shader`.
-- Lit, with a **banded lighting ramp**: the diffuse term (NdotL) is quantized to
-  2-4 flat steps instead of smooth shading.
-- A **min-light floor** parameter (`_MinLight`, default ≈ 0.3): the combined
-  lighting × shadow term is clamped to this minimum, so a fully-shadowed surface
-  still renders at ~30% brightness. No pure black anywhere.
-- Per-material inputs: base color, band count / ramp, min-light, plus the
-  procedural-detail inputs from Section C (two-tone break-up, strata banding).
-- One shader for the entire world — ground, rock, and ships later.
-- Hand-written HLSL (not Shader Graph): the cel ramp is a custom lighting step
-  best controlled directly, and a `.shader` file is a reviewable text artifact.
-
-### 3.3 Outline render feature
-- A `ScriptableRendererFeature`: `Assets/Scripts/Desert/OutlineRendererFeature.cs`,
-  with a fullscreen edge-detection shader `Assets/Shaders/OutlineEdgeDetect.shader`.
-- Detects edges from scene depth + normals and inks them — catches silhouettes
-  *and* interior creases (the hand-inked Borderlands look).
-- Tunable thresholds for depth edges and normal edges, so a faceted rock field
-  can be kept from getting too busy.
-- Must use the **URP 17.3 RenderGraph API** (`RecordRenderGraph`), not the legacy
-  `Execute` / `CommandBuffer` compatibility path.
-
-### 3.4 Keeping the renderer detached
-- The feature lives on a new URP renderer asset, `Assets/Settings/Desert_Renderer.asset`.
-- `Desert_Renderer` is added to `PC_RPAsset`'s renderer list (an **additive**
-  change — existing renderers are untouched), and the desert scene's camera
-  selects it.
-- This additive entry is the single shared-file touch in the whole exploration;
-  it is reversible and does not alter the game's default renderer.
-
-## 4. Section B — World geometry
+## 4. Geometry
 
 ### 4.1 Ground
-- A 200×200u mesh: a subdivided plane displaced by layered noise — broad rolling
-  swells + medium dunes + fine ripple — for gentle dunes.
-- Generated by an editor tool: `Assets/Scripts/Desert/DuneGroundGenerator.cs` (a
-  component) with a custom inspector `Assets/Scripts/Desert/Editor/DuneGroundGeneratorEditor.cs`
-  exposing a "Generate" button. Parameters: extent, vertex resolution, noise
-  octaves, amplitudes, seed.
-- The tool bakes a mesh asset (`Assets/Models/DesertGround.asset`) so the result
-  is reproducible and the level can be regenerated freely while tuning.
-- Smooth-shaded (rolling sand reads better smooth). Has a `MeshCollider`.
+`DuneGroundGenerator.cs` (+ its editor "Generate" button) builds a `size × res`
+grid displaced by layered Perlin noise (swell + dune + ripple), baked to
+`Assets/Models/DesertGround_500.asset` (500 u, res 600, ~361 k verts, `UInt32`
+index). Smooth-shaded, `MeshCollider`. (The generator's in-place "Generate" button
+`CopySerialized`s onto the *bound* mesh asset — regenerate to a **new** path to
+avoid clobbering.)
 
 ### 4.2 Formations
-Five hero formation clusters, hand-built in ProBuilder, faceted low-poly (the
-smooth-sand / faceted-rock contrast is intentional). Each is a small group of
-ProBuilder meshes under a parent GameObject, each mesh with a `MeshCollider`.
-Saved as prefabs under `Assets/Prefabs/Desert/`.
+Five hero clusters, hand-built in ProBuilder (faceted low-poly against the smooth
+sand), each a group of `MeshCollider`-bearing meshes, scaled `(1.2, 1.32, 1.2)` and
+pushed to the rim in A1.5. Bundled (with the ground + ridge) into
+`Assets/Prefabs/Desert/DesertEnvironment.prefab`.
 
-| Archetype | Description | Navigable sizing |
+| Archetype | Role | Navigable sizing (at 500 scale) |
 |---|---|---|
-| **Mesa + Arch** | Flat-topped mesas joined by a natural arch flown through. *C1 hero formation.* | Arch opening 12-18u clearance |
-| **Slot Canyon** | A narrow winding corridor threaded at low altitude | 18-35u wide, walls 30-60u high |
-| **Fin Field** | A cluster of tall thin sandstone blades for weaving | Gaps 15-25u |
-| **Hoodoo Spires** | Clustered pillars and a balanced rock to slalom | Pillar spacing 15-30u |
-| **Butte Ring** | A ring of rock enclosing an open bowl — a landmark "arena" | Bowl ≈ 60-80u across |
+| **Mesa + Arch** (hero) | flat-topped mesas + a fly-through arch | arch opening ≈ 20 u |
+| **Slot Canyon** | narrow winding corridor | inner gap ≈ 17 u |
+| **Fin Field** | tall thin blades to weave | gaps ~15–25 u |
+| **Hoodoo Spires** | clustered pillars to slalom | ~15–30 u spacing |
+| **Butte Ring** | rock ring around an open bowl — a landmark arena | bowl ≈ 60–80 u |
 
-### 4.3 Layout
-Scene centered on the origin. Formations spread asymmetrically with open dune
-lanes between them, so they can be strung into a loose flight course.
+### 4.3 Boundary
+No walls — the perimeter dunes build into a continuous **64-piece ridge** (~256 u
+radius) that closes the basin on all headings and physically contains side flight
+via its colliders. Vertical flight is unbounded (acceptable for the level).
 
-| Formation | Approx. center (X, Z) | Footprint |
+## 5. Combat (A2)
+
+- **Targets:** `Assets/Prefabs/Desert/DesertTarget.prefab` — a variant of
+  `WorldTargetCube` (`CubeStats` HP 30 / AV 0, on the `PlacedCube` layer so the
+  existing projectile masks hit it; damage via `CubeStats.TakeDamage`) + a
+  `SurfaceSnap` placer. ~21 placed: 3–4 per formation cluster + a thin plain scatter
+  kept ≥ 40 u clear of spawn.
+- **Turrets:** `Assets/Prefabs/Desert/Turret.prefab` — the same variant + the
+  existing `AutoTurret` (fires a `Bullet` along local **+Y**, 1 s / 40 dmg, no
+  tracking). 3 placed: 2 holding the Butte Ring arena, 1 at the Slot-Canyon mouth.
+- **Placement seating:** `SurfaceSnap` (a generalisation of the construct's spawn
+  placer) raycasts each object onto the dunes at runtime, so authoring is XZ-only.
+- All combat content lives in a `DesertTargets` container in FlyScene (not the
+  environment prefab), authored by hand.
+- **Known cosmetic:** because `AutoTurret` fires along local +Y, aiming a turret
+  tilts its cube body — accepted as-is.
+
+## 6. Cel look + live toggle (A3)
+
+- **Materials:** the rock/ground materials (`Sand`, `RedSandstone`, `Limestone`,
+  `OxidizedRock`) use `Assets/Shaders/CelShaded.shader` — banded lighting ramp,
+  `_MinLight` floor (~0.3, no pure black), procedural two-tone break-up + strata
+  banding. Sky is a gradient skybox (`GradientSkybox.shader` / `DesertSky.mat`).
+- **Outline:** `OutlineRendererFeature` (`Desert_Renderer`) — depth+normal
+  Roberts-cross edge detect, black, injected before post-processing;
+  **distance-scaled thickness** (`thicknessFalloffStart` 35 u, `minThicknessScale`
+  0.2) so far edges stay crisp without blobbing.
+- **Grade:** a global `DesertLook` Volume with `DesertVolumeProfile` (warm
+  contrast/saturation + light bloom). *(`Desert_Renderer` was given the
+  `PostProcessData` it was missing so the grade renders under the cel renderer.)*
+- **Toggle:** `CelLookSettings` (Core, PlayerPrefs `desert.celLook`, default on) is
+  the persisted preference; `DesertLookController` (on FlyScene's `DesertLook` GO)
+  applies it — `SetRenderer` (`PC_Renderer` ↔ `Desert_Renderer`) + Volume weight —
+  on load and whenever it changes; a **"Cel look (desert)"** toggle in the
+  `SettingsMenu` debug panel flips it live for in-game A/B.
+
+## 7. Atmosphere & shadows
+
+- Warm **distance fog** (linear, ~180 → 520 u for the longer sightlines) + warm
+  ambient + the `DesertSky` skybox — all under the current renderer.
+- **Desert-local shadow pipeline (A4):** `Assets/Settings/Desert_RPAsset.asset`
+  (a duplicate of `PC_RPAsset` with `shadowDistance = 300`) is made active only
+  while FlyScene is loaded by `ScenePipelineOverride` (Core) on the `DesertLook` GO;
+  the global `PC_RPAsset` is restored to `shadowDistance = 50`. Far formations cast
+  shadows in the desert without softening Menu/Hangar/Build.
+
+## 8. The integration arc (history)
+
+| Sub-phase | Outcome | What landed |
 |---|---|---|
-| Mesa + Arch (hero) | (-50, +45) | ~70u |
-| Hoodoo Spires | (+45, +60) | ~50u |
-| Slot Canyon | (+55, ±0), winding N–S | ~40 × 90u |
-| Butte Ring | (0, -50) | ~80u |
-| Fin Field | (-50, -50) | ~60u |
+| **A1** | iterate | Terrain into FlyScene: `DesertEnvironment` prefab on the `World` layer, spawn placer, desert atmosphere; removed the old flat arena |
+| **A1.5** | ship | Scaled the basin 200 → 500 (`DesertGround_500`), formations to the rim, ridge 20 → 64, spawn to the central plain |
+| **A2** | ship | Combat layout: `DesertTarget` + `Turret` variants + `SurfaceSnap`; 21 targets + 3 turrets |
+| **A3** | ship | Cel look adopted as a live Settings toggle; fixed `Desert_Renderer` post-FX; distance-scaled the outline |
+| **A4** | land | Dropped the exploration scaffolding, made shadows desert-local, rewrote these docs, merged to `main` |
 
-```
-            -100              0             +100   X →
-     +100   +-------------------------------------+
-            | ::::::::::  perimeter ridge  :::::::: |
-            | :                                 : |
-            | :    [MESA+ARCH]                  : |
-      +50   | :     (C1 hero)       [HOODOO     : |
-            | :                      SPIRES]   : |
-            | :         . open dune lanes .    : |
-        0   | :                       [SLOT    : |
-            | :                        CANYON] : |
-      -50   | :   [FIN FIELD]   [BUTTE RING]    : |
-            | :                                 : |
-            | ::::::::::  perimeter ridge  :::::::: |
-     -100   +-------------------------------------+
-          Z (scene centered on origin)
-```
+Details: `docs/superpowers/specs/2026-*-desert-flyscene-*-design.md` and the paired plans.
 
-### 4.4 Boundary
-No walls. The perimeter dunes build up into a continuous ridge of high rock
-(|X| or |Z| ≳ 85u) — a natural basin rim. It is landscape, not a barrier, and it
-physically contains fly-through on the sides via its collider. Vertical flight is
-unbounded in the demonstrator; that is acceptable for an editor exploration, and
-real bounds arrive with game wiring.
+## 9. File manifest (integrated level)
 
-### 4.5 Test camera
-`Assets/Scripts/Desert/FreeFlyCamera.cs` — a minimal play-mode free-fly camera
-(WASD + mouse-look + vertical) for evaluating the level. Demonstrator-only.
-Dropping the real ship prefab in later is trivial.
+**Shaders** — `Assets/Shaders/`: `CelShaded.shader`, `OutlineEdgeDetect.shader`, `GradientSkybox.shader`.
+**Scripts** — `Assets/Scripts/Desert/`: `OutlineRendererFeature.cs`, `DuneGroundGenerator.cs` (+ `Editor/`), `SurfaceSnap.cs`, `DesertLookController.cs`. `Assets/Scripts/Core/`: `CelLookSettings.cs`, `ScenePipelineOverride.cs`.
+**Settings** — `Assets/Settings/`: `Desert_Renderer.asset`, `Desert_RPAsset.asset`, `DesertVolumeProfile.asset`; `PC_RPAsset.asset` (renderer list carries `Desert_Renderer`; `shadowDistance` 50).
+**Materials** — `Assets/Materials/Desert/`: `Sand`, `RedSandstone`, `Limestone`, `OxidizedRock`, `DesertSky`.
+**Geometry / prefabs** — `Assets/Models/DesertGround_500.asset`; `Assets/Prefabs/Desert/`: `DesertEnvironment`, `PerimeterRidge`, the 5 formations, `DesertTarget`, `Turret`.
+**Scene** — `Assets/Scenes/FlyScene.unity` hosts the `DesertEnvironment` instance, the `DesertTargets` container, and the `DesertLook` GO (Volume + `DesertLookController` + `ScenePipelineOverride`).
 
-## 5. Section C — Materials, lighting & atmosphere
+## 10. Definition of done (landed)
 
-### 5.1 Palette & materials
-Four materials, each an instance of `CelShaded.shader`, flat-color, no bitmap
-textures — fully procedural. Saved under `Assets/Materials/Desert/`.
-
-| Material | Role | Tone |
-|---|---|---|
-| `Sand` | Dune ground | Warm tan / ochre |
-| `RedSandstone` | "Fire" rock | Bright Valley-of-Fire red |
-| `Limestone` | Surrounding rock | Light tan / gray |
-| `OxidizedRock` | Accent / lower strata | Brown / rust |
-
-### 5.2 Procedural detail
-Two cheap in-shader details keep flat color from looking dead:
-- **Two-tone noise break-up** on all materials — large-scale color variation so
-  no surface is a single flat fill.
-- **Horizontal strata banding** on the rock materials — color bands by world
-  height, the signature swirling-strata look of Valley of Fire.
-
-### 5.3 Worn / sun-bleached treatment
-The landscape has no metal or buildings, so the worn feel comes from palette and
-atmosphere, not grime: warm, slightly-desaturated colors; harsh bright light; and
-a warm distance haze (5.6) fading far geometry into a dusty horizon. The
-deliberately simple low-poly faceted look is itself the DIY / hand-made aesthetic.
-Rust proper belongs to the ships, addressed later.
-
-### 5.4 Lighting
-- One Directional Light — the sun. Warm-white, ~45-60° elevation: bright and
-  bleached, with readable but not sprawling shadows. (Golden-hour shadows would
-  clutter the fly-through reads; high noon would be flat.)
-- Warm sky ambient (URP environment lighting).
-- Shadows banded by the cel ramp and lifted by the `_MinLight` floor.
-
-### 5.5 Sky
-- A procedural gradient skybox material `Assets/Materials/Desert/DesertSky.mat`
-  (gradient skybox shader `Assets/Shaders/GradientSkybox.shader`).
-- Dusty warm horizon blending to a soft sky overhead, sun disc aligned to the
-  Directional Light. Stylized and flat — no photo HDRI.
-
-### 5.6 Atmosphere & post
-- Warm **distance fog** for the dusty horizon (URP fog, warm tint).
-- A scene-local URP Volume with profile `Assets/Settings/DesertVolumeProfile.asset`
-  — a gentle warm color grade + light bloom. Deliberately minimal; heavy grading
-  muddies flat cel color. Not the shared `DefaultVolumeProfile`.
-
-### 5.7 Optional polish
-Included only if it earns its place during C3:
-- Drifting low dust / dust devils via VFX Graph.
-- Stylized flat clouds.
-
-## 6. Build order — checkpoints
-
-The demonstrator is built in three reviewed checkpoints, matching the project's
-working rhythm. Each is built, reviewed, and committed before the next begins.
-
-### C1 — Style
-Branch + scene + `CelShaded.shader` + `OutlineRendererFeature` + `Desert_Renderer`
-+ the four palette materials, shown on the **Mesa + Arch** hero formation sitting
-on a small ground patch.
-*Review:* does the cel-shaded Valley-of-Fire look land — banded lighting, outline
-reads, palette, lifted (non-black) shadows?
-
-### C2 — Layout
-Full procedural dune ground across the 200×200, all five formations blocked out
-and placed, the perimeter ridge, the free-fly camera — all wearing the proven
-shader.
-*Review:* fly the level — do the canyons, arches and fins navigate well at the
-3-6u ship scale? Does the layout flow? Do formations read at distance? Does the
-ridge contain you?
-
-### C3 — Dressing
-Lighting, gradient sky, distance fog, scene-local post Volume, strata banding and
-two-tone detail pass, any optional polish, final tune.
-*Review:* the finished demonstrator — does the rusty / dusty / worn / sun-bleached
-DIY desert feeling come through?
-
-## 7. File manifest
-
-New files, by area:
-
-**Shaders** — `Assets/Shaders/` (new folder)
-- `CelShaded.shader`
-- `OutlineEdgeDetect.shader`
-- `GradientSkybox.shader`
-
-**Scripts** — `Assets/Scripts/Desert/` (new folder)
-- `OutlineRendererFeature.cs`
-- `DuneGroundGenerator.cs`
-- `Editor/DuneGroundGeneratorEditor.cs`
-- `FreeFlyCamera.cs`
-
-**Settings** — `Assets/Settings/`
-- `Desert_Renderer.asset`
-- `DesertVolumeProfile.asset`
-- `PC_RPAsset.asset` — additive edit only: append `Desert_Renderer` to the renderer list
-
-**Materials** — `Assets/Materials/Desert/` (new folder)
-- `Sand.mat`, `RedSandstone.mat`, `Limestone.mat`, `OxidizedRock.mat`
-- `DesertSky.mat`
-
-**Geometry**
-- `Assets/Models/DesertGround.asset` — baked dune mesh
-- `Assets/Prefabs/Desert/` — five formation prefabs
-
-**Scene**
-- `Assets/Scenes/DesertSandbox.unity`
-
-Every new C# script gets a full canonical `.meta` file with a `MonoImporter`
-block (project routine — Unity's auto-generated stub is incomplete).
-
-## 8. Technical notes & risks
-
-- **URP 17.3 RenderGraph** — the outline render feature must use the RenderGraph
-  API; the legacy `Execute` / `CommandBuffer` path is compatibility-mode only.
-- **Faceted rock + screen-space outline** can read as busy. Mitigations: tune
-  depth / normal edge thresholds; use ProBuilder smoothing groups to control which
-  edges are hard.
-- **Shared-file touch** — the only non-detached change is the additive
-  `Desert_Renderer` entry in `PC_RPAsset`. Additive and reversible; flagged here
-  for visibility.
-- **ProBuilder colliders** — formations need `MeshCollider`s for fly-through
-  collision; ProBuilder meshes can carry standard colliders directly.
-- **Min-light floor** is a shader clamp (`_MinLight` ≈ 0.3), not a lighting
-  setting, so it is consistent regardless of light or ambient values.
-
-## 9. Definition of done
-
-The demonstrator is complete when, opening `DesertSandbox.unity` and flying it
-with the free-fly camera:
-- The cel-shaded, outlined Valley-of-Fire look is consistent across ground and
-  rock, with no pure-black shadows.
-- All five formations are navigable at the 3-6u reference ship scale.
-- The perimeter ridge visually and physically contains the basin.
-- The scene reads as a worn, dusty, sun-bleached DIY desert.
-- Nothing depends on the game's systems; the scene is absent from Build Settings.
+Flying `FlyScene`:
+- The construct spawns clear on the central plain and flies the basin; the arch,
+  slot canyon and fin gaps are navigable; the ridge contains the basin.
+- Targets take damage and destroy; turrets return fire and are themselves
+  destructible; the Butte Ring reads as a defended arena.
+- The **Cel look** toggle (Settings) flips the cel/outline/grade look live, default
+  on; the choice persists; far outlines don't blob.
+- Shadows: far formations cast in FlyScene (300 u); Menu/Hangar/Build render crisp
+  (50 u) again, restored on leaving FlyScene.
+- The exploration scaffolding (DesertSandbox, FreeFlyCamera, the 200 u ground) is
+  gone; nothing references it.

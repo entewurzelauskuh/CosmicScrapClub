@@ -87,8 +87,8 @@ is being pulled ahead of the remaining VFX phases (B-2…D) by decision on 2026-
   missing-script the former targeted is already gone from `main` (verified
   `m_Script: {fileID: 0}` count = 0 in `FlyScene.unity`).
 
-**Milestone A — Desert → FlyScene integration** *(experimental branch; decision gate = ship / iterate / shelve)*
-Terrain-first, cel-look-second — the two risks are split so each gets its own play-test.
+**Milestone A — Desert → FlyScene integration** ✅ *(COMPLETE — A1–A4 landed + merged to `main`, 2026-07-04)*
+Terrain-first, cel-look-second — the two risks were split so each got its own play-test.
 - **A1 — Terrain in, current renderer (DONE, 2026-06-11; gate = ITERATE).** Replaced
   FlyScene's 200×200 plane + 20 dummies + 4 turrets with a single `DesertEnvironment` prefab
   (dune ground + perimeter ridge + 5 formations, all on a new `World` layer), a
@@ -120,9 +120,13 @@ Terrain-first, cel-look-second — the two risks are split so each gets its own 
   fine against the cel world, so no ship-cel conversion needed. See
   `docs/superpowers/specs/2026-07-03-desert-flyscene-a3-design.md`. **Next: A4** (which also
   carries the parked A2-review shadow-pipeline split + the tilted-turret cosmetic).
-- **A4 — Decide + docs.** Land or shelve. If landing: rewrite `docs/desert_level_spec.md`
-  (still written as a detached demonstrator), re-sync ROADMAP + architecture map, and drop
-  the throwaway `FreeFlyCamera`.
+- **A4 — Decide + docs (DONE, 2026-07-04; gate = LAND).** Decision: **LAND** the desert into the
+  game. Dropped the exploration scaffolding (`DesertSandbox`, `FreeFlyCamera`, the orphaned 200 u
+  `DesertGround`); made the desert's long shadows scene-local (`Desert_RPAsset` 300 via a
+  `ScenePipelineOverride`, global `PC_RPAsset` restored to 50); rewrote `docs/desert_level_spec.md`
+  (demonstrator → integrated level) + re-synced the architecture map; accepted the turret tilt;
+  merged to `main`. See `docs/superpowers/specs/2026-07-04-desert-flyscene-a4-design.md`.
+  **Milestone A complete → Milestone B next.**
 
 **Milestone B — UI rebrand** *(separate milestone, all scenes; after A)*
 Consume the `unity_handoff/` design-system drop (palette `CscPalette` + theme `CscTheme`

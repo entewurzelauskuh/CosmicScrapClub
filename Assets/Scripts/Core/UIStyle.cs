@@ -22,22 +22,6 @@ namespace CubeFly.Core
         public static readonly Color TintDisabled   = CscPalette.TintDisabled;
         public static readonly Color LabelColor     = CscPalette.Label;
 
-        static Font _builtinFont;
-        static Font BuiltinFont
-        {
-            get
-            {
-                if (_builtinFont == null)
-                {
-                    // Unity 6.x ships LegacyRuntime.ttf as the default UI font.
-                    // Older versions exposed Arial.ttf; try both for safety.
-                    _builtinFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                                   ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-                }
-                return _builtinFont;
-            }
-        }
-
         public static Canvas BuildScreenSpaceCanvas(string name, int sortingOrder = 100)
         {
             GameObject go = new GameObject(name,
@@ -79,7 +63,7 @@ namespace CubeFly.Core
         // Builds a Button + label as a child of `parent`. Caller positions the
         // resulting RectTransform (anchors / anchoredPosition).
         public static (Button button, Text label) BuildLabeledButton(
-            Transform parent, string labelText, Vector2 size, int fontSize = 28)
+            Transform parent, string labelText, Vector2 size, int fontSize = 28, Font font = null)
         {
             GameObject buttonGO = new GameObject(labelText + "Button",
                 typeof(RectTransform),
@@ -121,7 +105,7 @@ namespace CubeFly.Core
             lrt.offsetMax = Vector2.zero;
 
             Text text = labelGO.AddComponent<Text>();
-            text.font = BuiltinFont;
+            text.font = font ?? CscTheme.CondOr;
             text.alignment = TextAnchor.MiddleCenter;
             text.fontSize = fontSize;
             text.color = LabelColor;
@@ -227,7 +211,7 @@ namespace CubeFly.Core
             lrt.offsetMin = new Vector2(40f, 0f);
             lrt.offsetMax = new Vector2(0f, 0f);
             Text label = labelGO.AddComponent<Text>();
-            label.font = BuiltinFont;
+            label.font = CscTheme.CondOr;
             label.alignment = TextAnchor.MiddleLeft;
             label.fontSize = fontSize;
             label.color = LabelColor;
@@ -369,7 +353,7 @@ namespace CubeFly.Core
             go.transform.SetParent(parent, false);
             if (uiLayer >= 0) go.layer = uiLayer;
             Text t = go.AddComponent<Text>();
-            t.font = BuiltinFont;
+            t.font = CscTheme.CondOr;
             t.fontSize = fontSize;
             t.color = LabelColor;
             t.alignment = TextAnchor.MiddleLeft;
@@ -388,7 +372,7 @@ namespace CubeFly.Core
         }
 
         public static Text BuildLabel(
-            Transform parent, string text, int fontSize, FontStyle style = FontStyle.Normal)
+            Transform parent, string text, int fontSize, FontStyle style = FontStyle.Normal, Font font = null)
         {
             GameObject labelGO = new GameObject(text + "Label",
                 typeof(RectTransform),
@@ -398,7 +382,7 @@ namespace CubeFly.Core
             if (uiLayer >= 0) labelGO.layer = uiLayer;
 
             Text t = labelGO.AddComponent<Text>();
-            t.font = BuiltinFont;
+            t.font = font ?? CscTheme.BodyOr;
             t.alignment = TextAnchor.MiddleCenter;
             t.fontSize = fontSize;
             t.fontStyle = style;

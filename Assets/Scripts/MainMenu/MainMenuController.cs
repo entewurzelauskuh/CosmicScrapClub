@@ -61,7 +61,7 @@ namespace CubeFly.MainMenu
             prt.anchorMin = prt.anchorMax = prt.pivot = new Vector2(0.5f, 0.5f);
             prt.sizeDelta = new Vector2(620f, 300f);
             prt.anchoredPosition = new Vector2(0f, 200f);
-            prt.localEulerAngles = new Vector3(0f, 0f, 2f);   // ~ -2 deg visual tilt
+            prt.localEulerAngles = new Vector3(0f, 0f, 2f);   // slight counter-clockwise tilt (+2° z), per the mockup
             Image plate = plateGO.GetComponent<Image>();
             plate.color = CscPalette.HazardYellow;
             CscTheme.AddToonOutline(plateGO, 4f);

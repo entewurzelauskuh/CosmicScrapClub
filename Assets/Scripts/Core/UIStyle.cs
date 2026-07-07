@@ -64,14 +64,18 @@ namespace CubeFly.Core
         // gradient + a faint diagonal overlay, inserted behind all other UI.
         // Textures are generated in code (no asset / no Resources) so this static
         // builder needs nothing external. Reused across menu surfaces (B3a-c).
+        static Texture2D _gradientTex, _hazardTex;
+
         public static void BuildBrandBackground(RectTransform canvasRoot)
         {
-            AddFullScreenRaw(canvasRoot, "BrandGradient",
-                MakeRadialGradient(256, CscPalette.Ochre300, CscPalette.Brown900),
-                1f, new Vector2(1f, 1f));
-            AddFullScreenRaw(canvasRoot, "BrandHazardOverlay",
-                MakeDiagonalStripes(32, CscPalette.Scorch),
-                0.06f, new Vector2(24f, 14f));
+            // Generate the brand textures once per session (shared by every menu
+            // surface) instead of regenerating on each menu (re)build.
+            if (_gradientTex == null)
+                _gradientTex = MakeRadialGradient(256, CscPalette.Ochre300, CscPalette.Brown900);
+            if (_hazardTex == null)
+                _hazardTex = MakeDiagonalStripes(32, CscPalette.Scorch);
+            AddFullScreenRaw(canvasRoot, "BrandGradient", _gradientTex, 1f, new Vector2(1f, 1f));
+            AddFullScreenRaw(canvasRoot, "BrandHazardOverlay", _hazardTex, 0.06f, new Vector2(24f, 14f));
         }
 
         static void AddFullScreenRaw(RectTransform parent, string name, Texture2D tex,
@@ -90,7 +94,10 @@ namespace CubeFly.Core
             img.color = new Color(1f, 1f, 1f, alpha);
             img.uvRect = new Rect(0f, 0f, tiling.x, tiling.y);
             img.raycastTarget = false;
-            go.transform.SetAsFirstSibling();   // draw behind everything
+            // Background layers are added before any menu content, and the
+            // gradient before the overlay, so natural sibling order already
+            // draws them back-to-front behind the UI. (An earlier SetAsFirstSibling
+            // here inverted the two layers and hid the overlay under the gradient.)
         }
 
         static Texture2D MakeRadialGradient(int size, Color center, Color edge)

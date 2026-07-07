@@ -72,11 +72,25 @@ namespace CubeFly.Core
         // ---- Add a crisp toon outline to any Graphic (the cel-shaded look) ----
         public static Outline AddToonOutline(GameObject go, float thickness = 2f)
         {
-            Outline o = go.GetComponent<Outline>() ?? go.AddComponent<Outline>();
+            Outline o = go.GetComponent<Outline>();
+            if (o == null) o = go.AddComponent<Outline>();
             o.effectColor = OutlineColor;
             o.effectDistance = new Vector2(thickness, -thickness);
             o.useGraphicAlpha = true;
             return o;
+        }
+
+        // ---- Add a hard toon drop-shadow (single offset, no blur) ----
+        // The world/menu "stamp": Ink, offset down-right. Composes with an
+        // Outline (border + shadow together) to match the mockups' plates/buttons.
+        public static Shadow AddToonShadow(GameObject go, float offset = 6f)
+        {
+            Shadow s = go.GetComponent<Shadow>();
+            if (s == null) s = go.AddComponent<Shadow>();
+            s.effectColor = OutlineColor;
+            s.effectDistance = new Vector2(offset, -offset);
+            s.useGraphicAlpha = true;
+            return s;
         }
 
         // ---- Lerp helper for meters (boost critical, heat cool->hot) ----

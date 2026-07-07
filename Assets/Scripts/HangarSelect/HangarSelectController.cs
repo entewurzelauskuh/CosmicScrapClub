@@ -104,7 +104,7 @@ namespace CubeFly.HangarSelect
             RectTransform root = (RectTransform)canvas.transform;
 
             // Title — centred above the cards.
-            Text title = UIStyle.BuildLabel(root, "Choose a Slot", fontSize: 72, style: FontStyle.Bold);
+            Text title = UIStyle.BuildLabel(root, "Choose a Slot", fontSize: 72, style: FontStyle.Bold, font: CscTheme.DisplayOr);
             RectTransform trt = (RectTransform)title.transform;
             trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0.5f, 0.5f);
             trt.sizeDelta = new Vector2(900f, 120f);
@@ -148,7 +148,7 @@ namespace CubeFly.HangarSelect
             card.Root = rt;
 
             // Title (top of card).
-            Text title = UIStyle.BuildLabel(rt, $"Slot {slot + 1}", fontSize: 32, style: FontStyle.Bold);
+            Text title = UIStyle.BuildLabel(rt, $"Slot {slot + 1}", fontSize: 32, style: FontStyle.Bold, font: CscTheme.DisplayOr);
             RectTransform titleRT = (RectTransform)title.transform;
             titleRT.anchorMin = titleRT.anchorMax = titleRT.pivot = new Vector2(0.5f, 1f);
             titleRT.sizeDelta = new Vector2(cardSize.x - 32f, 48f);

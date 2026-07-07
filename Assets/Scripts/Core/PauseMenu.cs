@@ -261,7 +261,7 @@ namespace CubeFly.Core
             bgImage.raycastTarget = true;
 
             // Title.
-            Text title = UIStyle.BuildLabel(root, "Paused", fontSize: 96, style: FontStyle.Bold);
+            Text title = UIStyle.BuildLabel(root, "Paused", fontSize: 96, style: FontStyle.Bold, font: CscTheme.DisplayOr);
             RectTransform trt = (RectTransform)title.transform;
             trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0.5f, 0.5f);
             trt.sizeDelta = new Vector2(800f, 160f);

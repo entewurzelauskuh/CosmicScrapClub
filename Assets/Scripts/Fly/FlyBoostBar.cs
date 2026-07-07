@@ -205,7 +205,7 @@ namespace CubeFly.Fly
 
             // "Overboosted!" flash label — screen-centre relative,
             // offset above the crosshair. Hidden until a flash fires.
-            _flashLabel = UIStyle.BuildLabel(canvasRoot, "Overboosted!", fontSize: flashFontSize, style: FontStyle.Bold);
+            _flashLabel = UIStyle.BuildLabel(canvasRoot, "Overboosted!", fontSize: flashFontSize, style: FontStyle.Bold, font: CscTheme.StencilOr);
             _flashLabel.color = flashColor;
             RectTransform flashRT = (RectTransform)_flashLabel.transform;
             flashRT.anchorMin = flashRT.anchorMax = flashRT.pivot = new Vector2(0.5f, 0.5f);

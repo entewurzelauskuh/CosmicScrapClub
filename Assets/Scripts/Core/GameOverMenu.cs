@@ -149,7 +149,7 @@ namespace CubeFly.Core
 
             // Title.
             Text title = UIStyle.BuildLabel(root, "Construct Destroyed",
-                fontSize: 84, style: FontStyle.Bold);
+                fontSize: 84, style: FontStyle.Bold, font: CscTheme.DisplayOr);
             RectTransform trt = (RectTransform)title.transform;
             trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0.5f, 0.5f);
             trt.sizeDelta = new Vector2(900f, 160f);

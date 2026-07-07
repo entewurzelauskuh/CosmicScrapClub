@@ -92,6 +92,9 @@ namespace CubeFly.Core
             button.colors = cb;
             button.targetGraphic = bImage;
 
+            // Signature 2px ink outline on the button fill (render effect — no layout change).
+            CscTheme.AddToonOutline(buttonGO);
+
             GameObject labelGO = new GameObject("Label",
                 typeof(RectTransform),
                 typeof(CanvasRenderer));
@@ -183,7 +186,7 @@ namespace CubeFly.Core
             // configured effectDistance regardless of the box's tint
             // or the checkmark state.
             Outline bgOutline = bgGO.AddComponent<Outline>();
-            bgOutline.effectColor = Color.white;
+            bgOutline.effectColor = CscTheme.OutlineColor;
             bgOutline.effectDistance = new Vector2(1f, 1f);
 
             // Checkmark — child of Background, shown when Toggle.isOn.

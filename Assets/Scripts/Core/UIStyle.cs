@@ -60,6 +60,66 @@ namespace CubeFly.Core
             Object.DontDestroyOnLoad(es);
         }
 
+        // Full-screen warm brand background: a procedural radial ochre->rust
+        // gradient + a faint diagonal overlay, inserted behind all other UI.
+        // Textures are generated in code (no asset / no Resources) so this static
+        // builder needs nothing external. Reused across menu surfaces (B3a-c).
+        public static void BuildBrandBackground(RectTransform canvasRoot)
+        {
+            AddFullScreenRaw(canvasRoot, "BrandGradient",
+                MakeRadialGradient(256, CscPalette.Ochre300, CscPalette.Brown900),
+                1f, new Vector2(1f, 1f));
+            AddFullScreenRaw(canvasRoot, "BrandHazardOverlay",
+                MakeDiagonalStripes(32, CscPalette.Scorch),
+                0.06f, new Vector2(24f, 14f));
+        }
+
+        static void AddFullScreenRaw(RectTransform parent, string name, Texture2D tex,
+            float alpha, Vector2 tiling)
+        {
+            int uiLayer = LayerMask.NameToLayer("UI");
+            GameObject go = new GameObject(name,
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            if (uiLayer >= 0) go.layer = uiLayer;
+            RectTransform rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            RawImage img = go.GetComponent<RawImage>();
+            img.texture = tex;
+            img.color = new Color(1f, 1f, 1f, alpha);
+            img.uvRect = new Rect(0f, 0f, tiling.x, tiling.y);
+            img.raycastTarget = false;
+            go.transform.SetAsFirstSibling();   // draw behind everything
+        }
+
+        static Texture2D MakeRadialGradient(int size, Color center, Color edge)
+        {
+            Texture2D t = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp };
+            float c = (size - 1) / 2f, maxR = Mathf.Sqrt(2f) * c;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Clamp01(Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / maxR);
+                    t.SetPixel(x, y, Color.Lerp(center, edge, d * d));
+                }
+            t.Apply();
+            return t;
+        }
+
+        static Texture2D MakeDiagonalStripes(int size, Color line)
+        {
+            Texture2D t = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Repeat };
+            Color clear = new Color(line.r, line.g, line.b, 0f);
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                    t.SetPixel(x, y, ((x + y) % 16 < 2) ? line : clear);
+            t.Apply();
+            return t;
+        }
+
         // Builds a Button + label as a child of `parent`. Caller positions the
         // resulting RectTransform (anchors / anchoredPosition).
         public static (Button button, Text label) BuildLabeledButton(

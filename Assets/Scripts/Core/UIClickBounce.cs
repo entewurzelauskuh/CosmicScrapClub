@@ -20,9 +20,29 @@ namespace CubeFly.Core
 
         void Awake() => _rt = (RectTransform)transform;
 
+        void OnDisable()
+        {
+            // If the button is hidden mid-bounce, Unity kills the coroutine before
+            // the trailing scale-reset runs — restore full size here so the button
+            // isn't stranded shrunk the next time it's shown.
+            if (_running != null)
+            {
+                StopCoroutine(_running);
+                _running = null;
+            }
+            if (_rt != null) _rt.localScale = Vector3.one;
+        }
+
         public void OnPointerClick(PointerEventData eventData)
         {
             if (eventData.button != PointerEventData.InputButton.Left) return;
+            // A button's own onClick can deactivate this GameObject earlier in the
+            // same pointer-event dispatch: both IPointerClick handlers are captured
+            // while active, then invoked in order (Button first). HangarSelect's
+            // Cancel / "Yes, delete" buttons hide themselves this way. Starting a
+            // coroutine on an inactive object logs a Unity error and there's nothing
+            // visible left to animate, so bail.
+            if (!isActiveAndEnabled) return;
             if (_running != null) StopCoroutine(_running);
             _running = StartCoroutine(Bounce());
         }

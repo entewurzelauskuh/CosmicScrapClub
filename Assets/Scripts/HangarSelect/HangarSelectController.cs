@@ -168,6 +168,7 @@ namespace CubeFly.HangarSelect
             Text body = UIStyle.BuildLabel(rt, string.Empty, fontSize: 22);
             body.color = CscPalette.Sand100;
             body.alignment = TextAnchor.UpperCenter;
+            body.supportRichText = true;   // the filled-slot "last edited" line uses a <color> tag — be explicit (matches CategoryFlyout / BuildToolbarController) rather than leaning on Unity's default
             RectTransform bodyRT = (RectTransform)body.transform;
             bodyRT.anchorMin = bodyRT.anchorMax = bodyRT.pivot = new Vector2(0.5f, 1f);
             bodyRT.sizeDelta = new Vector2(cardSize.x - 32f, 170f);

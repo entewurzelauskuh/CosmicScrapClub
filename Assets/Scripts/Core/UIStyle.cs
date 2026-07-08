@@ -127,6 +127,28 @@ namespace CubeFly.Core
             return t;
         }
 
+        // A brand plate sprite: fill + ink border with feathered (anti-aliased)
+        // edges, so a *rotated* plate renders without staircase aliasing (uGUI
+        // Screen-Space-Overlay has no MSAA). Generate once and cache at the call site.
+        public static Sprite MakePlateSprite(int w, int h, int border, Color fill, Color ink)
+        {
+            Color[] px = new Color[w * h];
+            const float feather = 1.5f;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float edge = Mathf.Min(Mathf.Min(x, w - 1 - x), Mathf.Min(y, h - 1 - y));
+                    Color c = Color.Lerp(ink, fill, Mathf.Clamp01((edge - border) / feather));
+                    c.a = Mathf.Clamp01(edge / feather);   // feathered outer edge
+                    px[y * w + x] = c;
+                }
+            Texture2D t = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            t.SetPixels(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
+        }
+
         // Builds a Button + label as a child of `parent`. Caller positions the
         // resulting RectTransform (anchors / anchoredPosition).
         public static (Button button, Text label) BuildLabeledButton(

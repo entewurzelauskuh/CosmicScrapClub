@@ -47,6 +47,8 @@ namespace CubeFly.MainMenu
             CreateMenuButton(root, "Exit",     new Vector2(0f, -240f), OnExit);
         }
 
+        static Sprite _plateSprite;   // generated once, session-cached
+
         // The Cosmic Scrap Club wordmark: a slightly-tilted hazard-yellow plate
         // (ink border + toon shadow) with COSMIC / SCRAP / star-CLUB-star in the
         // three brand fonts. Built inline — it is MainMenu-only.
@@ -63,8 +65,10 @@ namespace CubeFly.MainMenu
             prt.anchoredPosition = new Vector2(0f, 200f);
             prt.localEulerAngles = new Vector3(0f, 0f, 2f);   // slight counter-clockwise tilt (+2° z), per the mockup
             Image plate = plateGO.GetComponent<Image>();
-            plate.color = CscPalette.HazardYellow;
-            CscTheme.AddToonOutline(plateGO, 4f);
+            if (_plateSprite == null)
+                _plateSprite = UIStyle.MakePlateSprite(620, 300, 5, CscPalette.HazardYellow, CscPalette.Ink);
+            plate.sprite = _plateSprite;   // baked yellow fill + feathered ink border (anti-aliased)
+            plate.color = Color.white;
             CscTheme.AddToonShadow(plateGO, 8f);
 
             WordmarkLine(prt, "COSMIC", 40, CscTheme.CondOr, CscPalette.Scorch, 95f);

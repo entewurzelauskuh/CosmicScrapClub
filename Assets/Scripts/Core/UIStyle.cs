@@ -152,7 +152,7 @@ namespace CubeFly.Core
         // Builds a Button + label as a child of `parent`. Caller positions the
         // resulting RectTransform (anchors / anchoredPosition).
         public static (Button button, Text label) BuildLabeledButton(
-            Transform parent, string labelText, Vector2 size, int fontSize = 28, Font font = null)
+            Transform parent, string labelText, Vector2 size, int fontSize = 28, Font font = null, bool bounce = false)
         {
             GameObject buttonGO = new GameObject(labelText + "Button",
                 typeof(RectTransform),
@@ -183,6 +183,7 @@ namespace CubeFly.Core
 
             // Signature 2px ink outline on the button fill (render effect — no layout change).
             CscTheme.AddToonOutline(buttonGO);
+            if (bounce) buttonGO.AddComponent<UIClickBounce>();
 
             GameObject labelGO = new GameObject("Label",
                 typeof(RectTransform),
@@ -288,7 +289,7 @@ namespace CubeFly.Core
             chkRT.offsetMin = new Vector2(6f, 6f);
             chkRT.offsetMax = new Vector2(-6f, -6f);
             Image checkImage = checkGO.GetComponent<Image>();
-            checkImage.color = TintHighlight;
+            checkImage.color = new Color(0.85f, 0.85f, 1f);   // bright checkmark, decoupled from the darkened hover tint
             toggle.graphic = checkImage;
 
             // Label — text to the right of the box, fills remaining width.
@@ -404,7 +405,7 @@ namespace CubeFly.Core
             checkRT.anchorMax = new Vector2(0f, 0.5f);
             checkRT.sizeDelta = new Vector2(14f, 14f);
             checkRT.anchoredPosition = new Vector2(12f, 0f);
-            itemCheckGO.GetComponent<Image>().color = TintHighlight;
+            itemCheckGO.GetComponent<Image>().color = new Color(0.85f, 0.85f, 1f);   // bright checkmark, decoupled from the hover tint
 
             Text itemText = MakeText(itemGO.transform, "Item Label", fontSize, uiLayer);
             RectTransform itemTextRT = (RectTransform)itemText.transform;

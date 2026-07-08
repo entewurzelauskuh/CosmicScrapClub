@@ -127,7 +127,7 @@ namespace CubeFly.HangarSelect
 
             // Cancel button — bottom-centre.
             (Button cancelButton, Text _) = UIStyle.BuildLabeledButton(
-                root, "Cancel", new Vector2(220f, 64f), fontSize: 28);
+                root, "Cancel", new Vector2(220f, 64f), fontSize: 28, bounce: true);
             RectTransform crtc = (RectTransform)cancelButton.transform;
             crtc.anchorMin = crtc.anchorMax = crtc.pivot = new Vector2(0.5f, 0.5f);
             crtc.anchoredPosition = new Vector2(0f, -(cardSize.y / 2f + 80f) + cardYOffset);
@@ -176,7 +176,7 @@ namespace CubeFly.HangarSelect
 
             // Primary button — "Start new" / "Continue".
             (Button primary, Text primaryLabel) = UIStyle.BuildLabeledButton(
-                rt, "—", new Vector2(cardSize.x - 80f, 56f), fontSize: 26);
+                rt, "—", new Vector2(cardSize.x - 80f, 56f), fontSize: 26, bounce: true);
             RectTransform prt = (RectTransform)primary.transform;
             prt.anchorMin = prt.anchorMax = prt.pivot = new Vector2(0.5f, 0f);
             prt.anchoredPosition = new Vector2(0f, 84f);
@@ -187,7 +187,7 @@ namespace CubeFly.HangarSelect
 
             // Delete button (initially hidden; revealed when slot has data).
             (Button del, Text delLabel) = UIStyle.BuildLabeledButton(
-                rt, "Delete", new Vector2((cardSize.x - 80f) / 2f - 4f, 44f), fontSize: 20);
+                rt, "Delete", new Vector2((cardSize.x - 80f) / 2f - 4f, 44f), fontSize: 20, bounce: true);
             RectTransform delRT = (RectTransform)del.transform;
             delRT.anchorMin = delRT.anchorMax = delRT.pivot = new Vector2(0.5f, 0f);
             delRT.anchoredPosition = new Vector2(-(cardSize.x - 80f) / 4f - 2f, 24f);
@@ -199,7 +199,7 @@ namespace CubeFly.HangarSelect
 
             // Inline-confirm cancel button — shown only during the confirm window.
             (Button delCancel, Text delCancelLabel) = UIStyle.BuildLabeledButton(
-                rt, "Cancel", new Vector2((cardSize.x - 80f) / 2f - 4f, 44f), fontSize: 20);
+                rt, "Cancel", new Vector2((cardSize.x - 80f) / 2f - 4f, 44f), fontSize: 20, bounce: true);
             RectTransform delCancelRT = (RectTransform)delCancel.transform;
             delCancelRT.anchorMin = delCancelRT.anchorMax = delCancelRT.pivot = new Vector2(0.5f, 0f);
             delCancelRT.anchoredPosition = new Vector2((cardSize.x - 80f) / 4f + 2f, 24f);

@@ -41,12 +41,12 @@ namespace CubeFly.Core
 
         // ---- HUD surfaces (cool dark overlay chrome) ----
         public static readonly Color HudPanel           = new Color(0.07f, 0.06f, 0.09f, 0.86f);  // glassy combat panel
-        public static readonly Color BackgroundIdle     = new Color(0.13f, 0.13f, 0.18f, 0.9f);  // src: UIStyle.BackgroundIdle
+        public static readonly Color BackgroundIdle     = new Color(0.16f, 0.16f, 0.22f, 0.9f);  // button/control idle fill (lightened ~20% for hover contrast)
         public static readonly Color HudCard            = new Color(0.1f, 0.1f, 0.14f, 0.92f);  // src: HangarSelect card bg
 
         // ---- Tints (src: UIStyle ColorBlock) ----
         public static readonly Color TintNormal         = new Color(1f, 1f, 1f, 1f);  // src: TintNormal
-        public static readonly Color TintHighlight      = new Color(0.85f, 0.85f, 1f, 1f);  // src: TintHighlight (lavender hover)
+        public static readonly Color TintHighlight      = new Color(0.69f, 0.69f, 0.82f, 1f);  // hover/selected tint — darkened so hover reads distinctly vs the lighter idle fill
         public static readonly Color TintPressed        = new Color(0.55f, 0.55f, 0.7f, 1f);  // src: TintPressed
         public static readonly Color TintDisabled       = new Color(0.5f, 0.5f, 0.5f, 0.5f);  // src: TintDisabled
         public static readonly Color Label              = new Color(1f, 1f, 1f, 1f);  // src: LabelColor (white)

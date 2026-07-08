@@ -91,7 +91,7 @@ namespace CubeFly.MainMenu
             Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick)
         {
             (Button button, Text _) = UIStyle.BuildLabeledButton(
-                parent, text, new Vector2(360f, 72f), fontSize: 32);
+                parent, text, new Vector2(360f, 72f), fontSize: 32, bounce: true);
             RectTransform rt = (RectTransform)button.transform;
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = anchoredPos;

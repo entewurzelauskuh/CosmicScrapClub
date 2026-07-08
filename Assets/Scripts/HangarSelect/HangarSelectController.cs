@@ -103,8 +103,11 @@ namespace CubeFly.HangarSelect
             Canvas canvas = UIStyle.BuildScreenSpaceCanvas("HangarSelectCanvas", sortingOrder: 200);
             RectTransform root = (RectTransform)canvas.transform;
 
+            UIStyle.BuildBrandBackground(root);
+
             // Title — centred above the cards.
             Text title = UIStyle.BuildLabel(root, "Choose a Slot", fontSize: 72, style: FontStyle.Bold, font: CscTheme.DisplayOr);
+            title.color = CscPalette.Sand100;
             RectTransform trt = (RectTransform)title.transform;
             trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0.5f, 0.5f);
             trt.sizeDelta = new Vector2(900f, 120f);
@@ -129,6 +132,7 @@ namespace CubeFly.HangarSelect
             crtc.anchorMin = crtc.anchorMax = crtc.pivot = new Vector2(0.5f, 0.5f);
             crtc.anchoredPosition = new Vector2(0f, -(cardSize.y / 2f + 80f) + cardYOffset);
             cancelButton.onClick.AddListener(OnCancel);
+            CscTheme.AddToonShadow(cancelButton.gameObject, 6f);
         }
 
         SlotCard BuildCard(RectTransform parent, int slot)
@@ -143,12 +147,15 @@ namespace CubeFly.HangarSelect
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = cardSize;
             Image bg = rootGO.GetComponent<Image>();
-            bg.color = new Color(0.10f, 0.10f, 0.14f, 0.92f);
+            bg.color = CscTheme.CardFill;
             bg.raycastTarget = false; // clicks pass through to inner buttons
             card.Root = rt;
+            CscTheme.AddToonOutline(rootGO, 3f);
+            CscTheme.AddToonShadow(rootGO, 6f);
 
             // Title (top of card).
             Text title = UIStyle.BuildLabel(rt, $"Slot {slot + 1}", fontSize: 32, style: FontStyle.Bold, font: CscTheme.DisplayOr);
+            title.color = CscPalette.Ochre300;
             RectTransform titleRT = (RectTransform)title.transform;
             titleRT.anchorMin = titleRT.anchorMax = titleRT.pivot = new Vector2(0.5f, 1f);
             titleRT.sizeDelta = new Vector2(cardSize.x - 32f, 48f);
@@ -159,6 +166,7 @@ namespace CubeFly.HangarSelect
             // holds the four-line filled-slot body (class / cubes·mass /
             // HP / last-edited) with clearance above the Continue button.
             Text body = UIStyle.BuildLabel(rt, string.Empty, fontSize: 22);
+            body.color = CscPalette.Sand100;
             body.alignment = TextAnchor.UpperCenter;
             RectTransform bodyRT = (RectTransform)body.transform;
             bodyRT.anchorMin = bodyRT.anchorMax = bodyRT.pivot = new Vector2(0.5f, 1f);
@@ -175,6 +183,7 @@ namespace CubeFly.HangarSelect
             primary.onClick.AddListener(() => ActivateSlot(slot));
             card.PrimaryButton = primary;
             card.PrimaryLabel = primaryLabel;
+            CscTheme.AddToonShadow(primary.gameObject, 6f);
 
             // Delete button (initially hidden; revealed when slot has data).
             (Button del, Text delLabel) = UIStyle.BuildLabeledButton(
@@ -186,6 +195,7 @@ namespace CubeFly.HangarSelect
             del.gameObject.SetActive(false);
             card.DeleteButton = del;
             card.DeleteLabel = delLabel;
+            CscTheme.AddToonShadow(del.gameObject, 6f);
 
             // Inline-confirm cancel button — shown only during the confirm window.
             (Button delCancel, Text delCancelLabel) = UIStyle.BuildLabeledButton(
@@ -197,6 +207,7 @@ namespace CubeFly.HangarSelect
             delCancel.gameObject.SetActive(false);
             card.DeleteCancelButton = delCancel;
             card.DeleteCancelLabel = delCancelLabel;
+            CscTheme.AddToonShadow(delCancel.gameObject, 6f);
 
             return card;
         }
@@ -241,7 +252,7 @@ namespace CubeFly.HangarSelect
                     $"{ShipClasses.DisplayName(info.ShipClass)}\n" +
                     $"{info.CubeCount} cube{(info.CubeCount == 1 ? string.Empty : "s")}  ·  Mass {info.TotalMass:F1}\n" +
                     $"HP {info.TotalHealthPoints:F0}\n" +
-                    $"{when}";
+                    $"<color=#7E776C>{when}</color>";
                 card.PrimaryLabel.text = "Continue";
                 card.DeleteButton.gameObject.SetActive(true);
             }

@@ -86,6 +86,7 @@ namespace CubeFly.Build
         // shape sits in the registry — important when weapons aren't
         // all at the end of ShapeRegistry.
         int[] _armourShapeIndices;
+        static Sprite _hazardSprite;   // AA hazard trim, session-cached
 
         // Cached so Update() doesn't allocate a fresh Key[] every frame.
         static readonly Key[] DigitKeys =
@@ -276,6 +277,7 @@ namespace CubeFly.Build
             // serialized 160x60 — keeps the restyle code-only, no scene edit).
             buttonSize = new Vector2(72f, 72f);
             spacing = 8f;
+            bottomMargin = 44f;   // lift the toolbar clear of the 28px hazard band
 
             // Hazard-stripe trim along the floor, behind the toolbar slots.
             GameObject hazGO = new GameObject("HazardTrim", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -289,7 +291,9 @@ namespace CubeFly.Build
             hazRT.sizeDelta = new Vector2(0f, 28f);
             hazRT.anchoredPosition = Vector2.zero;
             Image haz = hazGO.GetComponent<Image>();
-            haz.sprite = CscSprites.Hazard();
+            if (_hazardSprite == null)
+                _hazardSprite = UIStyle.MakeHazardStripe(64, 10f, CscPalette.HazardYellow, CscPalette.HazardStripe);
+            haz.sprite = _hazardSprite;
             haz.type = Image.Type.Tiled;
             haz.raycastTarget = false;
             haz.enabled = haz.sprite != null;
@@ -300,7 +304,7 @@ namespace CubeFly.Build
             hint.alignment = TextAnchor.UpperLeft;
             RectTransform hrt = (RectTransform)hint.transform;
             hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0f, 1f);
-            hrt.anchoredPosition = hintAnchoredPosition;
+            hrt.anchoredPosition = new Vector2(hintAnchoredPosition.x, -80f);   // below the 64px top bar
             hrt.sizeDelta = hintSize;
 
             // Top-center transient message label.

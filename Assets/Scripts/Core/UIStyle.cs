@@ -210,6 +210,75 @@ namespace CubeFly.Core
             return (button, text);
         }
 
+        // Restyles a BuildLabeledButton result into a brand toolbar slot: the
+        // existing label drops to a small bottom caption, a number badge sits
+        // top-left, and a centered glyph Image fills the middle. Returns the
+        // glyph Image so callers can swap its sprite later (e.g. the cube slot
+        // tracking the armed material). glyph == null leaves the image hidden.
+        public static Image DecorateToolbarSlot(Button slot, Text label, Sprite glyph, string number, string caption)
+        {
+            int uiLayer = LayerMask.NameToLayer("UI");
+            RectTransform slotRT = (RectTransform)slot.transform;
+
+            // Bottom caption — reuse the label the button already carries.
+            label.text = string.IsNullOrEmpty(caption) ? string.Empty : caption.ToUpperInvariant();
+            label.font = CscTheme.CondOr;
+            label.fontSize = 14;
+            label.color = CscPalette.Sand100;
+            label.alignment = TextAnchor.LowerCenter;
+            RectTransform lrt = (RectTransform)label.transform;
+            lrt.anchorMin = new Vector2(0f, 0f);
+            lrt.anchorMax = new Vector2(1f, 0f);
+            lrt.pivot = new Vector2(0.5f, 0f);
+            lrt.offsetMin = new Vector2(2f, 4f);
+            lrt.offsetMax = new Vector2(-2f, 18f);
+
+            // Centered glyph.
+            GameObject glyphGO = new GameObject("Glyph", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            glyphGO.transform.SetParent(slotRT, false);
+            if (uiLayer >= 0) glyphGO.layer = uiLayer;
+            RectTransform grt = (RectTransform)glyphGO.transform;
+            grt.anchorMin = grt.anchorMax = grt.pivot = new Vector2(0.5f, 0.5f);
+            grt.anchoredPosition = new Vector2(0f, 6f);   // nudged up to clear the caption
+            grt.sizeDelta = new Vector2(40f, 40f);
+            Image glyphImg = glyphGO.GetComponent<Image>();
+            glyphImg.sprite = glyph;
+            glyphImg.color = Color.white;
+            glyphImg.preserveAspect = true;
+            glyphImg.raycastTarget = false;
+            glyphImg.enabled = glyph != null;
+
+            // Number badge, top-left.
+            GameObject badgeGO = new GameObject("Badge", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            badgeGO.transform.SetParent(slotRT, false);
+            if (uiLayer >= 0) badgeGO.layer = uiLayer;
+            RectTransform brt = (RectTransform)badgeGO.transform;
+            brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0f, 1f);
+            brt.anchoredPosition = new Vector2(4f, -4f);
+            brt.sizeDelta = new Vector2(18f, 16f);
+            Text badge = badgeGO.GetComponent<Text>();
+            badge.font = CscTheme.CondOr;
+            badge.fontSize = 13;
+            badge.color = CscPalette.Steel300;
+            badge.alignment = TextAnchor.UpperLeft;
+            badge.raycastTarget = false;
+            badge.text = number ?? string.Empty;
+
+            return glyphImg;
+        }
+
+        // Adds a disabled ochre selection Outline (distinct from the ink toon
+        // outline BuildLabeledButton already carries). Toggle .enabled to show
+        // the "selected" ring. Returns it so the caller can keep the ref.
+        public static Outline AddSelectionOutline(GameObject go)
+        {
+            Outline o = go.AddComponent<Outline>();
+            o.effectColor = CscPalette.Ochre300;
+            o.effectDistance = new Vector2(3f, -3f);
+            o.enabled = false;
+            return o;
+        }
+
         // Builds a legacy uGUI Dropdown as a child of `parent`, with the
         // full template hierarchy the control needs (Label + Template →
         // Viewport → Content → Item → Background/Checkmark/Label). The
@@ -325,6 +394,7 @@ namespace CubeFly.Core
             ((RectTransform)rootGO.transform).sizeDelta = size;
             Image rootImage = rootGO.GetComponent<Image>();
             rootImage.color = BackgroundIdle;
+            CscTheme.AddToonOutline(rootGO);   // branded ink border on the dropdown control
 
             Dropdown dropdown = rootGO.GetComponent<Dropdown>();
             ColorBlock cb = dropdown.colors;
@@ -417,6 +487,17 @@ namespace CubeFly.Core
             Toggle itemToggle = itemGO.GetComponent<Toggle>();
             itemToggle.targetGraphic = itemBgGO.GetComponent<Image>();
             itemToggle.graphic = itemCheckGO.GetComponent<Image>();
+            // Brand the option rows: idle from the ColorBlock, hover/selected ochre.
+            itemBgGO.GetComponent<Image>().color = Color.white;
+            ColorBlock itemColors = itemToggle.colors;
+            itemColors.normalColor      = BackgroundIdle;
+            itemColors.highlightedColor = CscPalette.Ochre300;
+            itemColors.pressedColor     = CscPalette.Ochre500;
+            itemColors.selectedColor    = CscPalette.Ochre300;
+            itemColors.disabledColor    = TintDisabled;
+            itemColors.colorMultiplier  = 1f;
+            itemColors.fadeDuration     = 0.1f;
+            itemToggle.colors = itemColors;
             itemToggle.isOn = true;
 
             ScrollRect scroll = templateGO.GetComponent<ScrollRect>();

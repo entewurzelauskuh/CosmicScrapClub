@@ -42,7 +42,7 @@ namespace CubeFly.MainMenu
             BuildWordmark(root);
 
             // Buttons stacked below the wordmark.
-            CreateMenuButton(root, "Hangar",   new Vector2(0f, -40f),  OnHangar);
+            CreateMenuButton(root, "Hangar",   new Vector2(0f, -40f),  OnHangar, UIStyle.ButtonKind.Primary);
             CreateMenuButton(root, "Settings", new Vector2(0f, -140f), OnSettings);
             CreateMenuButton(root, "Exit",     new Vector2(0f, -240f), OnExit);
         }
@@ -88,14 +88,14 @@ namespace CubeFly.MainMenu
         }
 
         static void CreateMenuButton(RectTransform parent, string text,
-            Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick)
+            Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick, UIStyle.ButtonKind kind = UIStyle.ButtonKind.Ghost)
         {
             (Button button, Text _) = UIStyle.BuildLabeledButton(
-                parent, text, new Vector2(360f, 72f), fontSize: 32, bounce: true);
+                parent, text, new Vector2(360f, 72f), fontSize: 32, bounce: true, kind: kind);
             RectTransform rt = (RectTransform)button.transform;
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = anchoredPos;
-            CscTheme.AddToonShadow(button.gameObject, 6f);
+            CscTheme.AddToonShadow(button.gameObject, 8f);
             button.onClick.AddListener(onClick);
         }
 

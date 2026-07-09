@@ -211,9 +211,9 @@ namespace CubeFly.HangarSelect
             Outline delOutline = del.GetComponent<Outline>();
             EventTrigger delTrig = del.gameObject.AddComponent<EventTrigger>();
             EventTrigger.Entry delEnter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-            delEnter.callback.AddListener(_ => { if (card.DeleteConfirming) return; if (delOutline != null) delOutline.effectColor = CscPalette.Critical; delLabel.color = CscPalette.Critical; });
+            delEnter.callback.AddListener(_ => { if (card.DeleteConfirming) return; if (delOutline != null) { delOutline.effectColor = CscPalette.Critical; delOutline.effectDistance = new Vector2(1f, -1f); } delLabel.color = CscPalette.Critical; });
             EventTrigger.Entry delExit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-            delExit.callback.AddListener(_ => { if (card.DeleteConfirming) return; if (delOutline != null) delOutline.effectColor = CscTheme.OutlineColor; delLabel.color = CscPalette.Label; });
+            delExit.callback.AddListener(_ => { if (card.DeleteConfirming) return; if (delOutline != null) { delOutline.effectColor = CscTheme.OutlineColor; delOutline.effectDistance = new Vector2(2f, -2f); } delLabel.color = CscPalette.Label; });
             delTrig.triggers.Add(delEnter);
             delTrig.triggers.Add(delExit);
 
@@ -356,7 +356,7 @@ namespace CubeFly.HangarSelect
             card.DeleteButton.image.color = CscTheme.DangerFill;
             card.DeleteLabel.color = Color.white;
             Outline delCO = card.DeleteButton.GetComponent<Outline>();
-            if (delCO != null) delCO.effectColor = CscTheme.OutlineColor;
+            if (delCO != null) { delCO.effectColor = CscTheme.OutlineColor; delCO.effectDistance = new Vector2(2f, -2f); }
             card.DeleteLabel.text = "YES, DELETE";
             card.DeleteCancelButton.gameObject.SetActive(true);
             // Auto-cancel after the timeout to avoid a stuck confirm state.
@@ -385,7 +385,7 @@ namespace CubeFly.HangarSelect
             card.DeleteButton.image.color = UIStyle.BackgroundIdle;
             card.DeleteLabel.color = CscPalette.Label;
             Outline delRO = card.DeleteButton.GetComponent<Outline>();
-            if (delRO != null) delRO.effectColor = CscTheme.OutlineColor;
+            if (delRO != null) { delRO.effectColor = CscTheme.OutlineColor; delRO.effectDistance = new Vector2(2f, -2f); }
             card.DeleteLabel.text = "DELETE";
             card.DeleteCancelButton.gameObject.SetActive(false);
         }

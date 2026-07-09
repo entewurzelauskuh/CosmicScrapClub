@@ -27,7 +27,9 @@ injected (`CategoryFlyout.cs:44-45,87-88`).
 **In scope (BuildScene-owned chrome):**
 1. Sprite pipeline (foundational — makes the 12 glyph PNGs loadable).
 2. Top bar: cool panel + `CLASS` label + branded class **dropdown**.
-3. Shape toolbar: 9 slots restructured to glyph + number badge + label; hazard-stripe floor trim.
+3. Shape toolbar: the real **5 slots** (`Cube · Slope · Weapons▸ · Utilities▸ · Delete`)
+   restyled to glyph + number badge + label; category slots show the armed
+   weapon/utility glyph; flyout entries get per-shape glyphs; hazard-stripe floor trim.
 4. Material flyout: A–D entries restyled.
 5. MASS / HP / Power readout (bottom-left).
 
@@ -94,9 +96,14 @@ injected (`CategoryFlyout.cs:44-45,87-88`).
 
 ### 4.3 Shape toolbar (largest change)
 
-Today each slot is a `UIStyle.BuildLabeledButton` (text = shape name, armour `:354`,
-Delete `:405`) plus a solid-colour corner swatch (`BuildCornerSwatch :717`, recoloured
-in `RefreshSwatchFor :839`). Restructure each of the 9 slots to the mockup anatomy:
+The live toolbar is **5 slots**, not the mockup's flat 9: 2 armour (Cube, Slope —
+individual, `BuildToolbar` :347) + 2 category (Weapons▸, Utilities▸ — each collapses a
+flyout, :375) + Delete (:405). We restyle this real structure in place (user decision,
+2026-07-09) — flattening to 9 slots would dismantle the category-flyout + digit-shortcut
+system (interaction change, out of "presentation-only"). Today each slot is a
+`UIStyle.BuildLabeledButton` (text = shape name) plus a solid-colour corner swatch
+(`BuildCornerSwatch :717`, recoloured in `RefreshSwatchFor :839`); selection is a
+background recolour (`SelectedTypeColor` :124/:806). Restyle each slot to the anatomy:
 - Dark slot button (`CscTheme.CardFill`/`HudCard`, ~72×72, 3px radius, **2px ink**).
 - **Number badge** top-left (small Condensed, muted `Steel`).
 - **Centered glyph sprite** (`Image`, sprite from `CscSprites`, white tint).

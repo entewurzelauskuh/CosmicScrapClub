@@ -55,6 +55,9 @@ namespace CubeFly.Build
         Button _button;
         Image _background;
         Image _swatch;
+        Image _glyph;
+        Text _btnLabel;
+        Outline _selectionOutline;
         GameObject _flyout;
         CanvasGroup _flyoutGroup;
         Button[] _flyoutButtons;
@@ -69,9 +72,8 @@ namespace CubeFly.Build
         // Defaults to the category's first shape.
         int _lastArmedShapeIndex = -1;
 
-        static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
-        static readonly Color FlyoutEntryIdle   = new Color(0.18f, 0.18f, 0.22f, 0.95f);
-        static readonly Color FlyoutEntryActive = new Color(0.35f, 0.55f, 0.95f, 0.95f);
+        static readonly Color FlyoutEntryIdle   = CscPalette.HudCard;
+        static readonly Color FlyoutEntryActive = CscPalette.Ochre300;
 
         public CategoryFlyout(
             BuildManager buildManager,
@@ -140,7 +142,8 @@ namespace CubeFly.Build
         // controller used to do inline for the Weapons button.
         public void BuildButton(RectTransform canvas, float anchoredX)
         {
-            (Button btn, Text _) = UIStyle.BuildLabeledButton(canvas, _buttonLabel, _buttonSize, _fontSize);
+            (Button btn, Text lbl) = UIStyle.BuildLabeledButton(canvas, _buttonLabel, _buttonSize, _fontSize);
+            _btnLabel = lbl;
             RectTransform rt = (RectTransform)btn.transform;
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0f);
             rt.anchoredPosition = new Vector2(anchoredX, _bottomMargin);
@@ -151,6 +154,14 @@ namespace CubeFly.Build
             _swatch = _buildCornerSwatch(rt);
             _button = btn;
             _background = btn.GetComponent<Image>();
+
+            int armedShape = _lastArmedShapeIndex >= 0 ? _lastArmedShapeIndex : (_shapeIndices.Length > 0 ? _shapeIndices[0] : -1);
+            ShapeDefinition armed = armedShape >= 0 && _buildManager.Shapes != null ? _buildManager.Shapes.Get(armedShape) : null;
+            int armedMat = armed != null ? _buildManager.GetMaterialForShape(armedShape) : 0;
+            Sprite g = armed != null ? CscSprites.ForShape(armed.displayName, armedMat) : null;
+            _glyph = UIStyle.DecorateToolbarSlot(_button, _btnLabel, g, null, _buttonLabel);
+            _selectionOutline = UIStyle.AddSelectionOutline(_button.gameObject);
+            _swatch.enabled = false;   // glyph conveys the armed shape now
         }
 
         // Build the (initially hidden) flyout panel under the canvas, one
@@ -196,6 +207,23 @@ namespace CubeFly.Build
                 brt.anchoredPosition = new Vector2(0f, y);
 
                 _buildEntrySwatch(brt, wmat != null ? wmat.SwatchColor : Color.gray);
+
+                Sprite eg = shape != null ? CscSprites.ForShape(shape.displayName, 0) : null;
+                if (eg != null)
+                {
+                    GameObject egGO = new GameObject("EntryGlyph", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                    egGO.transform.SetParent(brt, false);
+                    RectTransform egRT = (RectTransform)egGO.transform;
+                    egRT.anchorMin = egRT.anchorMax = new Vector2(0f, 0.5f);
+                    egRT.pivot = new Vector2(0f, 0.5f);
+                    egRT.anchoredPosition = new Vector2(6f, 0f);
+                    egRT.sizeDelta = new Vector2(28f, 28f);
+                    Image egImg = egGO.GetComponent<Image>();
+                    egImg.sprite = eg; egImg.color = Color.white;
+                    egImg.preserveAspect = true; egImg.raycastTarget = false;
+                    RectTransform elrt = (RectTransform)label.transform;
+                    elrt.offsetMin = new Vector2(40f, elrt.offsetMin.y);   // inset text to clear the glyph
+                }
 
                 int captured = shapeIndex;
                 btn.onClick.AddListener(() => OnFlyoutEntryClicked(captured));
@@ -270,7 +298,8 @@ namespace CubeFly.Build
         public void RefreshButtonHighlight()
         {
             if (_background == null) return;
-            _background.color = IsActiveCategory() ? SelectedTypeColor : UIStyle.BackgroundIdle;
+            _background.color = CscTheme.CardFill;
+            if (_selectionOutline != null) _selectionOutline.enabled = IsActiveCategory();
         }
 
         // Corner-swatch colour: the armed shape's coupled material when a
@@ -287,6 +316,12 @@ namespace CubeFly.Build
             ShapeDefinition shape = _buildManager.Shapes.Get(swatchShape);
             MaterialDefinition wmat = shape != null ? shape.coupledMaterial : null;
             _swatch.color = wmat != null ? wmat.SwatchColor : Color.gray;
+            if (_glyph != null && shape != null)
+            {
+                int mat = _buildManager.GetMaterialForShape(swatchShape);
+                Sprite g = CscSprites.ForShape(shape.displayName, mat);
+                if (g != null) { _glyph.sprite = g; _glyph.enabled = true; }
+            }
         }
 
         // Flyout entry highlight: the entry for the active shape (when

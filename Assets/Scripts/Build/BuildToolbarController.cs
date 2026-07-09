@@ -279,6 +279,24 @@ namespace CubeFly.Build
             buttonSize = new Vector2(72f, 72f);
             spacing = 8f;
 
+            // Hazard-stripe trim along the floor, behind the toolbar slots.
+            GameObject hazGO = new GameObject("HazardTrim", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            hazGO.transform.SetParent(root, false);
+            int hazLayer = LayerMask.NameToLayer("UI");
+            if (hazLayer >= 0) hazGO.layer = hazLayer;
+            RectTransform hazRT = (RectTransform)hazGO.transform;
+            hazRT.anchorMin = new Vector2(0f, 0f);
+            hazRT.anchorMax = new Vector2(1f, 0f);
+            hazRT.pivot = new Vector2(0.5f, 0f);
+            hazRT.sizeDelta = new Vector2(0f, 28f);
+            hazRT.anchoredPosition = Vector2.zero;
+            Image haz = hazGO.GetComponent<Image>();
+            haz.sprite = CscSprites.Hazard();
+            haz.type = Image.Type.Tiled;
+            haz.raycastTarget = false;
+            haz.enabled = haz.sprite != null;
+            hazGO.transform.SetAsFirstSibling();   // behind the slots
+
             // Top-left rotation hint.
             Text hint = UIStyle.BuildLabel(root, hintText, fontSize: hintFontSize);
             hint.alignment = TextAnchor.UpperLeft;

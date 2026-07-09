@@ -78,6 +78,9 @@ namespace CubeFly.Build
         Button[] _shapeButtons;
         Image[] _shapeBackgrounds;
         Image[] _shapeSwatches;
+        Image[] _shapeGlyphs;
+        Outline[] _shapeSelectionOutlines;
+        Outline _deleteSelectionOutline;
         // Slot-ordered list of ShapeRegistry indices for armour shapes
         // only (i.e. the on-screen toolbar slot order). Digit shortcut
         // [i] maps to _armourShapeIndices[i], independent of where the
@@ -271,6 +274,11 @@ namespace CubeFly.Build
             RectTransform root = BuildHud.Instance.Root;
             _canvasRect = root;
 
+            // Brand slots: square 72x72 with tighter spacing (overrides the
+            // serialized 160x60 — keeps the restyle code-only, no scene edit).
+            buttonSize = new Vector2(72f, 72f);
+            spacing = 8f;
+
             // Top-left rotation hint.
             Text hint = UIStyle.BuildLabel(root, hintText, fontSize: hintFontSize);
             hint.alignment = TextAnchor.UpperLeft;
@@ -307,6 +315,8 @@ namespace CubeFly.Build
             _shapeButtons = new Button[totalShapes];
             _shapeBackgrounds = new Image[totalShapes];
             _shapeSwatches = new Image[totalShapes];
+            _shapeGlyphs = new Image[totalShapes];
+            _shapeSelectionOutlines = new Outline[totalShapes];
 
             // Partition the registry into armour shapes and the
             // non-armour categories. Each non-armour category keeps its
@@ -351,7 +361,11 @@ namespace CubeFly.Build
                 ShapeDefinition def = shapes.Get(i);
                 string label = def != null ? def.displayName : $"Shape #{i}";
 
-                (Button btn, Text _) = UIStyle.BuildLabeledButton(root, label, buttonSize, fontSize);
+                (Button btn, Text lbl) = UIStyle.BuildLabeledButton(root, label, buttonSize, fontSize);
+                int armedMat = buildManager != null ? buildManager.GetMaterialForShape(i) : 0;
+                Sprite glyph = def != null ? CscSprites.ForShape(def.displayName, armedMat) : null;
+                _shapeGlyphs[i] = UIStyle.DecorateToolbarSlot(btn, lbl, glyph, (a + 1).ToString(), label);
+                _shapeSelectionOutlines[i] = UIStyle.AddSelectionOutline(btn.gameObject);
                 RectTransform rt = (RectTransform)btn.transform;
                 rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0f);
                 rt.anchoredPosition = new Vector2(startX + slot * (buttonSize.x + spacing), bottomMargin);
@@ -361,6 +375,7 @@ namespace CubeFly.Build
                 AddPointerHandlers(btn.gameObject, idx);
 
                 Image swatch = BuildCornerSwatch(rt);
+                swatch.enabled = false;   // glyph now conveys the armed material
                 _shapeSwatches[i] = swatch;
 
                 _shapeButtons[i] = btn;
@@ -409,6 +424,21 @@ namespace CubeFly.Build
             delBtn.onClick.AddListener(() => buildManager.SetCurrentTool(BuildTool.Delete));
             _deleteButton = delBtn;
             _deleteBackground = delBtn.GetComponent<Image>();
+            _deleteSelectionOutline = UIStyle.AddSelectionOutline(delBtn.gameObject);
+            UIStyle.DecorateToolbarSlot(delBtn, _ignored, null, null, "Delete");
+            GameObject xGO = new GameObject("DeleteX", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            xGO.transform.SetParent(delBtn.transform, false);
+            RectTransform xRT = (RectTransform)xGO.transform;
+            xRT.anchorMin = xRT.anchorMax = xRT.pivot = new Vector2(0.5f, 0.5f);
+            xRT.anchoredPosition = new Vector2(0f, 6f);
+            xRT.sizeDelta = new Vector2(40f, 40f);
+            Text xT = xGO.GetComponent<Text>();
+            xT.font = CscTheme.DisplayOr;
+            xT.fontSize = 34;
+            xT.alignment = TextAnchor.MiddleCenter;
+            xT.color = CscPalette.Critical;
+            xT.raycastTarget = false;
+            xT.text = "✕";
 
             // ---- Bottom-left stat labels ----
             _massLabel = UIStyle.BuildLabel(root, "Mass: 0 / 100", fontSize: statFontSize);
@@ -801,10 +831,10 @@ namespace CubeFly.Build
             {
                 for (int i = 0; i < _shapeBackgrounds.Length; i++)
                 {
-                    if (_shapeBackgrounds[i] == null) continue;
-                    _shapeBackgrounds[i].color = (!deleteActive && !weaponActive && i == activeIdx)
-                        ? SelectedTypeColor
-                        : UIStyle.BackgroundIdle;
+                    if (_shapeBackgrounds[i] != null)
+                        _shapeBackgrounds[i].color = CscTheme.CardFill;   // dark slot, always
+                    if (_shapeSelectionOutlines != null && _shapeSelectionOutlines[i] != null)
+                        _shapeSelectionOutlines[i].enabled = (!deleteActive && !weaponActive && i == activeIdx);
                 }
             }
             // Each category button gets the same selected highlight as
@@ -813,7 +843,9 @@ namespace CubeFly.Build
             for (int i = 0; i < _categoryFlyouts.Count; i++)
                 _categoryFlyouts[i].RefreshButtonHighlight();
             if (_deleteBackground != null)
-                _deleteBackground.color = deleteActive ? deleteSelectedColor : UIStyle.BackgroundIdle;
+                _deleteBackground.color = CscTheme.CardFill;
+            if (_deleteSelectionOutline != null)
+                _deleteSelectionOutline.enabled = deleteActive;
         }
 
         // Refresh the corner swatch on every shape button to reflect
@@ -837,6 +869,16 @@ namespace CubeFly.Build
             int mIdx = buildManager.GetMaterialForShape(shapeIndex);
             MaterialDefinition mdef = mats.Get(mIdx);
             _shapeSwatches[shapeIndex].color = mdef != null ? mdef.SwatchColor : Color.gray;
+            if (_shapeGlyphs != null && shapeIndex < _shapeGlyphs.Length && _shapeGlyphs[shapeIndex] != null)
+            {
+                ShapeDefinition sdef = buildManager.Shapes != null ? buildManager.Shapes.Get(shapeIndex) : null;
+                Sprite g = sdef != null ? CscSprites.ForShape(sdef.displayName, mIdx) : null;
+                if (g != null)
+                {
+                    _shapeGlyphs[shapeIndex].sprite = g;
+                    _shapeGlyphs[shapeIndex].enabled = true;
+                }
+            }
         }
 
         // ---------- Bottom-left stat readouts ----------

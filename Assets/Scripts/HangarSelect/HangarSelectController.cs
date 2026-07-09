@@ -255,12 +255,12 @@ namespace CubeFly.HangarSelect
             CancelDeleteConfirm(card);
 
             card.IsEmpty = info.IsEmpty;
-            card.TitleLabel.text = info.Name;
+            card.TitleLabel.text = (info.Name ?? string.Empty).ToUpperInvariant();
 
             if (info.IsEmpty)
             {
                 card.BodyLabel.text = "<empty>";
-                card.PrimaryLabel.text = "Start new construct";
+                card.PrimaryLabel.text = "START NEW CONSTRUCT";
                 card.DeleteButton.gameObject.SetActive(false);
             }
             else
@@ -273,7 +273,7 @@ namespace CubeFly.HangarSelect
                     $"{info.CubeCount} cube{(info.CubeCount == 1 ? string.Empty : "s")}  ·  Mass {info.TotalMass:F1}\n" +
                     $"HP {info.TotalHealthPoints:F0}\n" +
                     $"<color=#7E776C>{when}</color>";
-                card.PrimaryLabel.text = "Continue";
+                card.PrimaryLabel.text = "CONTINUE";
                 card.DeleteButton.gameObject.SetActive(true);
             }
         }

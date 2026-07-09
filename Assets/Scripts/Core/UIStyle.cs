@@ -265,7 +265,7 @@ namespace CubeFly.Core
             text.font = font ?? CscTheme.CondOr;
             text.alignment = TextAnchor.MiddleCenter;
             text.fontSize = fontSize;
-            text.text = labelText.ToUpperInvariant();
+            text.text = labelText.Contains("<") ? labelText : labelText.ToUpperInvariant();   // don't uppercase rich-text markup (legacy Text tags are case-sensitive)
             text.color = kind == ButtonKind.Primary ? CscTheme.TextOnLight
                        : kind == ButtonKind.Danger  ? Color.white
                        : LabelColor;

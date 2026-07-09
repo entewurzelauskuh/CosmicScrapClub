@@ -292,7 +292,7 @@ namespace CubeFly.Build
             hazRT.anchoredPosition = Vector2.zero;
             Image haz = hazGO.GetComponent<Image>();
             if (_hazardSprite == null)
-                _hazardSprite = UIStyle.MakeHazardStripe(64, 10f, CscPalette.HazardYellow, CscPalette.HazardStripe);
+                _hazardSprite = UIStyle.MakeHazardStripe(80, 10f, CscPalette.HazardYellow, CscPalette.HazardStripe);   // 80 = 4x the 20px diagonal period → seamless tiling
             haz.sprite = _hazardSprite;
             haz.type = Image.Type.Tiled;
             haz.raycastTarget = false;

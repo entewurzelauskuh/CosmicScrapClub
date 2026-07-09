@@ -5,51 +5,61 @@ using UnityEngine.UI;
 namespace CubeFly.Core
 {
     // Press feedback for menu / hangar buttons: on pointer-DOWN the button
-    // translates into its toon shadow (the BRAND "stamp"), and restores on
-    // pointer-up / exit. Reads the sibling Shadow's offset (added by the caller
-    // after this component) lazily on first press so it lands exactly on the
-    // shadow; falls back to (6,-6). Additive alongside the Button's own onClick.
-    // Class name kept so UIStyle.BuildLabeledButton's `bounce` param still opts in.
+    // translates toward its toon shadow AND the shadow collapses (effectDistance
+    // -> 0), so the button visually "stamps" down onto its shadow (the BRAND
+    // press-stamp). Restores on pointer-up. The Shadow is a same-graphic
+    // BaseMeshEffect (AddToonShadow), so collapsing it is what sells the sink —
+    // translating alone would just drag the shadow along. Additive alongside the
+    // Button's own onClick. Class name kept so UIStyle.BuildLabeledButton's
+    // `bounce` param still opts in.
     [RequireComponent(typeof(RectTransform))]
-    public class UIClickBounce : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
+    public class UIClickBounce : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     {
         RectTransform _rt;
+        Shadow _shadow;
         Vector2 _rest;
         Vector2 _stamp = new Vector2(6f, -6f);
-        bool _stampResolved;
+        bool _resolved;
         bool _pressed;
 
         void Awake() => _rt = (RectTransform)transform;
 
+        void Resolve()
+        {
+            if (_resolved) return;
+            // The Shadow is added by the caller AFTER this component, so resolve lazily.
+            _shadow = GetComponent<Shadow>();
+            if (_shadow != null) _stamp = _shadow.effectDistance;
+            _resolved = true;
+        }
+
         void OnDisable()
         {
-            // Only restore if we're mid-press — otherwise _rest is unset and
-            // we'd yank the button to (0,0).
-            if (_pressed) { _rt.anchoredPosition = _rest; _pressed = false; }
+            if (_pressed) Restore();
         }
 
         public void OnPointerDown(PointerEventData e)
         {
             if (e.button != PointerEventData.InputButton.Left || _pressed) return;
-            if (!_stampResolved)
-            {
-                Shadow sh = GetComponent<Shadow>();
-                if (sh != null) _stamp = sh.effectDistance;
-                _stampResolved = true;
-            }
+            Resolve();
             _rest = _rt.anchoredPosition;
             _rt.anchoredPosition = _rest + _stamp;
+            if (_shadow != null) _shadow.effectDistance = Vector2.zero;   // collapse — button stamps onto the shadow
             _pressed = true;
         }
 
-        public void OnPointerUp(PointerEventData e) => Release();
-        public void OnPointerExit(PointerEventData e) => Release();
+        // uGUI sends OnPointerUp to the pressed object regardless of where the
+        // pointer is, so this alone reliably restores — no OnPointerExit (which
+        // would fire spuriously when the stamp shifts the button out from under
+        // a held cursor).
+        public void OnPointerUp(PointerEventData e) => Restore();
 
-        void Release()
+        void Restore()
         {
             if (!_pressed) return;
             _pressed = false;
             _rt.anchoredPosition = _rest;
+            if (_shadow != null) _shadow.effectDistance = _stamp;
         }
     }
 }

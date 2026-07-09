@@ -86,7 +86,9 @@ namespace CubeFly.Build
             barRT.pivot = new Vector2(0.5f, 1f);
             barRT.sizeDelta = new Vector2(0f, 64f);
             barRT.anchoredPosition = Vector2.zero;
-            barGO.GetComponent<Image>().color = CscTheme.PanelFill;
+            Image barImg = barGO.GetComponent<Image>();
+            barImg.color = CscTheme.PanelFill;
+            barImg.raycastTarget = false;   // decorative — don't swallow build clicks
             barGO.transform.SetAsFirstSibling();   // behind the label + dropdown
 
             GameObject inkGO = new GameObject("TopBarInk", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -102,22 +104,27 @@ namespace CubeFly.Build
             inkImg.color = CscPalette.Ink;
             inkImg.raycastTarget = false;
 
-            // Anchored / pivoted middle-left so anchoredPosition reads
-            // as an offset from the screen's left edge at vertical centre.
-            Vector2 midLeft = new Vector2(0f, 0.5f);
+            // CLASS label + dropdown, seated inside the top bar: top-anchored,
+            // vertically centred in the 64px band. anchoredPosition.x still
+            // drives the left margin (its y now reads as the bar centre).
+            Vector2 barLeft = new Vector2(0f, 1f);
+            Vector2 leftPivot = new Vector2(0f, 0.5f);
+            const float barCenterY = -32f;
 
             Text label = UIStyle.BuildLabel(root, "CLASS", fontSize: fontSize, style: FontStyle.Bold, font: CscTheme.CondOr);
             label.alignment = TextAnchor.MiddleLeft;
             label.color = CscPalette.Steel100;
             RectTransform labelRT = (RectTransform)label.transform;
-            labelRT.anchorMin = labelRT.anchorMax = labelRT.pivot = midLeft;
+            labelRT.anchorMin = labelRT.anchorMax = barLeft;
+            labelRT.pivot = leftPivot;
             labelRT.sizeDelta = new Vector2(70f, dropdownSize.y);
-            labelRT.anchoredPosition = anchoredPosition;
+            labelRT.anchoredPosition = new Vector2(anchoredPosition.x, barCenterY);
 
             _dropdown = UIStyle.BuildDropdown(root, dropdownSize, fontSize);
             RectTransform ddRT = (RectTransform)_dropdown.transform;
-            ddRT.anchorMin = ddRT.anchorMax = ddRT.pivot = midLeft;
-            ddRT.anchoredPosition = new Vector2(anchoredPosition.x + 78f, anchoredPosition.y);
+            ddRT.anchorMin = ddRT.anchorMax = barLeft;
+            ddRT.pivot = leftPivot;
+            ddRT.anchoredPosition = new Vector2(anchoredPosition.x + 78f, barCenterY);
         }
     }
 }

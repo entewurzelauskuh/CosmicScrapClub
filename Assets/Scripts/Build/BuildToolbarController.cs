@@ -50,7 +50,6 @@ namespace CubeFly.Build
 
         [Header("Delete button (toolbar)")]
         [SerializeField] string deleteButtonLabel = "Delete";
-        [SerializeField] Color deleteSelectedColor = new Color(0.85f, 0.25f, 0.25f, 0.95f);
 
         [Header("Weapons button (toolbar)")]
         [SerializeField] string weaponsButtonLabel = "Weapons";
@@ -124,9 +123,8 @@ namespace CubeFly.Build
         // state. Empty when the registry has no non-armour shapes.
         readonly List<CategoryFlyout> _categoryFlyouts = new List<CategoryFlyout>();
 
-        static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
-        static readonly Color FlyoutEntryIdle   = new Color(0.18f, 0.18f, 0.22f, 0.95f);
-        static readonly Color FlyoutEntryActive = new Color(0.35f, 0.55f, 0.95f, 0.95f);
+        static readonly Color FlyoutEntryIdle   = CscPalette.HudCard;
+        static readonly Color FlyoutEntryActive = CscPalette.Ochre300;
         static readonly Color PowerPositive     = CscPalette.PowerPositive;
         static readonly Color PowerNegative     = CscPalette.PowerNegative;
 
@@ -443,7 +441,7 @@ namespace CubeFly.Build
             _deleteButton = delBtn;
             _deleteBackground = delBtn.GetComponent<Image>();
             _deleteSelectionOutline = UIStyle.AddSelectionOutline(delBtn.gameObject);
-            UIStyle.DecorateToolbarSlot(delBtn, _ignored, null, null, "Delete");
+            UIStyle.DecorateToolbarSlot(delBtn, _ignored, null, null, deleteButtonLabel);
             GameObject xGO = new GameObject("DeleteX", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
             xGO.transform.SetParent(delBtn.transform, false);
             RectTransform xRT = (RectTransform)xGO.transform;
@@ -451,7 +449,7 @@ namespace CubeFly.Build
             xRT.anchoredPosition = new Vector2(0f, 6f);
             xRT.sizeDelta = new Vector2(40f, 40f);
             Text xT = xGO.GetComponent<Text>();
-            xT.font = CscTheme.DisplayOr;
+            xT.font = CscTheme.CondOr;
             xT.fontSize = 34;
             xT.alignment = TextAnchor.MiddleCenter;
             xT.color = CscPalette.Critical;

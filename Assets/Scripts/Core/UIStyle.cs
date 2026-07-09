@@ -149,10 +149,72 @@ namespace CubeFly.Core
             return Sprite.Create(t, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
         }
 
+        public enum ButtonKind { Ghost, Primary, Danger }
+
+        // Adds/updates a LetterSpacing mesh effect on a legacy Text (pixels per gap).
+        public static void ApplyLetterSpacing(Text t, float spacing)
+        {
+            if (t == null) return;
+            LetterSpacing ls = t.GetComponent<LetterSpacing>();
+            if (ls == null) ls = t.gameObject.AddComponent<LetterSpacing>();
+            ls.Spacing = spacing;
+        }
+
+        // A rounded-rect brand plate: fill + ink border, feathered (AA) edges +
+        // corners via a signed-distance field. For slot cards. Cache at the call site.
+        public static Sprite MakeRoundedPlate(int w, int h, int radius, int border, Color fill, Color ink)
+        {
+            Color[] px = new Color[w * h];
+            const float feather = 1.5f;
+            float halfW = w / 2f, halfH = h / 2f;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float qx = Mathf.Abs(x + 0.5f - halfW) - (halfW - radius);
+                    float qy = Mathf.Abs(y + 0.5f - halfH) - (halfH - radius);
+                    float outside = Mathf.Sqrt(Mathf.Max(qx, 0f) * Mathf.Max(qx, 0f) + Mathf.Max(qy, 0f) * Mathf.Max(qy, 0f));
+                    float inside = Mathf.Min(Mathf.Max(qx, qy), 0f);
+                    float edge = radius - (outside + inside);   // inward distance from the rounded boundary
+                    Color c = Color.Lerp(ink, fill, Mathf.Clamp01((edge - border) / feather));
+                    c.a = Mathf.Clamp01(edge / feather);
+                    px[y * w + x] = c;
+                }
+            Texture2D t = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            t.SetPixels(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        // Anti-aliased diagonal hazard stripes (feathered edges, bilinear) — the
+        // same AA treatment as the title plate, replacing the point-filtered tile.
+        // Tile it (Image.Type.Tiled) with Repeat wrap.
+        public static Sprite MakeHazardStripe(int size, float stripe, Color a, Color b)
+        {
+            Color[] px = new Color[size * size];
+            const float feather = 1.2f;
+            Color mid = Color.Lerp(a, b, 0.5f);
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float m = Mathf.Repeat(x + y, 2f * stripe);
+                    float f = Mathf.Repeat(m, stripe);
+                    float distEdge = Mathf.Min(f, stripe - f);
+                    Color band = m < stripe ? a : b;
+                    float k = Mathf.Clamp01(distEdge / feather);   // 0 at a band edge -> 1 inside
+                    px[y * size + x] = Color.Lerp(mid, band, k);
+                }
+            Texture2D t = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear };
+            t.SetPixels(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
         // Builds a Button + label as a child of `parent`. Caller positions the
         // resulting RectTransform (anchors / anchoredPosition).
         public static (Button button, Text label) BuildLabeledButton(
-            Transform parent, string labelText, Vector2 size, int fontSize = 28, Font font = null, bool bounce = false)
+            Transform parent, string labelText, Vector2 size, int fontSize = 28, Font font = null, bool bounce = false, ButtonKind kind = ButtonKind.Ghost)
         {
             GameObject buttonGO = new GameObject(labelText + "Button",
                 typeof(RectTransform),
@@ -168,6 +230,8 @@ namespace CubeFly.Core
 
             Image bImage = buttonGO.GetComponent<Image>();
             bImage.color = BackgroundIdle;
+            if (kind == ButtonKind.Primary) bImage.color = CscTheme.PrimaryFill;
+            else if (kind == ButtonKind.Danger) bImage.color = CscTheme.DangerFill;
 
             Button button = buttonGO.GetComponent<Button>();
             ColorBlock cb = button.colors;
@@ -201,8 +265,11 @@ namespace CubeFly.Core
             text.font = font ?? CscTheme.CondOr;
             text.alignment = TextAnchor.MiddleCenter;
             text.fontSize = fontSize;
-            text.color = LabelColor;
-            text.text = labelText;
+            text.text = labelText.ToUpperInvariant();
+            text.color = kind == ButtonKind.Primary ? CscTheme.TextOnLight
+                       : kind == ButtonKind.Danger  ? Color.white
+                       : LabelColor;
+            ApplyLetterSpacing(text, fontSize * 0.05f);
             text.raycastTarget = false;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
@@ -545,7 +612,7 @@ namespace CubeFly.Core
         }
 
         public static Text BuildLabel(
-            Transform parent, string text, int fontSize, FontStyle style = FontStyle.Normal, Font font = null)
+            Transform parent, string text, int fontSize, FontStyle style = FontStyle.Normal, Font font = null, bool upper = false)
         {
             GameObject labelGO = new GameObject(text + "Label",
                 typeof(RectTransform),
@@ -560,7 +627,7 @@ namespace CubeFly.Core
             t.fontSize = fontSize;
             t.fontStyle = style;
             t.color = LabelColor;
-            t.text = text;
+            t.text = upper ? text.ToUpperInvariant() : text;
             t.raycastTarget = false;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Overflow;

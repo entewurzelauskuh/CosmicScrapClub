@@ -127,8 +127,8 @@ namespace CubeFly.Build
         static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
         static readonly Color FlyoutEntryIdle   = new Color(0.18f, 0.18f, 0.22f, 0.95f);
         static readonly Color FlyoutEntryActive = new Color(0.35f, 0.55f, 0.95f, 0.95f);
-        static readonly Color PowerPositive     = new Color(0.4f, 1f, 0.5f, 1f);
-        static readonly Color PowerNegative     = new Color(1f, 0.4f, 0.35f, 1f);
+        static readonly Color PowerPositive     = CscPalette.PowerPositive;
+        static readonly Color PowerNegative     = CscPalette.PowerNegative;
 
         void Start()
         {
@@ -442,6 +442,9 @@ namespace CubeFly.Build
 
             // ---- Bottom-left stat labels ----
             _massLabel = UIStyle.BuildLabel(root, "Mass: 0 / 100", fontSize: statFontSize);
+            _massLabel.font = CscTheme.CondOr;
+            _massLabel.supportRichText = true;
+            _massLabel.color = CscPalette.Sand100;
             _massLabel.alignment = TextAnchor.LowerLeft;
             RectTransform massRT = (RectTransform)_massLabel.transform;
             massRT.anchorMin = massRT.anchorMax = massRT.pivot = new Vector2(0f, 0f);
@@ -449,6 +452,9 @@ namespace CubeFly.Build
             massRT.sizeDelta = statLabelSize;
 
             _hpLabel = UIStyle.BuildLabel(root, "HP: 0", fontSize: statFontSize);
+            _hpLabel.font = CscTheme.CondOr;
+            _hpLabel.supportRichText = true;
+            _hpLabel.color = CscPalette.PowerPositive;
             _hpLabel.alignment = TextAnchor.LowerLeft;
             RectTransform hpRT = (RectTransform)_hpLabel.transform;
             hpRT.anchorMin = hpRT.anchorMax = hpRT.pivot = new Vector2(0f, 0f);
@@ -456,6 +462,7 @@ namespace CubeFly.Build
             hpRT.sizeDelta = statLabelSize;
 
             _powerLabel = UIStyle.BuildLabel(root, "Power: +0", fontSize: statFontSize);
+            _powerLabel.font = CscTheme.CondOr;
             _powerLabel.alignment = TextAnchor.LowerLeft;
             RectTransform powerRT = (RectTransform)_powerLabel.transform;
             powerRT.anchorMin = powerRT.anchorMax = powerRT.pivot = new Vector2(0f, 0f);
@@ -545,6 +552,7 @@ namespace CubeFly.Build
                 (Button btn, Text label) = UIStyle.BuildLabeledButton(frt, $"{title}\n<size={Mathf.Max(10, fontSize - 8)}>{statLine}</size>", flyoutEntrySize, fontSize);
                 label.supportRichText = true;
                 label.alignment = TextAnchor.MiddleLeft;
+                label.color = CscPalette.Sand100;
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
                 // Stack bottom-up: entry 0 sits at y=0 (closest to the
@@ -928,9 +936,12 @@ namespace CubeFly.Build
             float mass = buildManager.ComputeCurrentMass();
             float hp   = buildManager.ComputeCurrentHealthPoints();
             if (_massLabel != null)
-                _massLabel.text = $"Mass: {mass:F1} / {buildManager.MassLimit:F0}";
+                _massLabel.text = $"MASS <size={statFontSize + 12}>{mass:F0}</size> / {buildManager.MassLimit:F0}";
             if (_hpLabel != null)
-                _hpLabel.text = $"HP: {hp:F0}";
+            {
+                _hpLabel.text = $"HP <size={statFontSize + 12}>{hp:F0}</size>";
+                _hpLabel.color = CscPalette.PowerPositive;
+            }
             if (_powerLabel != null)
             {
                 float net = buildManager.ComputeCurrentNetPower(out bool hasPower);

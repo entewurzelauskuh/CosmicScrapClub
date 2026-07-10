@@ -64,7 +64,8 @@ namespace CubeFly.Fly
         {
             if (_label == null || _construct == null) return;
             float current = SumCubeHp();
-            _label.text = $"HP: {current:F0} / {_maxHp:F0}";
+            _label.text = $"HP <size={fontSize + 12}>{current:F0}</size> / {_maxHp:F0}";
+            _label.color = (_maxHp > 0f && current < 0.25f * _maxHp) ? CscPalette.Critical : CscPalette.Label;
         }
 
         // Direct child iteration only. Cubes that have already died and
@@ -89,6 +90,8 @@ namespace CubeFly.Fly
 
             _label = UIStyle.BuildLabel(canvasRoot, "HP: -- / --", fontSize: fontSize);
             _label.alignment = TextAnchor.MiddleLeft;
+            _label.font = CscTheme.CondOr;
+            _label.supportRichText = true;
             RectTransform rt = (RectTransform)_label.transform;
             // Anchor and pivot bottom-left so anchoredPosition reads as
             // an offset from the screen's bottom-left corner.

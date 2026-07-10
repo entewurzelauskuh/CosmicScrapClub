@@ -22,17 +22,16 @@ namespace CubeFly.Fly
         [SerializeField] Vector2 powerLabelAnchoredPosition = new Vector2(20f, 122f);
         [SerializeField] int powerFontSize = 18;
 
-        [Header("Colours")]
-        [SerializeField] Color shieldFillColor = new Color(0.3f, 0.8f, 1f, 0.95f);
-        [SerializeField] Color shieldFrameColor = new Color(0.05f, 0.12f, 0.16f, 0.85f);
-        [SerializeField] Color shieldDownColor = new Color(0.4f, 0.4f, 0.45f, 0.6f);
-        [SerializeField] Color powerPositiveColor = new Color(0.4f, 1f, 0.5f, 1f);
-        [SerializeField] Color powerNegativeColor = new Color(1f, 0.4f, 0.35f, 1f);
+        Color shieldFillColor = new Color(CscPalette.Shield.r, CscPalette.Shield.g, CscPalette.Shield.b, 0.95f);
+        Color shieldFrameColor = CscPalette.HudPanel;
+        Color shieldDownColor = new Color(CscPalette.ShieldDown.r, CscPalette.ShieldDown.g, CscPalette.ShieldDown.b, 0.6f);
+        Color powerPositiveColor = CscPalette.PowerPositive;
+        Color powerNegativeColor = CscPalette.PowerNegative;
 
         [Header("Eject hint (top-left)")]
         [SerializeField] Vector2 ejectHintAnchoredPosition = new Vector2(20f, -20f);
         [SerializeField] int ejectHintFontSize = 22;
-        [SerializeField] Color ejectHintColor = new Color(1f, 0.55f, 0.2f, 1f);
+        Color ejectHintColor = CscPalette.PowerNegative;
 
         ConstructEnergySystem _energy;
         RectTransform _frame;
@@ -40,6 +39,7 @@ namespace CubeFly.Fly
         Image _fillImage;
         Text _powerLabel;
         Text _ejectHint;
+        UIPulse _ejectHintPulse;
 
         const string TAG = "FlyShield";
 
@@ -60,7 +60,9 @@ namespace CubeFly.Fly
             if (_frame != null && _frame.gameObject.activeSelf != hasShield)
                 _frame.gameObject.SetActive(hasShield);
             if (_powerLabel != null) _powerLabel.enabled = hasPower;
-            if (_ejectHint != null) _ejectHint.enabled = _energy != null && _energy.CanEject;
+            bool canEject = _energy != null && _energy.CanEject;
+            if (_ejectHint != null) _ejectHint.enabled = canEject;
+            if (_ejectHintPulse != null) _ejectHintPulse.enabled = canEject;
             if (!hasPower) return;
 
             if (hasShield)
@@ -72,7 +74,7 @@ namespace CubeFly.Fly
             }
 
             float net = _energy.NetPower;
-            _powerLabel.text = $"Power: {(net >= 0f ? "+" : "")}{net:F0}";
+            _powerLabel.text = $"POWER: {(net >= 0f ? "+" : "")}{net:F0}";
             _powerLabel.color = net >= 0f ? powerPositiveColor : powerNegativeColor;
         }
 
@@ -93,6 +95,7 @@ namespace CubeFly.Fly
             Image frameImg = frameGO.GetComponent<Image>();
             frameImg.color = shieldFrameColor;
             frameImg.raycastTarget = false;
+            CscTheme.AddToonOutline(frameGO);
 
             // Fill — left-anchored child so width = fraction shrinks from the right.
             GameObject fillGO = new GameObject("ShieldBarFill",
@@ -108,8 +111,10 @@ namespace CubeFly.Fly
             _fillImage.raycastTarget = false;
 
             // Power readout label.
-            _powerLabel = UIStyle.BuildLabel(root, "Power: +0", fontSize: powerFontSize);
+            _powerLabel = UIStyle.BuildLabel(root, "POWER: +0", fontSize: powerFontSize);
             _powerLabel.alignment = TextAnchor.LowerLeft;
+            _powerLabel.font = CscTheme.CondOr;
+            _powerLabel.supportRichText = true;
             RectTransform plRT = (RectTransform)_powerLabel.transform;
             plRT.anchorMin = plRT.anchorMax = plRT.pivot = new Vector2(0f, 0f);
             plRT.sizeDelta = new Vector2(220f, 28f);
@@ -117,7 +122,7 @@ namespace CubeFly.Fly
 
             // "Eject: P" hint, top-left. Shown only while CanEject (all
             // reactors lost but power-drawing cubes remain) — see Update.
-            _ejectHint = UIStyle.BuildLabel(root, "Eject: P", ejectHintFontSize, FontStyle.Bold);
+            _ejectHint = UIStyle.BuildLabel(root, "EJECT: P", ejectHintFontSize, FontStyle.Bold);
             _ejectHint.color = ejectHintColor;
             _ejectHint.alignment = TextAnchor.UpperLeft;
             RectTransform ehRT = (RectTransform)_ejectHint.transform;
@@ -125,6 +130,10 @@ namespace CubeFly.Fly
             ehRT.sizeDelta = new Vector2(260f, 36f);
             ehRT.anchoredPosition = ejectHintAnchoredPosition;
             _ejectHint.enabled = false;
+            // Pulse red while shown — same red + pulse as the hangar POWER
+            // readout in a deficit (see BuildToolbarController / UIPulse).
+            _ejectHintPulse = _ejectHint.gameObject.AddComponent<UIPulse>();
+            _ejectHintPulse.enabled = false;
         }
     }
 }

@@ -261,11 +261,14 @@ namespace CubeFly.Core
             bgImage.raycastTarget = true;
 
             // Title.
-            Text title = UIStyle.BuildLabel(root, "Paused", fontSize: 96, style: FontStyle.Bold);
+            Text title = UIStyle.BuildLabel(root, "Paused", fontSize: 96, style: FontStyle.Bold, font: CscTheme.DisplayOr);
+            title.alignment = TextAnchor.MiddleCenter;
             RectTransform trt = (RectTransform)title.transform;
-            trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0.5f, 0.5f);
-            trt.sizeDelta = new Vector2(800f, 160f);
-            trt.anchoredPosition = new Vector2(0f, 140f);
+            trt.anchorMin = trt.anchorMax = new Vector2(0f, 1f);   // anchor to the top-left corner
+            trt.pivot = new Vector2(0.5f, 0.5f);
+            trt.sizeDelta = new Vector2(520f, 150f);
+            trt.anchoredPosition = new Vector2(280f, -200f);       // margins from top + left (tune to taste)
+            trt.localEulerAngles = new Vector3(0f, 0f, 30f);       // ~30° counter-clockwise, like the wordmark
 
             // Buttons stacked below the title. Same dimensions as the
             // MainMenu buttons to keep the visual language consistent.

@@ -194,7 +194,7 @@ namespace CubeFly.Core
 
             // Title at top of frame.
             Text title = UIStyle.BuildLabel(frameRT, "Settings", fontSize: 48,
-                style: FontStyle.Bold);
+                style: FontStyle.Bold, font: CscTheme.DisplayOr);
             RectTransform titleRT = (RectTransform)title.transform;
             titleRT.anchorMin = new Vector2(0f, 1f);
             titleRT.anchorMax = new Vector2(1f, 1f);
@@ -327,7 +327,7 @@ namespace CubeFly.Core
         {
             // Section title spans the full content width.
             Text title = UIStyle.BuildLabel(parent, "VFX Toggles", fontSize: 28,
-                style: FontStyle.Bold);
+                style: FontStyle.Bold, font: CscTheme.DisplayOr);
             RectTransform titleRT = (RectTransform)title.transform;
             titleRT.anchorMin = new Vector2(0f, 1f);
             titleRT.anchorMax = new Vector2(1f, 1f);

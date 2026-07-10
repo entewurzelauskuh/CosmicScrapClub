@@ -62,7 +62,7 @@ namespace CubeFly.Fly
             // be resolved (clean checkout without TagManager.asset imported),
             // hit everything except Ignore Raycast so the projectile
             // doesn't silently no-op.
-            _hitLayerMask = LayerMask.GetMask("PlacedCube", "AlphaCube");
+            _hitLayerMask = LayerMask.GetMask("PlacedCube", "AlphaCube", "World");
             if (_hitLayerMask == 0)
             {
                 int ignoreRaycast = 1 << LayerMask.NameToLayer("Ignore Raycast");

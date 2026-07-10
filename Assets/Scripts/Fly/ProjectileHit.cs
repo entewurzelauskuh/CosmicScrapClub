@@ -94,8 +94,11 @@ namespace CubeFly.Fly
             CubeStats stats = hit.collider.GetComponentInParent<CubeStats>();
             if (stats == null)
             {
-                Debug.unityLogger.LogWarning(projectileTag,
-                    $"Hit '{hit.collider.name}' but no CubeStats found — damage dropped.");
+                // World-layer terrain legitimately has no CubeStats (non-breakable);
+                // only a cube-layer object missing its stats is a real misconfiguration.
+                if (hit.collider.gameObject.layer != LayerMask.NameToLayer("World"))
+                    Debug.unityLogger.LogWarning(projectileTag,
+                        $"Hit '{hit.collider.name}' but no CubeStats found — damage dropped.");
                 return;
             }
 

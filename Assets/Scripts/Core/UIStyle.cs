@@ -15,28 +15,12 @@ namespace CubeFly.Core
     // TMP Essential Resources) so a default TMP_FontAsset exists at runtime.
     internal static class UIStyle
     {
-        public static readonly Color BackgroundIdle = new Color(0.13f, 0.13f, 0.18f, 0.9f);
-        public static readonly Color TintNormal     = Color.white;
-        public static readonly Color TintHighlight  = new Color(0.85f, 0.85f, 1f, 1f);
-        public static readonly Color TintPressed    = new Color(0.55f, 0.55f, 0.7f, 1f);
-        public static readonly Color TintDisabled   = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-        public static readonly Color LabelColor     = Color.white;
-
-        static Font _builtinFont;
-        static Font BuiltinFont
-        {
-            get
-            {
-                if (_builtinFont == null)
-                {
-                    // Unity 6.x ships LegacyRuntime.ttf as the default UI font.
-                    // Older versions exposed Arial.ttf; try both for safety.
-                    _builtinFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                                   ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-                }
-                return _builtinFont;
-            }
-        }
+        public static readonly Color BackgroundIdle = CscPalette.BackgroundIdle;
+        public static readonly Color TintNormal     = CscPalette.TintNormal;
+        public static readonly Color TintHighlight  = CscPalette.TintHighlight;
+        public static readonly Color TintPressed    = CscPalette.TintPressed;
+        public static readonly Color TintDisabled   = CscPalette.TintDisabled;
+        public static readonly Color LabelColor     = CscPalette.Label;
 
         public static Canvas BuildScreenSpaceCanvas(string name, int sortingOrder = 100)
         {
@@ -76,10 +60,161 @@ namespace CubeFly.Core
             Object.DontDestroyOnLoad(es);
         }
 
+        // Full-screen warm brand background: a procedural radial ochre->rust
+        // gradient + a faint diagonal overlay, inserted behind all other UI.
+        // Textures are generated in code (no asset / no Resources) so this static
+        // builder needs nothing external. Reused across menu surfaces (B3a-c).
+        static Texture2D _gradientTex, _hazardTex;
+
+        public static void BuildBrandBackground(RectTransform canvasRoot)
+        {
+            // Generate the brand textures once per session (shared by every menu
+            // surface) instead of regenerating on each menu (re)build.
+            if (_gradientTex == null)
+                _gradientTex = MakeRadialGradient(256, CscPalette.Ochre300, CscPalette.Brown900);
+            if (_hazardTex == null)
+                _hazardTex = MakeDiagonalStripes(32, CscPalette.Scorch);
+            AddFullScreenRaw(canvasRoot, "BrandGradient", _gradientTex, 1f, new Vector2(1f, 1f));
+            AddFullScreenRaw(canvasRoot, "BrandHazardOverlay", _hazardTex, 0.06f, new Vector2(24f, 14f));
+        }
+
+        static void AddFullScreenRaw(RectTransform parent, string name, Texture2D tex,
+            float alpha, Vector2 tiling)
+        {
+            int uiLayer = LayerMask.NameToLayer("UI");
+            GameObject go = new GameObject(name,
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            if (uiLayer >= 0) go.layer = uiLayer;
+            RectTransform rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            RawImage img = go.GetComponent<RawImage>();
+            img.texture = tex;
+            img.color = new Color(1f, 1f, 1f, alpha);
+            img.uvRect = new Rect(0f, 0f, tiling.x, tiling.y);
+            img.raycastTarget = false;
+            // Background layers are added before any menu content, and the
+            // gradient before the overlay, so natural sibling order already
+            // draws them back-to-front behind the UI. (An earlier SetAsFirstSibling
+            // here inverted the two layers and hid the overlay under the gradient.)
+        }
+
+        static Texture2D MakeRadialGradient(int size, Color center, Color edge)
+        {
+            Texture2D t = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp };
+            float c = (size - 1) / 2f, maxR = Mathf.Sqrt(2f) * c;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Clamp01(Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / maxR);
+                    t.SetPixel(x, y, Color.Lerp(center, edge, d * d));
+                }
+            t.Apply();
+            return t;
+        }
+
+        static Texture2D MakeDiagonalStripes(int size, Color line)
+        {
+            Texture2D t = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Repeat };
+            Color clear = new Color(line.r, line.g, line.b, 0f);
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                    t.SetPixel(x, y, ((x + y) % 16 < 2) ? line : clear);
+            t.Apply();
+            return t;
+        }
+
+        // A brand plate sprite: fill + ink border with feathered (anti-aliased)
+        // edges, so a *rotated* plate renders without staircase aliasing (uGUI
+        // Screen-Space-Overlay has no MSAA). Generate once and cache at the call site.
+        public static Sprite MakePlateSprite(int w, int h, int border, Color fill, Color ink)
+        {
+            Color[] px = new Color[w * h];
+            const float feather = 1.5f;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float edge = Mathf.Min(Mathf.Min(x, w - 1 - x), Mathf.Min(y, h - 1 - y));
+                    Color c = Color.Lerp(ink, fill, Mathf.Clamp01((edge - border) / feather));
+                    c.a = Mathf.Clamp01(edge / feather);   // feathered outer edge
+                    px[y * w + x] = c;
+                }
+            Texture2D t = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            t.SetPixels(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        public enum ButtonKind { Ghost, Primary, Danger }
+
+        // Adds/updates a LetterSpacing mesh effect on a legacy Text (pixels per gap).
+        public static void ApplyLetterSpacing(Text t, float spacing)
+        {
+            if (t == null) return;
+            LetterSpacing ls = t.GetComponent<LetterSpacing>();
+            if (ls == null) ls = t.gameObject.AddComponent<LetterSpacing>();
+            ls.Spacing = spacing;
+        }
+
+        // A rounded-rect brand plate: fill + ink border, feathered (AA) edges +
+        // corners via a signed-distance field. For slot cards. Cache at the call site.
+        public static Sprite MakeRoundedPlate(int w, int h, int radius, int border, Color fill, Color ink)
+        {
+            Color[] px = new Color[w * h];
+            const float feather = 1.5f;
+            float halfW = w / 2f, halfH = h / 2f;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float qx = Mathf.Abs(x + 0.5f - halfW) - (halfW - radius);
+                    float qy = Mathf.Abs(y + 0.5f - halfH) - (halfH - radius);
+                    float outside = Mathf.Sqrt(Mathf.Max(qx, 0f) * Mathf.Max(qx, 0f) + Mathf.Max(qy, 0f) * Mathf.Max(qy, 0f));
+                    float inside = Mathf.Min(Mathf.Max(qx, qy), 0f);
+                    float edge = radius - (outside + inside);   // inward distance from the rounded boundary
+                    Color c = Color.Lerp(ink, fill, Mathf.Clamp01((edge - border) / feather));
+                    c.a = Mathf.Clamp01(edge / feather);
+                    px[y * w + x] = c;
+                }
+            Texture2D t = new Texture2D(w, h, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            t.SetPixels(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        // Anti-aliased diagonal hazard stripes (feathered edges, bilinear) — the
+        // same AA treatment as the title plate, replacing the point-filtered tile.
+        // Tile it (Image.Type.Tiled) with Repeat wrap.
+        public static Sprite MakeHazardStripe(int size, float stripe, Color a, Color b)
+        {
+            Color[] px = new Color[size * size];
+            const float feather = 1.2f;
+            Color mid = Color.Lerp(a, b, 0.5f);
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float m = Mathf.Repeat(x + y, 2f * stripe);
+                    float f = Mathf.Repeat(m, stripe);
+                    float distEdge = Mathf.Min(f, stripe - f);
+                    Color band = m < stripe ? a : b;
+                    float k = Mathf.Clamp01(distEdge / feather);   // 0 at a band edge -> 1 inside
+                    px[y * size + x] = Color.Lerp(mid, band, k);
+                }
+            Texture2D t = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear };
+            t.SetPixels(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
         // Builds a Button + label as a child of `parent`. Caller positions the
         // resulting RectTransform (anchors / anchoredPosition).
         public static (Button button, Text label) BuildLabeledButton(
-            Transform parent, string labelText, Vector2 size, int fontSize = 28)
+            Transform parent, string labelText, Vector2 size, int fontSize = 28, Font font = null, bool bounce = false, ButtonKind kind = ButtonKind.Ghost)
         {
             GameObject buttonGO = new GameObject(labelText + "Button",
                 typeof(RectTransform),
@@ -95,6 +230,8 @@ namespace CubeFly.Core
 
             Image bImage = buttonGO.GetComponent<Image>();
             bImage.color = BackgroundIdle;
+            if (kind == ButtonKind.Primary) bImage.color = CscTheme.PrimaryFill;
+            else if (kind == ButtonKind.Danger) bImage.color = CscTheme.DangerFill;
 
             Button button = buttonGO.GetComponent<Button>();
             ColorBlock cb = button.colors;
@@ -107,6 +244,10 @@ namespace CubeFly.Core
             cb.fadeDuration     = 0.1f;
             button.colors = cb;
             button.targetGraphic = bImage;
+
+            // Signature 2px ink outline on the button fill (render effect — no layout change).
+            CscTheme.AddToonOutline(buttonGO);
+            if (bounce) buttonGO.AddComponent<UIClickBounce>();
 
             GameObject labelGO = new GameObject("Label",
                 typeof(RectTransform),
@@ -121,16 +262,210 @@ namespace CubeFly.Core
             lrt.offsetMax = Vector2.zero;
 
             Text text = labelGO.AddComponent<Text>();
-            text.font = BuiltinFont;
+            text.font = font ?? CscTheme.CondOr;
             text.alignment = TextAnchor.MiddleCenter;
             text.fontSize = fontSize;
-            text.color = LabelColor;
-            text.text = labelText;
+            text.text = labelText.Contains("<") ? labelText : labelText.ToUpperInvariant();   // don't uppercase rich-text markup (legacy Text tags are case-sensitive)
+            text.color = kind == ButtonKind.Primary ? CscTheme.TextOnLight
+                       : kind == ButtonKind.Danger  ? Color.white
+                       : LabelColor;
+            ApplyLetterSpacing(text, fontSize * 0.05f);
             text.raycastTarget = false;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
 
             return (button, text);
+        }
+
+        // Restyles a BuildLabeledButton result into a brand toolbar slot: the
+        // existing label drops to a small bottom caption, a number badge sits
+        // top-left, and a centered glyph Image fills the middle. Returns the
+        // glyph Image so callers can swap its sprite later (e.g. the cube slot
+        // tracking the armed material). glyph == null leaves the image hidden.
+        public static Image DecorateToolbarSlot(Button slot, Text label, Sprite glyph, string number, string caption)
+        {
+            int uiLayer = LayerMask.NameToLayer("UI");
+            RectTransform slotRT = (RectTransform)slot.transform;
+
+            // Bottom caption — reuse the label the button already carries.
+            label.text = string.IsNullOrEmpty(caption) ? string.Empty : caption.ToUpperInvariant();
+            label.font = CscTheme.CondOr;
+            label.fontSize = 14;
+            label.color = CscPalette.Sand100;
+            label.alignment = TextAnchor.LowerCenter;
+            RectTransform lrt = (RectTransform)label.transform;
+            lrt.anchorMin = new Vector2(0f, 0f);
+            lrt.anchorMax = new Vector2(1f, 0f);
+            lrt.pivot = new Vector2(0.5f, 0f);
+            lrt.offsetMin = new Vector2(2f, 4f);
+            lrt.offsetMax = new Vector2(-2f, 18f);
+
+            // Centered glyph.
+            GameObject glyphGO = new GameObject("Glyph", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            glyphGO.transform.SetParent(slotRT, false);
+            if (uiLayer >= 0) glyphGO.layer = uiLayer;
+            RectTransform grt = (RectTransform)glyphGO.transform;
+            grt.anchorMin = grt.anchorMax = grt.pivot = new Vector2(0.5f, 0.5f);
+            grt.anchoredPosition = new Vector2(0f, 6f);   // nudged up to clear the caption
+            grt.sizeDelta = new Vector2(40f, 40f);
+            Image glyphImg = glyphGO.GetComponent<Image>();
+            glyphImg.sprite = glyph;
+            glyphImg.color = Color.white;
+            glyphImg.preserveAspect = true;
+            glyphImg.raycastTarget = false;
+            glyphImg.enabled = glyph != null;
+
+            // Number badge, top-left.
+            GameObject badgeGO = new GameObject("Badge", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            badgeGO.transform.SetParent(slotRT, false);
+            if (uiLayer >= 0) badgeGO.layer = uiLayer;
+            RectTransform brt = (RectTransform)badgeGO.transform;
+            brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0f, 1f);
+            brt.anchoredPosition = new Vector2(4f, -4f);
+            brt.sizeDelta = new Vector2(18f, 16f);
+            Text badge = badgeGO.GetComponent<Text>();
+            badge.font = CscTheme.CondOr;
+            badge.fontSize = 13;
+            badge.color = CscPalette.Steel300;
+            badge.alignment = TextAnchor.UpperLeft;
+            badge.raycastTarget = false;
+            badge.text = number ?? string.Empty;
+
+            return glyphImg;
+        }
+
+        // Vertical layout of a split flyout entry (title row, gap, stat row).
+        // FlyoutEntryHeight and SplitEntryText share these so the computed entry
+        // height always fits the stacked text with no overlap. FlyoutRightInset
+        // keeps both rows clear of the entry's colour swatch on the right.
+        const float FlyoutTopMargin = 6f, FlyoutBottomMargin = 6f, FlyoutRowGap = 5f, FlyoutRightInset = 40f;
+
+        // Height a split flyout entry needs for a given title font size:
+        // top margin + title line + gap + stat line + bottom margin.
+        public static float FlyoutEntryHeight(int fontSize)
+        {
+            int statSize = Mathf.Max(10, fontSize - 8);
+            return FlyoutTopMargin + (fontSize + 4f) + FlyoutRowGap + (statSize + 4f) + FlyoutBottomMargin;
+        }
+
+        // Splits a flyout entry's single label into a TITLE row and a STAT row
+        // stacked from the top with a fixed gap between them (so they never
+        // overlap), both inset on the right to clear the entry's colour swatch.
+        // `leftInset` clears an optional entry glyph. Reuses the button's
+        // existing label as the title; returns the new stat Text. Pair with
+        // FlyoutEntryHeight so the entry is tall enough for both rows.
+        public static Text SplitEntryText(Text titleLabel, string title, string statLine,
+            int fontSize, float leftInset)
+        {
+            int statSize = Mathf.Max(10, fontSize - 8);
+            float titleH = fontSize + 4f;
+            float statH = statSize + 4f;
+
+            // Title → top row.
+            titleLabel.text = title;
+            titleLabel.supportRichText = true;
+            titleLabel.alignment = TextAnchor.UpperLeft;
+            titleLabel.fontSize = fontSize;
+            titleLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            titleLabel.verticalOverflow = VerticalWrapMode.Overflow;
+            RectTransform trt = (RectTransform)titleLabel.transform;
+            trt.anchorMin = new Vector2(0f, 1f);
+            trt.anchorMax = new Vector2(1f, 1f);
+            trt.pivot = new Vector2(0.5f, 1f);
+            trt.offsetMax = new Vector2(-FlyoutRightInset, -FlyoutTopMargin);
+            trt.offsetMin = new Vector2(leftInset, -(FlyoutTopMargin + titleH));
+
+            // Stat → row below the title, separated by FlyoutRowGap.
+            GameObject sGO = new GameObject("EntryStats", typeof(RectTransform), typeof(CanvasRenderer));
+            sGO.transform.SetParent(titleLabel.transform.parent, false);
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0) sGO.layer = uiLayer;
+            Text stat = sGO.AddComponent<Text>();
+            stat.font = CscTheme.BodyOr;
+            stat.fontSize = statSize;
+            stat.color = CscPalette.Sand100;
+            stat.alignment = TextAnchor.UpperLeft;
+            stat.supportRichText = true;
+            stat.raycastTarget = false;
+            stat.horizontalOverflow = HorizontalWrapMode.Overflow;
+            stat.verticalOverflow = VerticalWrapMode.Overflow;
+            stat.text = statLine;
+            RectTransform srt = (RectTransform)stat.transform;
+            srt.anchorMin = new Vector2(0f, 1f);
+            srt.anchorMax = new Vector2(1f, 1f);
+            srt.pivot = new Vector2(0.5f, 1f);
+            srt.offsetMax = new Vector2(-FlyoutRightInset, -(FlyoutTopMargin + titleH + FlyoutRowGap));
+            srt.offsetMin = new Vector2(leftInset, -(FlyoutTopMargin + titleH + FlyoutRowGap + statH));
+            return stat;
+        }
+
+        // Adds a disabled ochre selection Outline (distinct from the ink toon
+        // outline BuildLabeledButton already carries). Toggle .enabled to show
+        // the "selected" ring. Returns it so the caller can keep the ref.
+        public static Outline AddSelectionOutline(GameObject go)
+        {
+            Outline o = go.AddComponent<Outline>();
+            o.effectColor = CscPalette.Ochre300;
+            o.effectDistance = new Vector2(3f, -3f);
+            o.enabled = false;
+            return o;
+        }
+
+        // ---- Procedural lightning-bolt glyph (font-independent) ----
+        // A white, tintable bolt sprite for HUD "no power" marks etc. Cached —
+        // one texture shared by every user (tint via Image.color).
+        static Sprite _boltSprite;
+        public static Sprite BoltSprite()
+        {
+            if (_boltSprite == null) _boltSprite = MakeBoltSprite(64);
+            return _boltSprite;
+        }
+
+        // Rasterise a filled lightning-bolt polygon into an RGBA sprite (white,
+        // transparent outside). 2×2 supersampled for cheap edge anti-aliasing.
+        static Sprite MakeBoltSprite(int size)
+        {
+            // Normalised bolt outline (y up), a classic zig-zag flash.
+            Vector2[] poly =
+            {
+                new Vector2(0.60f, 1.00f),
+                new Vector2(0.12f, 0.46f),
+                new Vector2(0.44f, 0.46f),
+                new Vector2(0.30f, 0.00f),
+                new Vector2(0.88f, 0.56f),
+                new Vector2(0.56f, 0.56f),
+            };
+            Texture2D t = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            Color[] px = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    int inside = 0;
+                    for (int sy = 0; sy < 2; sy++)
+                        for (int sx = 0; sx < 2; sx++)
+                        {
+                            float u = (x + 0.25f + sx * 0.5f) / size;
+                            float v = (y + 0.25f + sy * 0.5f) / size;
+                            if (PointInPoly(u, v, poly)) inside++;
+                        }
+                    px[y * size + x] = new Color(1f, 1f, 1f, inside / 4f);
+                }
+            t.SetPixels(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        static bool PointInPoly(float x, float y, Vector2[] p)
+        {
+            bool inside = false;
+            for (int i = 0, j = p.Length - 1; i < p.Length; j = i++)
+            {
+                if (((p[i].y > y) != (p[j].y > y)) &&
+                    (x < (p[j].x - p[i].x) * (y - p[i].y) / (p[j].y - p[i].y) + p[i].x))
+                    inside = !inside;
+            }
+            return inside;
         }
 
         // Builds a legacy uGUI Dropdown as a child of `parent`, with the
@@ -192,14 +527,13 @@ namespace CubeFly.Core
             bgImage.color = BackgroundIdle;
             toggle.targetGraphic = bgImage;
 
-            // 1-pixel white outline so the checkbox stays visually
-            // distinct against any background (modal panel, tab
-            // content). Unity's Outline replicates the mesh in four
-            // diagonal offsets, producing a uniform outline at the
-            // configured effectDistance regardless of the box's tint
-            // or the checkmark state.
+            // 1-pixel Ink outline (the brand toon edge) on the checkbox
+            // box. Unity's Outline replicates the mesh in four diagonal
+            // offsets, producing a uniform outline at the configured
+            // effectDistance regardless of the box's tint or the
+            // checkmark state.
             Outline bgOutline = bgGO.AddComponent<Outline>();
-            bgOutline.effectColor = Color.white;
+            bgOutline.effectColor = CscTheme.OutlineColor;
             bgOutline.effectDistance = new Vector2(1f, 1f);
 
             // Checkmark — child of Background, shown when Toggle.isOn.
@@ -213,7 +547,7 @@ namespace CubeFly.Core
             chkRT.offsetMin = new Vector2(6f, 6f);
             chkRT.offsetMax = new Vector2(-6f, -6f);
             Image checkImage = checkGO.GetComponent<Image>();
-            checkImage.color = TintHighlight;
+            checkImage.color = new Color(0.85f, 0.85f, 1f);   // bright checkmark, decoupled from the darkened hover tint
             toggle.graphic = checkImage;
 
             // Label — text to the right of the box, fills remaining width.
@@ -227,7 +561,7 @@ namespace CubeFly.Core
             lrt.offsetMin = new Vector2(40f, 0f);
             lrt.offsetMax = new Vector2(0f, 0f);
             Text label = labelGO.AddComponent<Text>();
-            label.font = BuiltinFont;
+            label.font = CscTheme.CondOr;
             label.alignment = TextAnchor.MiddleLeft;
             label.fontSize = fontSize;
             label.color = LabelColor;
@@ -249,6 +583,7 @@ namespace CubeFly.Core
             ((RectTransform)rootGO.transform).sizeDelta = size;
             Image rootImage = rootGO.GetComponent<Image>();
             rootImage.color = BackgroundIdle;
+            CscTheme.AddToonOutline(rootGO);   // branded ink border on the dropdown control
 
             Dropdown dropdown = rootGO.GetComponent<Dropdown>();
             ColorBlock cb = dropdown.colors;
@@ -329,7 +664,7 @@ namespace CubeFly.Core
             checkRT.anchorMax = new Vector2(0f, 0.5f);
             checkRT.sizeDelta = new Vector2(14f, 14f);
             checkRT.anchoredPosition = new Vector2(12f, 0f);
-            itemCheckGO.GetComponent<Image>().color = TintHighlight;
+            itemCheckGO.GetComponent<Image>().color = new Color(0.85f, 0.85f, 1f);   // bright checkmark, decoupled from the hover tint
 
             Text itemText = MakeText(itemGO.transform, "Item Label", fontSize, uiLayer);
             RectTransform itemTextRT = (RectTransform)itemText.transform;
@@ -341,6 +676,17 @@ namespace CubeFly.Core
             Toggle itemToggle = itemGO.GetComponent<Toggle>();
             itemToggle.targetGraphic = itemBgGO.GetComponent<Image>();
             itemToggle.graphic = itemCheckGO.GetComponent<Image>();
+            // Brand the option rows: idle from the ColorBlock, hover/selected ochre.
+            itemBgGO.GetComponent<Image>().color = Color.white;
+            ColorBlock itemColors = itemToggle.colors;
+            itemColors.normalColor      = BackgroundIdle;
+            itemColors.highlightedColor = CscPalette.Ochre300;
+            itemColors.pressedColor     = CscPalette.Ochre500;
+            itemColors.selectedColor    = CscPalette.Ochre300;
+            itemColors.disabledColor    = TintDisabled;
+            itemColors.colorMultiplier  = 1f;
+            itemColors.fadeDuration     = 0.1f;
+            itemToggle.colors = itemColors;
             itemToggle.isOn = true;
 
             ScrollRect scroll = templateGO.GetComponent<ScrollRect>();
@@ -369,7 +715,7 @@ namespace CubeFly.Core
             go.transform.SetParent(parent, false);
             if (uiLayer >= 0) go.layer = uiLayer;
             Text t = go.AddComponent<Text>();
-            t.font = BuiltinFont;
+            t.font = CscTheme.CondOr;
             t.fontSize = fontSize;
             t.color = LabelColor;
             t.alignment = TextAnchor.MiddleLeft;
@@ -388,7 +734,7 @@ namespace CubeFly.Core
         }
 
         public static Text BuildLabel(
-            Transform parent, string text, int fontSize, FontStyle style = FontStyle.Normal)
+            Transform parent, string text, int fontSize, FontStyle style = FontStyle.Normal, Font font = null, bool upper = false)
         {
             GameObject labelGO = new GameObject(text + "Label",
                 typeof(RectTransform),
@@ -398,12 +744,12 @@ namespace CubeFly.Core
             if (uiLayer >= 0) labelGO.layer = uiLayer;
 
             Text t = labelGO.AddComponent<Text>();
-            t.font = BuiltinFont;
+            t.font = font ?? CscTheme.BodyOr;
             t.alignment = TextAnchor.MiddleCenter;
             t.fontSize = fontSize;
             t.fontStyle = style;
             t.color = LabelColor;
-            t.text = text;
+            t.text = upper ? text.ToUpperInvariant() : text;
             t.raycastTarget = false;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Overflow;

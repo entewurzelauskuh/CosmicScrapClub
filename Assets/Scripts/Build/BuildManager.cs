@@ -254,6 +254,7 @@ namespace CubeFly.Build
         void Start()
         {
             if (buildCamera == null) buildCamera = Camera.main;
+            ConfigureHangarLighting();
             if (preview == null)
             {
                 preview = GetComponent<CubePreview>();
@@ -317,13 +318,14 @@ namespace CubeFly.Build
         public float ComputeCurrentMass()         => SumStat(s => s.mass);
         public float ComputeCurrentHealthPoints() => SumStat(s => s.healthPoints);
 
-        // Net power = Σ(reactor Output) − Σ(shield Draw) across the spawned
-        // placed cubes, mirroring SumStat's instance walk. hasPowerCubes is
-        // false when the construct carries no reactor / shield cubes, so the
-        // build HUD can hide the readout entirely. The flight-side
-        // ConstructEnergySystem owns the live balance; this is the build
-        // preview of the same arithmetic so the player gets power feedback
-        // while building.
+        // Net power = Σ(reactor Output) − Σ(shield Draw + laser PowerDraw)
+        // across the spawned placed cubes, mirroring SumStat's instance walk.
+        // hasPowerCubes is false only when the construct carries no reactor /
+        // shield / laser cube, so the build HUD hides the readout entirely.
+        // NOTE: unlike flight's ConstructEnergySystem.NetPower (which excludes
+        // weapon draw — lasers are contended at fire time), the build preview
+        // folds laser draw in as a worst-case "can everything run at once?"
+        // budget check, so a laser without enough reactor reads negative.
         public float ComputeCurrentNetPower(out bool hasPowerCubes)
         {
             float output = 0f;
@@ -336,9 +338,28 @@ namespace CubeFly.Build
                 if (r != null) { output += r.Output; any = true; }
                 ShieldBehavior s = kv.Value.GetComponent<ShieldBehavior>();
                 if (s != null) { draw += s.Draw; any = true; }
+                LaserWeapon l = kv.Value.GetComponent<LaserWeapon>();
+                if (l != null) { draw += l.PowerDraw; any = true; }
             }
             hasPowerCubes = any;
             return output - draw;
+        }
+
+        // Flat, shadowless hangar lighting: every cube face lit evenly from all
+        // sides regardless of orientation or overshadowing (a build/inspection
+        // look). Runtime-only + scene-local — the BuildScene<->FlyScene Single
+        // loads reset RenderSettings, so this never leaks into the desert's cel
+        // lighting.
+        void ConfigureHangarLighting()
+        {
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.78f, 0.76f, 0.72f);   // bright warm neutral
+            foreach (Light light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+            {
+                if (light.type != LightType.Directional) continue;
+                light.shadows = LightShadows.None;   // kill cast shadows / overshadowing
+                light.intensity = 0.25f;             // faint key for edge form; ambient dominates
+            }
         }
 
         void EnsureAlphaCube()

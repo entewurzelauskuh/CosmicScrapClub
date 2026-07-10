@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 namespace CubeFly.HangarSelect
 {
@@ -39,9 +40,12 @@ namespace CubeFly.HangarSelect
 
         // Per-card state. Built once in Awake; rebuilt cosmetically
         // when a slot's data changes (delete).
+        static Sprite _cardSprite;   // rounded card plate, session-cached
+
         class SlotCard
         {
             public int Slot;
+            public float CardWidth;
             public RectTransform Root;
             public Text TitleLabel;
             public Text BodyLabel;          // shows stats / empty hint
@@ -103,8 +107,11 @@ namespace CubeFly.HangarSelect
             Canvas canvas = UIStyle.BuildScreenSpaceCanvas("HangarSelectCanvas", sortingOrder: 200);
             RectTransform root = (RectTransform)canvas.transform;
 
+            UIStyle.BuildBrandBackground(root);
+
             // Title — centred above the cards.
-            Text title = UIStyle.BuildLabel(root, "Choose a Slot", fontSize: 72, style: FontStyle.Bold);
+            Text title = UIStyle.BuildLabel(root, "Choose a Slot", fontSize: 72, style: FontStyle.Bold, font: CscTheme.DisplayOr, upper: true);
+            title.color = CscPalette.Sand100;
             RectTransform trt = (RectTransform)title.transform;
             trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0.5f, 0.5f);
             trt.sizeDelta = new Vector2(900f, 120f);
@@ -124,11 +131,12 @@ namespace CubeFly.HangarSelect
 
             // Cancel button — bottom-centre.
             (Button cancelButton, Text _) = UIStyle.BuildLabeledButton(
-                root, "Cancel", new Vector2(220f, 64f), fontSize: 28);
+                root, "Cancel", new Vector2(220f, 64f), fontSize: 28, bounce: true);
             RectTransform crtc = (RectTransform)cancelButton.transform;
             crtc.anchorMin = crtc.anchorMax = crtc.pivot = new Vector2(0.5f, 0.5f);
             crtc.anchoredPosition = new Vector2(0f, -(cardSize.y / 2f + 80f) + cardYOffset);
             cancelButton.onClick.AddListener(OnCancel);
+            CscTheme.AddToonShadow(cancelButton.gameObject, 6f);
         }
 
         SlotCard BuildCard(RectTransform parent, int slot)
@@ -143,12 +151,20 @@ namespace CubeFly.HangarSelect
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = cardSize;
             Image bg = rootGO.GetComponent<Image>();
-            bg.color = new Color(0.10f, 0.10f, 0.14f, 0.92f);
+            if (_cardSprite == null)
+                _cardSprite = UIStyle.MakeRoundedPlate((int)cardSize.x, (int)cardSize.y, 14, 3, CscTheme.CardFill, CscPalette.Ink);
+            bg.sprite = _cardSprite;
+            bg.color = Color.white;
+            bg.type = Image.Type.Simple;
             bg.raycastTarget = false; // clicks pass through to inner buttons
             card.Root = rt;
+            card.CardWidth = cardSize.x;
+            CscTheme.AddToonShadow(rootGO, 6f);   // rounded sprite bakes the ink border
 
             // Title (top of card).
-            Text title = UIStyle.BuildLabel(rt, $"Slot {slot + 1}", fontSize: 32, style: FontStyle.Bold);
+            Text title = UIStyle.BuildLabel(rt, $"Slot {slot + 1}", fontSize: 32, style: FontStyle.Bold, font: CscTheme.DisplayOr, upper: true);
+            title.color = CscPalette.Ochre300;
+            UIStyle.ApplyLetterSpacing(title, 32f * 0.05f);
             RectTransform titleRT = (RectTransform)title.transform;
             titleRT.anchorMin = titleRT.anchorMax = titleRT.pivot = new Vector2(0.5f, 1f);
             titleRT.sizeDelta = new Vector2(cardSize.x - 32f, 48f);
@@ -159,7 +175,9 @@ namespace CubeFly.HangarSelect
             // holds the four-line filled-slot body (class / cubes·mass /
             // HP / last-edited) with clearance above the Continue button.
             Text body = UIStyle.BuildLabel(rt, string.Empty, fontSize: 22);
+            body.color = CscPalette.Sand100;
             body.alignment = TextAnchor.UpperCenter;
+            body.supportRichText = true;   // the filled-slot "last edited" line uses a <color> tag — be explicit (matches CategoryFlyout / BuildToolbarController) rather than leaning on Unity's default
             RectTransform bodyRT = (RectTransform)body.transform;
             bodyRT.anchorMin = bodyRT.anchorMax = bodyRT.pivot = new Vector2(0.5f, 1f);
             bodyRT.sizeDelta = new Vector2(cardSize.x - 32f, 170f);
@@ -168,35 +186,48 @@ namespace CubeFly.HangarSelect
 
             // Primary button — "Start new" / "Continue".
             (Button primary, Text primaryLabel) = UIStyle.BuildLabeledButton(
-                rt, "—", new Vector2(cardSize.x - 80f, 56f), fontSize: 26);
+                rt, "—", new Vector2(cardSize.x - 80f, 56f), fontSize: 26, bounce: true, kind: UIStyle.ButtonKind.Primary);
             RectTransform prt = (RectTransform)primary.transform;
             prt.anchorMin = prt.anchorMax = prt.pivot = new Vector2(0.5f, 0f);
             prt.anchoredPosition = new Vector2(0f, 84f);
             primary.onClick.AddListener(() => ActivateSlot(slot));
             card.PrimaryButton = primary;
             card.PrimaryLabel = primaryLabel;
+            CscTheme.AddToonShadow(primary.gameObject, 6f);
 
             // Delete button (initially hidden; revealed when slot has data).
             (Button del, Text delLabel) = UIStyle.BuildLabeledButton(
-                rt, "Delete", new Vector2((cardSize.x - 80f) / 2f - 4f, 44f), fontSize: 20);
+                rt, "Delete", new Vector2(cardSize.x - 80f, 44f), fontSize: 20, bounce: true);
             RectTransform delRT = (RectTransform)del.transform;
             delRT.anchorMin = delRT.anchorMax = delRT.pivot = new Vector2(0.5f, 0f);
-            delRT.anchoredPosition = new Vector2(-(cardSize.x - 80f) / 4f - 2f, 24f);
+            delRT.anchoredPosition = new Vector2(0f, 24f);
             del.onClick.AddListener(() => OnDeletePressed(slot));
             del.gameObject.SetActive(false);
             card.DeleteButton = del;
             card.DeleteLabel = delLabel;
+            CscTheme.AddToonShadow(del.gameObject, 6f);
+
+            // Hover → red outline + text (danger affordance), only while not confirming.
+            Outline delOutline = del.GetComponent<Outline>();
+            EventTrigger delTrig = del.gameObject.AddComponent<EventTrigger>();
+            EventTrigger.Entry delEnter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            delEnter.callback.AddListener(_ => { if (card.DeleteConfirming) return; if (delOutline != null) { delOutline.effectColor = CscPalette.Critical; delOutline.effectDistance = new Vector2(1f, -1f); } delLabel.color = CscPalette.Critical; });
+            EventTrigger.Entry delExit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+            delExit.callback.AddListener(_ => { if (card.DeleteConfirming) return; if (delOutline != null) { delOutline.effectColor = CscTheme.OutlineColor; delOutline.effectDistance = new Vector2(2f, -2f); } delLabel.color = CscPalette.Label; });
+            delTrig.triggers.Add(delEnter);
+            delTrig.triggers.Add(delExit);
 
             // Inline-confirm cancel button — shown only during the confirm window.
             (Button delCancel, Text delCancelLabel) = UIStyle.BuildLabeledButton(
-                rt, "Cancel", new Vector2((cardSize.x - 80f) / 2f - 4f, 44f), fontSize: 20);
+                rt, "Cancel", new Vector2((cardSize.x - 80f) / 2f - 6f, 44f), fontSize: 20, bounce: true);
             RectTransform delCancelRT = (RectTransform)delCancel.transform;
             delCancelRT.anchorMin = delCancelRT.anchorMax = delCancelRT.pivot = new Vector2(0.5f, 0f);
-            delCancelRT.anchoredPosition = new Vector2((cardSize.x - 80f) / 4f + 2f, 24f);
+            delCancelRT.anchoredPosition = new Vector2((cardSize.x - 80f) / 4f + 3f, 24f);
             delCancel.onClick.AddListener(() => OnDeleteCancel(slot));
             delCancel.gameObject.SetActive(false);
             card.DeleteCancelButton = delCancel;
             card.DeleteCancelLabel = delCancelLabel;
+            CscTheme.AddToonShadow(delCancel.gameObject, 6f);
 
             return card;
         }
@@ -224,12 +255,12 @@ namespace CubeFly.HangarSelect
             CancelDeleteConfirm(card);
 
             card.IsEmpty = info.IsEmpty;
-            card.TitleLabel.text = info.Name;
+            card.TitleLabel.text = (info.Name ?? string.Empty).ToUpperInvariant();
 
             if (info.IsEmpty)
             {
                 card.BodyLabel.text = "<empty>";
-                card.PrimaryLabel.text = "Start new construct";
+                card.PrimaryLabel.text = "START NEW CONSTRUCT";
                 card.DeleteButton.gameObject.SetActive(false);
             }
             else
@@ -241,8 +272,8 @@ namespace CubeFly.HangarSelect
                     $"{ShipClasses.DisplayName(info.ShipClass)}\n" +
                     $"{info.CubeCount} cube{(info.CubeCount == 1 ? string.Empty : "s")}  ·  Mass {info.TotalMass:F1}\n" +
                     $"HP {info.TotalHealthPoints:F0}\n" +
-                    $"{when}";
-                card.PrimaryLabel.text = "Continue";
+                    $"<color=#7E776C>{when}</color>";
+                card.PrimaryLabel.text = "CONTINUE";
                 card.DeleteButton.gameObject.SetActive(true);
             }
         }
@@ -318,7 +349,15 @@ namespace CubeFly.HangarSelect
         void EnterDeleteConfirm(SlotCard card)
         {
             card.DeleteConfirming = true;
-            card.DeleteLabel.text = "Yes, delete";
+            float dw = card.CardWidth - 80f;
+            RectTransform delCRT = (RectTransform)card.DeleteButton.transform;
+            delCRT.sizeDelta = new Vector2(dw / 2f - 6f, 44f);
+            delCRT.anchoredPosition = new Vector2(-(dw / 4f + 3f), 24f);
+            card.DeleteButton.image.color = CscTheme.DangerFill;
+            card.DeleteLabel.color = Color.white;
+            Outline delCO = card.DeleteButton.GetComponent<Outline>();
+            if (delCO != null) { delCO.effectColor = CscTheme.OutlineColor; delCO.effectDistance = new Vector2(2f, -2f); }
+            card.DeleteLabel.text = "YES, DELETE";
             card.DeleteCancelButton.gameObject.SetActive(true);
             // Auto-cancel after the timeout to avoid a stuck confirm state.
             if (card.ConfirmTimeoutRoutine != null) StopCoroutine(card.ConfirmTimeoutRoutine);
@@ -339,7 +378,15 @@ namespace CubeFly.HangarSelect
                 card.ConfirmTimeoutRoutine = null;
             }
             card.DeleteConfirming = false;
-            card.DeleteLabel.text = "Delete";
+            float dwr = card.CardWidth - 80f;
+            RectTransform delRRT = (RectTransform)card.DeleteButton.transform;
+            delRRT.sizeDelta = new Vector2(dwr, 44f);
+            delRRT.anchoredPosition = new Vector2(0f, 24f);
+            card.DeleteButton.image.color = UIStyle.BackgroundIdle;
+            card.DeleteLabel.color = CscPalette.Label;
+            Outline delRO = card.DeleteButton.GetComponent<Outline>();
+            if (delRO != null) { delRO.effectColor = CscTheme.OutlineColor; delRO.effectDistance = new Vector2(2f, -2f); }
+            card.DeleteLabel.text = "DELETE";
             card.DeleteCancelButton.gameObject.SetActive(false);
         }
 

@@ -50,16 +50,18 @@ namespace CubeFly.Build
 
         [Header("Delete button (toolbar)")]
         [SerializeField] string deleteButtonLabel = "Delete";
-        [SerializeField] Color deleteSelectedColor = new Color(0.85f, 0.25f, 0.25f, 0.95f);
 
         [Header("Weapons button (toolbar)")]
         [SerializeField] string weaponsButtonLabel = "Weapons";
 
         [Header("Stat labels (bottom-left)")]
         [SerializeField] int statFontSize = 20;
-        [SerializeField] Vector2 massLabelAnchoredPosition = new Vector2(20f, 60f);
-        [SerializeField] Vector2 powerLabelAnchoredPosition = new Vector2(20f, 92f);
-        [SerializeField] Vector2 hpLabelAnchoredPosition = new Vector2(20f, 28f);
+        // Not [SerializeField]: the bottom-left stat column is positioned from
+        // code so the scene's stale serialized values don't override the layout.
+        // Even 40px spacing, lifted + inset a touch so the big values don't cram.
+        Vector2 massLabelAnchoredPosition = new Vector2(24f, 74f);
+        Vector2 powerLabelAnchoredPosition = new Vector2(24f, 114f);
+        Vector2 hpLabelAnchoredPosition = new Vector2(24f, 34f);
         [SerializeField] Vector2 statLabelSize = new Vector2(260f, 28f);
 
         [Header("Selected-cube stat label (bottom-left, right of Mass/HP)")]
@@ -78,12 +80,16 @@ namespace CubeFly.Build
         Button[] _shapeButtons;
         Image[] _shapeBackgrounds;
         Image[] _shapeSwatches;
+        Image[] _shapeGlyphs;
+        Outline[] _shapeSelectionOutlines;
+        Outline _deleteSelectionOutline;
         // Slot-ordered list of ShapeRegistry indices for armour shapes
         // only (i.e. the on-screen toolbar slot order). Digit shortcut
         // [i] maps to _armourShapeIndices[i], independent of where the
         // shape sits in the registry — important when weapons aren't
         // all at the end of ShapeRegistry.
         int[] _armourShapeIndices;
+        static Sprite _hazardSprite;   // AA hazard trim, session-cached
 
         // Cached so Update() doesn't allocate a fresh Key[] every frame.
         static readonly Key[] DigitKeys =
@@ -96,6 +102,7 @@ namespace CubeFly.Build
         Text _massLabel;
         Text _hpLabel;
         Text _powerLabel;
+        UIPulse _powerPulse;          // pulses the power label while in deficit
         Text _selectedStatsLabel;
         Text _floatingMessage;
         Coroutine _floatingRoutine;
@@ -121,11 +128,10 @@ namespace CubeFly.Build
         // state. Empty when the registry has no non-armour shapes.
         readonly List<CategoryFlyout> _categoryFlyouts = new List<CategoryFlyout>();
 
-        static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
-        static readonly Color FlyoutEntryIdle   = new Color(0.18f, 0.18f, 0.22f, 0.95f);
-        static readonly Color FlyoutEntryActive = new Color(0.35f, 0.55f, 0.95f, 0.95f);
-        static readonly Color PowerPositive     = new Color(0.4f, 1f, 0.5f, 1f);
-        static readonly Color PowerNegative     = new Color(1f, 0.4f, 0.35f, 1f);
+        static readonly Color FlyoutEntryIdle   = CscPalette.HudCard;
+        static readonly Color FlyoutEntryActive = CscPalette.Ochre300;
+        static readonly Color PowerPositive     = CscPalette.PowerPositive;
+        static readonly Color PowerNegative     = CscPalette.PowerNegative;
 
         void Start()
         {
@@ -271,12 +277,38 @@ namespace CubeFly.Build
             RectTransform root = BuildHud.Instance.Root;
             _canvasRect = root;
 
+            // Brand slots: square 72x72 with tighter spacing (overrides the
+            // serialized 160x60 — keeps the restyle code-only, no scene edit).
+            buttonSize = new Vector2(72f, 72f);
+            spacing = 8f;
+            bottomMargin = 44f;   // lift the toolbar clear of the 28px hazard band
+
+            // Hazard-stripe trim along the floor, behind the toolbar slots.
+            GameObject hazGO = new GameObject("HazardTrim", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            hazGO.transform.SetParent(root, false);
+            int hazLayer = LayerMask.NameToLayer("UI");
+            if (hazLayer >= 0) hazGO.layer = hazLayer;
+            RectTransform hazRT = (RectTransform)hazGO.transform;
+            hazRT.anchorMin = new Vector2(0f, 0f);
+            hazRT.anchorMax = new Vector2(1f, 0f);
+            hazRT.pivot = new Vector2(0.5f, 0f);
+            hazRT.sizeDelta = new Vector2(0f, 28f);
+            hazRT.anchoredPosition = Vector2.zero;
+            Image haz = hazGO.GetComponent<Image>();
+            if (_hazardSprite == null)
+                _hazardSprite = UIStyle.MakeHazardStripe(80, 10f, CscPalette.HazardYellow, CscPalette.HazardStripe);   // 80 = 4x the 20px diagonal period → seamless tiling
+            haz.sprite = _hazardSprite;
+            haz.type = Image.Type.Tiled;
+            haz.raycastTarget = false;
+            haz.enabled = haz.sprite != null;
+            hazGO.transform.SetAsFirstSibling();   // behind the slots
+
             // Top-left rotation hint.
             Text hint = UIStyle.BuildLabel(root, hintText, fontSize: hintFontSize);
             hint.alignment = TextAnchor.UpperLeft;
             RectTransform hrt = (RectTransform)hint.transform;
             hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0f, 1f);
-            hrt.anchoredPosition = hintAnchoredPosition;
+            hrt.anchoredPosition = new Vector2(hintAnchoredPosition.x, -80f);   // below the 64px top bar
             hrt.sizeDelta = hintSize;
 
             // Top-center transient message label.
@@ -307,6 +339,8 @@ namespace CubeFly.Build
             _shapeButtons = new Button[totalShapes];
             _shapeBackgrounds = new Image[totalShapes];
             _shapeSwatches = new Image[totalShapes];
+            _shapeGlyphs = new Image[totalShapes];
+            _shapeSelectionOutlines = new Outline[totalShapes];
 
             // Partition the registry into armour shapes and the
             // non-armour categories. Each non-armour category keeps its
@@ -351,7 +385,11 @@ namespace CubeFly.Build
                 ShapeDefinition def = shapes.Get(i);
                 string label = def != null ? def.displayName : $"Shape #{i}";
 
-                (Button btn, Text _) = UIStyle.BuildLabeledButton(root, label, buttonSize, fontSize);
+                (Button btn, Text lbl) = UIStyle.BuildLabeledButton(root, label, buttonSize, fontSize);
+                int armedMat = buildManager != null ? buildManager.GetMaterialForShape(i) : 0;
+                Sprite glyph = def != null ? CscSprites.ForShape(def.displayName, armedMat) : null;
+                _shapeGlyphs[i] = UIStyle.DecorateToolbarSlot(btn, lbl, glyph, (a + 1).ToString(), label);
+                _shapeSelectionOutlines[i] = UIStyle.AddSelectionOutline(btn.gameObject);
                 RectTransform rt = (RectTransform)btn.transform;
                 rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0f);
                 rt.anchoredPosition = new Vector2(startX + slot * (buttonSize.x + spacing), bottomMargin);
@@ -361,6 +399,7 @@ namespace CubeFly.Build
                 AddPointerHandlers(btn.gameObject, idx);
 
                 Image swatch = BuildCornerSwatch(rt);
+                swatch.enabled = false;   // glyph now conveys the armed material
                 _shapeSwatches[i] = swatch;
 
                 _shapeButtons[i] = btn;
@@ -409,9 +448,24 @@ namespace CubeFly.Build
             delBtn.onClick.AddListener(() => buildManager.SetCurrentTool(BuildTool.Delete));
             _deleteButton = delBtn;
             _deleteBackground = delBtn.GetComponent<Image>();
+            _deleteSelectionOutline = UIStyle.AddSelectionOutline(delBtn.gameObject);
+            UIStyle.DecorateToolbarSlot(delBtn, _ignored, null, null, deleteButtonLabel);
+            // Build via UIStyle.BuildLabel so the glyph gets Overflow wrap modes:
+            // the previous hand-rolled Text defaulted to verticalOverflow=Truncate,
+            // so a 34pt glyph clipped out of its 40px rect and rendered nothing
+            // (✕ or X alike — the earlier "missing glyph" diagnosis was wrong).
+            Text xT = UIStyle.BuildLabel(delBtn.transform, "X", 34, FontStyle.Bold, CscTheme.CondOr);
+            RectTransform xRT = (RectTransform)xT.transform;
+            xRT.anchorMin = xRT.anchorMax = xRT.pivot = new Vector2(0.5f, 0.5f);
+            xRT.anchoredPosition = new Vector2(0f, 6f);
+            xRT.sizeDelta = new Vector2(40f, 40f);
+            xT.color = CscPalette.Critical;
 
             // ---- Bottom-left stat labels ----
             _massLabel = UIStyle.BuildLabel(root, "Mass: 0 / 100", fontSize: statFontSize);
+            _massLabel.font = CscTheme.CondOr;
+            _massLabel.supportRichText = true;
+            _massLabel.color = CscPalette.Sand100;
             _massLabel.alignment = TextAnchor.LowerLeft;
             RectTransform massRT = (RectTransform)_massLabel.transform;
             massRT.anchorMin = massRT.anchorMax = massRT.pivot = new Vector2(0f, 0f);
@@ -419,6 +473,9 @@ namespace CubeFly.Build
             massRT.sizeDelta = statLabelSize;
 
             _hpLabel = UIStyle.BuildLabel(root, "HP: 0", fontSize: statFontSize);
+            _hpLabel.font = CscTheme.CondOr;
+            _hpLabel.supportRichText = true;
+            _hpLabel.color = CscPalette.PowerPositive;
             _hpLabel.alignment = TextAnchor.LowerLeft;
             RectTransform hpRT = (RectTransform)_hpLabel.transform;
             hpRT.anchorMin = hpRT.anchorMax = hpRT.pivot = new Vector2(0f, 0f);
@@ -426,12 +483,16 @@ namespace CubeFly.Build
             hpRT.sizeDelta = statLabelSize;
 
             _powerLabel = UIStyle.BuildLabel(root, "Power: +0", fontSize: statFontSize);
+            _powerLabel.font = CscTheme.CondOr;
+            _powerLabel.supportRichText = true;
             _powerLabel.alignment = TextAnchor.LowerLeft;
             RectTransform powerRT = (RectTransform)_powerLabel.transform;
             powerRT.anchorMin = powerRT.anchorMax = powerRT.pivot = new Vector2(0f, 0f);
             powerRT.anchoredPosition = powerLabelAnchoredPosition;
             powerRT.sizeDelta = statLabelSize;
             _powerLabel.enabled = false;
+            _powerPulse = _powerLabel.gameObject.AddComponent<UIPulse>();
+            _powerPulse.enabled = false;
 
             _selectedStatsLabel = UIStyle.BuildLabel(root, string.Empty, fontSize: statFontSize);
             _selectedStatsLabel.alignment = TextAnchor.LowerLeft;
@@ -493,11 +554,16 @@ namespace CubeFly.Build
             _flyoutButtons = new Button[count];
             _flyoutBackgrounds = new Image[count];
 
+            // Entry size derived in code: width +5%, height sized to the stacked
+            // title + stat rows (see UIStyle.SplitEntryText).
+            Vector2 entrySize = new Vector2(
+                flyoutEntrySize.x * 1.05f, UIStyle.FlyoutEntryHeight(fontSize));
+
             _flyout = new GameObject("MaterialFlyout", typeof(RectTransform), typeof(CanvasGroup));
             RectTransform frt = (RectTransform)_flyout.transform;
             frt.SetParent(canvas, false);
             frt.anchorMin = frt.anchorMax = frt.pivot = new Vector2(0.5f, 0f);
-            frt.sizeDelta = new Vector2(flyoutEntrySize.x, count * flyoutEntrySize.y + Mathf.Max(0, count - 1) * flyoutEntrySpacing);
+            frt.sizeDelta = new Vector2(entrySize.x, count * entrySize.y + Mathf.Max(0, count - 1) * flyoutEntrySpacing);
 
             _flyoutGroup = _flyout.GetComponent<CanvasGroup>();
             _flyoutGroup.interactable = true;
@@ -512,19 +578,20 @@ namespace CubeFly.Build
                     ? $"HP {mdef.healthPoints:F0}  ·  AV {mdef.armourValue:F0}  ·  M {mdef.mass:F1}"
                     : "—";
 
-                (Button btn, Text label) = UIStyle.BuildLabeledButton(frt, $"{title}\n<size={Mathf.Max(10, fontSize - 8)}>{statLine}</size>", flyoutEntrySize, fontSize);
-                label.supportRichText = true;
-                label.alignment = TextAnchor.MiddleLeft;
+                (Button btn, Text label) = UIStyle.BuildLabeledButton(frt, title, entrySize, fontSize);
+                // Top-anchored title + bottom-anchored stats so the text clears
+                // the entry's top/bottom edges (material flyout has no glyph).
+                UIStyle.SplitEntryText(label, title, statLine, fontSize, 8f);
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
                 // Stack bottom-up: entry 0 sits at y=0 (closest to the
                 // shape button below the flyout); each subsequent
                 // entry stacks above it. Pivot at (0.5, 0) makes y
                 // the distance from the flyout root's bottom edge.
-                float y = i * (flyoutEntrySize.y + flyoutEntrySpacing);
+                float y = i * (entrySize.y + flyoutEntrySpacing);
                 brt.anchoredPosition = new Vector2(0f, y);
 
-                // Coloured swatch on the left side of each entry.
+                // Coloured swatch on the right side of each entry.
                 Image swatch = BuildEntrySwatch(brt, mdef != null ? mdef.SwatchColor : Color.gray);
 
                 btn.onClick.AddListener(() => OnFlyoutEntryClicked(idx));
@@ -801,10 +868,10 @@ namespace CubeFly.Build
             {
                 for (int i = 0; i < _shapeBackgrounds.Length; i++)
                 {
-                    if (_shapeBackgrounds[i] == null) continue;
-                    _shapeBackgrounds[i].color = (!deleteActive && !weaponActive && i == activeIdx)
-                        ? SelectedTypeColor
-                        : UIStyle.BackgroundIdle;
+                    if (_shapeBackgrounds[i] != null)
+                        _shapeBackgrounds[i].color = CscTheme.CardFill;   // dark slot, always
+                    if (_shapeSelectionOutlines != null && _shapeSelectionOutlines[i] != null)
+                        _shapeSelectionOutlines[i].enabled = (!deleteActive && !weaponActive && i == activeIdx);
                 }
             }
             // Each category button gets the same selected highlight as
@@ -813,7 +880,9 @@ namespace CubeFly.Build
             for (int i = 0; i < _categoryFlyouts.Count; i++)
                 _categoryFlyouts[i].RefreshButtonHighlight();
             if (_deleteBackground != null)
-                _deleteBackground.color = deleteActive ? deleteSelectedColor : UIStyle.BackgroundIdle;
+                _deleteBackground.color = CscTheme.CardFill;
+            if (_deleteSelectionOutline != null)
+                _deleteSelectionOutline.enabled = deleteActive;
         }
 
         // Refresh the corner swatch on every shape button to reflect
@@ -837,6 +906,16 @@ namespace CubeFly.Build
             int mIdx = buildManager.GetMaterialForShape(shapeIndex);
             MaterialDefinition mdef = mats.Get(mIdx);
             _shapeSwatches[shapeIndex].color = mdef != null ? mdef.SwatchColor : Color.gray;
+            if (_shapeGlyphs != null && shapeIndex < _shapeGlyphs.Length && _shapeGlyphs[shapeIndex] != null)
+            {
+                ShapeDefinition sdef = buildManager.Shapes != null ? buildManager.Shapes.Get(shapeIndex) : null;
+                Sprite g = sdef != null ? CscSprites.ForShape(sdef.displayName, mIdx) : null;
+                if (g != null)
+                {
+                    _shapeGlyphs[shapeIndex].sprite = g;
+                    _shapeGlyphs[shapeIndex].enabled = true;
+                }
+            }
         }
 
         // ---------- Bottom-left stat readouts ----------
@@ -886,18 +965,24 @@ namespace CubeFly.Build
             float mass = buildManager.ComputeCurrentMass();
             float hp   = buildManager.ComputeCurrentHealthPoints();
             if (_massLabel != null)
-                _massLabel.text = $"Mass: {mass:F1} / {buildManager.MassLimit:F0}";
+                _massLabel.text = $"MASS: <size={statFontSize + 12}>{mass:F0}</size> / {buildManager.MassLimit:F0}";
             if (_hpLabel != null)
-                _hpLabel.text = $"HP: {hp:F0}";
+            {
+                _hpLabel.text = $"HP: <size={statFontSize + 12}>{hp:F0}</size>";
+                _hpLabel.color = CscPalette.PowerPositive;
+            }
             if (_powerLabel != null)
             {
                 float net = buildManager.ComputeCurrentNetPower(out bool hasPower);
                 _powerLabel.enabled = hasPower;
                 if (hasPower)
                 {
-                    _powerLabel.text = $"Power: {(net >= 0f ? "+" : "")}{net:F0}";
+                    _powerLabel.text = $"POWER: <size={statFontSize + 12}>{(net >= 0f ? "+" : "")}{net:F0}</size>";
                     _powerLabel.color = net >= 0f ? PowerPositive : PowerNegative;
                 }
+                // Pulse the readout only while in deficit (net < 0) to flag that
+                // the construct can't sustain everything attached.
+                if (_powerPulse != null) _powerPulse.enabled = hasPower && net < 0f;
             }
         }
 

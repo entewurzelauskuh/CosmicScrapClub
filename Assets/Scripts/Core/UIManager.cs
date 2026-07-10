@@ -101,14 +101,18 @@ namespace CubeFly.Core
         void BuildButton()
         {
             (Button button, Text label) = UIStyle.BuildLabeledButton(
-                PersistentHud.Instance.Root, "Fly!", new Vector2(220f, 64f), fontSize: 28);
+                PersistentHud.Instance.Root, "Fly!", new Vector2(200f, 44f), fontSize: 28);
 
             RectTransform brt = (RectTransform)button.transform;
             brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(1f, 1f);
-            brt.anchoredPosition = new Vector2(-20f, -20f);
+            brt.anchoredPosition = new Vector2(-20f, -10f);   // fit inside the 64px top bar with margins
 
             _sceneSwitchButton = button;
             _buttonLabel = label;
+
+            // Orange-red CTA (Orange600 isn't a semantic role — recolor directly).
+            button.image.color = CscPalette.Orange600;
+            label.color = Color.white;
         }
     }
 }

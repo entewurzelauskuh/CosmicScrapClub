@@ -1,3 +1,4 @@
+using System.Collections;
 using CubeFly.Core;
 using UnityEngine;
 using UnityEngine.UI;
@@ -20,27 +21,18 @@ namespace CubeFly.Fly
     {
         [SerializeField] FlyShootingController shootingController;
 
+        Vector2 buttonSize = new Vector2(64f, 64f);
         [Header("Layout")]
-        [SerializeField] Vector2 buttonSize = new Vector2(160f, 60f);
         [SerializeField] float spacing = 16f;
         [SerializeField] float bottomMargin = 30f;
         [SerializeField] int fontSize = 22;
 
-        [Header("Reload bar")]
-        [SerializeField] Vector2 reloadBarSize = new Vector2(140f, 6f);
-        [SerializeField] float reloadBarGap = 6f;
-        [SerializeField] Color reloadBarBackground = new Color(0f, 0f, 0f, 0.6f);
+        Vector2 reloadBarSize = new Vector2(54f, 4f);
+        // Reload-track backing: HudPanel hue at the original 0.6 alpha (spec alpha-preserve).
+        Color reloadBarBackground = new Color(CscPalette.HudPanel.r, CscPalette.HudPanel.g, CscPalette.HudPanel.b, 0.6f);
 
-        [Header("Corner swatch")]
-        [SerializeField] Vector2 swatchSize = new Vector2(18f, 18f);
-
+        Color deathMarkColor = CscPalette.Critical;
         [Header("Death response")]
-        [Tooltip("Background color of a fully-dead weapon type's button.")]
-        [SerializeField] Color deadColor = new Color(0.32f, 0.32f, 0.34f, 0.9f);
-        [Tooltip("Color of the partial-death corner mark (the X glyph).")]
-        [SerializeField] Color deathMarkColor = new Color(0.95f, 0.2f, 0.2f, 1f);
-        [Tooltip("Size of the partial-death corner mark, in UI units.")]
-        [SerializeField] Vector2 deathMarkSize = new Vector2(16f, 16f);
         [Tooltip("Period of the partial-death mark's alpha pulse, in seconds.")]
         [SerializeField] float deathMarkPulseSeconds = 0.9f;
         [Tooltip("Minimum alpha at the dim end of the partial-death mark pulse.")]
@@ -56,10 +48,13 @@ namespace CubeFly.Fly
         Button[] _buttons;
         Image[] _buttonBackgrounds;
         Image[] _reloadBars;          // foreground fill (per-type colored)
-        Image[] _swatches;
         Text[] _deathMarks;           // partial-death X mark, per button
+        Outline[] _selectionOutlines; // ochre selection ring, per button
+        CanvasGroup[] _canvasGroups;  // dead-dim group, per button
+        Image[] _boltMarks;           // "no power" bolt glyph, per button (top-right)
 
-        static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
+        Text _noPowerFlash;           // centre-screen "No Power!" flash (persistent)
+        Coroutine _noPowerFlashRoutine;
 
         void Start()
         {
@@ -73,6 +68,8 @@ namespace CubeFly.Fly
             }
 
             shootingController.TypesChanged += RebuildButtons;
+            shootingController.UnpoweredFireAttempt += FlashNoPower;
+            BuildNoPowerFlash();
 
             // FlyController.Start may have already called RegisterWeapons
             // before us — query current state.
@@ -84,7 +81,18 @@ namespace CubeFly.Fly
             if (shootingController != null)
             {
                 shootingController.TypesChanged -= RebuildButtons;
+                shootingController.UnpoweredFireAttempt -= FlashNoPower;
             }
+        }
+
+        // If the toolbar is disabled mid-flash, stop the routine and hide the
+        // "No Power!" label — it lives on the persistent FlyHud.Root, so it
+        // would otherwise linger visible until re-enabled.
+        void OnDisable()
+        {
+            if (_noPowerFlashRoutine != null) StopCoroutine(_noPowerFlashRoutine);
+            _noPowerFlashRoutine = null;
+            if (_noPowerFlash != null) _noPowerFlash.enabled = false;
         }
 
         void Update()
@@ -151,8 +159,10 @@ namespace CubeFly.Fly
                 _buttons = null;
                 _buttonBackgrounds = null;
                 _reloadBars = null;
-                _swatches = null;
                 _deathMarks = null;
+                _selectionOutlines = null;
+                _canvasGroups = null;
+                _boltMarks = null;
                 HideContainer();
                 return;
             }
@@ -161,8 +171,10 @@ namespace CubeFly.Fly
             _buttons = new Button[count];
             _buttonBackgrounds = new Image[count];
             _reloadBars = new Image[count];
-            _swatches = new Image[count];
             _deathMarks = new Text[count];
+            _selectionOutlines = new Outline[count];
+            _canvasGroups = new CanvasGroup[count];
+            _boltMarks = new Image[count];
 
             float totalWidth = count * buttonSize.x + Mathf.Max(0, count - 1) * spacing;
             float startX = -totalWidth / 2f + buttonSize.x / 2f;
@@ -178,7 +190,11 @@ namespace CubeFly.Fly
                     : Color.gray;
 
                 // ---- Button ----
-                (Button btn, Text _) = UIStyle.BuildLabeledButton(_container, label, buttonSize, fontSize);
+                (Button btn, Text lbl) = UIStyle.BuildLabeledButton(_container, label, buttonSize, fontSize);
+                Sprite glyph = shape != null ? CscSprites.ForShape(shape.displayName, 0) : null;
+                UIStyle.DecorateToolbarSlot(btn, lbl, glyph, (idx + 1).ToString(), string.Empty);   // caption suppressed; glyph identifies the weapon
+                _selectionOutlines[i] = UIStyle.AddSelectionOutline(btn.gameObject);
+                _canvasGroups[i] = btn.gameObject.AddComponent<CanvasGroup>();
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
                 brt.anchoredPosition = new Vector2(startX + i * (buttonSize.x + spacing), bottomMargin);
@@ -192,14 +208,14 @@ namespace CubeFly.Fly
                 _buttons[i] = btn;
                 _buttonBackgrounds[i] = btn.GetComponent<Image>();
 
-                // ---- Corner swatch ----
-                _swatches[i] = BuildSwatch(brt, swatchColor);
-
                 // ---- Partial-death corner mark ----
                 _deathMarks[i] = BuildDeathMark(brt);
 
-                // ---- Reload bar (background + foreground fill) ----
-                float barY = bottomMargin + buttonSize.y + reloadBarGap + reloadBarSize.y / 2f;
+                // ---- "No power" bolt (alive laser, not enough energy to fire) ----
+                _boltMarks[i] = BuildBoltMark(brt);
+
+                // ---- Reload bar along the slot's bottom edge ----
+                float barY = bottomMargin + 3f;
                 Vector2 barCenter = new Vector2(startX + i * (buttonSize.x + spacing), barY);
 
                 BuildReloadRect(_container, "ReloadBarBg" + i, reloadBarSize, barCenter, reloadBarBackground, isFill: false);
@@ -208,21 +224,6 @@ namespace CubeFly.Fly
 
             RefreshWeaponStates();
             Debug.unityLogger.Log(TAG, $"Toolbar rebuilt with {count} weapon type(s).");
-        }
-
-        Image BuildSwatch(RectTransform buttonRT, Color color)
-        {
-            GameObject go = new GameObject("Swatch", typeof(RectTransform), typeof(Image));
-            RectTransform rt = (RectTransform)go.transform;
-            rt.SetParent(buttonRT, false);
-            rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
-            rt.pivot = new Vector2(1f, 1f);
-            rt.anchoredPosition = new Vector2(-4f, -4f);
-            rt.sizeDelta = swatchSize;
-            Image img = go.GetComponent<Image>();
-            img.color = color;
-            img.raycastTarget = false;
-            return img;
         }
 
         Image BuildReloadRect(RectTransform parent, string name, Vector2 size, Vector2 anchoredPos, Color color, bool isFill)
@@ -257,21 +258,82 @@ namespace CubeFly.Fly
 
         // ---------- Death-response construction + per-frame refresh ----------
 
-        // Build the partial-death X mark for a button — a bold red glyph
-        // anchored to the button's bottom-right corner (mirroring the
-        // top-right swatch). Disabled by default; RefreshWeaponStates
-        // enables it while the type is partially dead.
+        // Build the partial-death ✕ mark for a button — a bold red glyph in the
+        // top-right corner (the former swatch spot, clear of the bottom reload
+        // bar). Disabled by default; RefreshWeaponStates enables it while the
+        // type is partially or fully dead.
         Text BuildDeathMark(RectTransform buttonRT)
         {
-            Text mark = UIStyle.BuildLabel(
-                buttonRT, "✕", Mathf.RoundToInt(deathMarkSize.y), FontStyle.Bold);
+            Text mark = UIStyle.BuildLabel(buttonRT, "✕", 22, FontStyle.Bold);
             RectTransform rt = (RectTransform)mark.transform;
-            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
-            rt.anchoredPosition = new Vector2(-4f, 4f);
-            rt.sizeDelta = deathMarkSize;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-3f, -3f);
+            rt.sizeDelta = new Vector2(24f, 24f);
             mark.color = deathMarkColor;
             mark.enabled = false;
             return mark;
+        }
+
+        // Build the "no power" bolt for a button — a bright lightning glyph in
+        // the top-right corner (same spot as the death ✕, and mutually
+        // exclusive with it). Shown by RefreshWeaponStates when an alive,
+        // undamaged laser can't afford to fire. A procedural sprite, so no
+        // font-glyph dependency. Disabled by default.
+        Image BuildBoltMark(RectTransform buttonRT)
+        {
+            GameObject go = new GameObject("NoPowerBolt", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.transform.SetParent(buttonRT, false);
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0) go.layer = uiLayer;
+            RectTransform rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-3f, -3f);
+            rt.sizeDelta = new Vector2(24f, 24f);
+            Image img = go.GetComponent<Image>();
+            img.sprite = UIStyle.BoltSprite();
+            img.color = CscPalette.HazardYellow;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            img.enabled = false;
+            return img;
+        }
+
+        // ---------- "No Power!" flash (fired weapon has no power) ----------
+
+        // Persistent centre-screen flash, built once under the HUD root (not the
+        // rebuilt toolbar container). Mirrors the Overboosted!/Overheated! flash
+        // style so the three warnings read as a family.
+        void BuildNoPowerFlash()
+        {
+            _noPowerFlash = UIStyle.BuildLabel(FlyHud.Instance.Root, "No Power!", 28, FontStyle.Normal, CscTheme.StencilOr);
+            _noPowerFlash.color = CscPalette.WarnFlash;
+            CscTheme.AddToonOutline(_noPowerFlash.gameObject, 0.5f);
+            RectTransform rt = (RectTransform)_noPowerFlash.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(360f, 44f);
+            rt.anchoredPosition = new Vector2(0f, 76f);
+            _noPowerFlash.enabled = false;
+        }
+
+        // FlyShootingController.UnpoweredFireAttempt handler: flash 3× then hide.
+        void FlashNoPower()
+        {
+            if (_noPowerFlash == null || !isActiveAndEnabled) return;
+            if (_noPowerFlashRoutine != null) StopCoroutine(_noPowerFlashRoutine);
+            _noPowerFlashRoutine = StartCoroutine(FlashNoPowerRoutine());
+        }
+
+        IEnumerator FlashNoPowerRoutine()
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                _noPowerFlash.enabled = true;
+                yield return new WaitForSecondsRealtime(0.27f);
+                _noPowerFlash.enabled = false;
+                yield return new WaitForSecondsRealtime(0.12f);
+            }
+            _noPowerFlash.enabled = false;
+            _noPowerFlashRoutine = null;
         }
 
         // Per-frame weapon-state refresh — sole owner of button
@@ -292,13 +354,18 @@ namespace CubeFly.Fly
                     _buttons[i].interactable = !fullyDead;
 
                 if (_buttonBackgrounds[i] != null)
-                {
-                    Color bg;
-                    if (fullyDead)          bg = deadColor;
-                    else if (i == selected) bg = SelectedTypeColor;
-                    else                    bg = UIStyle.BackgroundIdle;
-                    _buttonBackgrounds[i].color = bg;
-                }
+                    _buttonBackgrounds[i].color = UIStyle.BackgroundIdle;   // dark slot always
+                if (_selectionOutlines != null && _selectionOutlines[i] != null)
+                    _selectionOutlines[i].enabled = (i == selected && !fullyDead);
+                // Alive, undamaged laser with no spare power to fire: show the
+                // bolt at the corner. Once it takes damage or dies it shows the
+                // ✕ there instead (below), so the bolt is suppressed then.
+                bool starved = !fullyDead && !partiallyDead
+                    && shootingController.GroupEnergyStarved(i);
+                if (_canvasGroups != null && _canvasGroups[i] != null)
+                    _canvasGroups[i].alpha = fullyDead ? 0.4f : 1f;
+                if (_boltMarks != null && _boltMarks[i] != null)
+                    _boltMarks[i].enabled = starved;
 
                 if (_deathMarks[i] != null)
                 {
@@ -321,7 +388,8 @@ namespace CubeFly.Fly
                                 Mathf.Sin(Time.unscaledTime * (2f * Mathf.PI / period));
                             c.a = Mathf.Lerp(deathMarkAlphaMin, 1f, phase);
                         }
-                        // else: fullyDead — c.a stays at deathMarkColor.a (static, opaque).
+                        // else: fullyDead — the mark's own colour alpha stays opaque;
+                        // the slot's CanvasGroup separately dims the whole button to 40%.
                         _deathMarks[i].color = c;
                     }
                 }

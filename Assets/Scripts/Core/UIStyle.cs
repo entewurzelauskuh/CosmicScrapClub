@@ -334,19 +334,34 @@ namespace CubeFly.Core
             return glyphImg;
         }
 
-        // Splits a flyout entry's single label into a top-anchored TITLE and a
-        // bottom-anchored STAT line — each pinned to its own half of the entry,
-        // hugging the outer edge with a small margin — so neither text hugs the
-        // entry's top/bottom edge and the empty middle sits between them.
+        // Vertical layout of a split flyout entry (title row, gap, stat row).
+        // FlyoutEntryHeight and SplitEntryText share these so the computed entry
+        // height always fits the stacked text with no overlap. FlyoutRightInset
+        // keeps both rows clear of the entry's colour swatch on the right.
+        const float FlyoutTopMargin = 6f, FlyoutBottomMargin = 6f, FlyoutRowGap = 5f, FlyoutRightInset = 40f;
+
+        // Height a split flyout entry needs for a given title font size:
+        // top margin + title line + gap + stat line + bottom margin.
+        public static float FlyoutEntryHeight(int fontSize)
+        {
+            int statSize = Mathf.Max(10, fontSize - 8);
+            return FlyoutTopMargin + (fontSize + 4f) + FlyoutRowGap + (statSize + 4f) + FlyoutBottomMargin;
+        }
+
+        // Splits a flyout entry's single label into a TITLE row and a STAT row
+        // stacked from the top with a fixed gap between them (so they never
+        // overlap), both inset on the right to clear the entry's colour swatch.
         // `leftInset` clears an optional entry glyph. Reuses the button's
-        // existing label as the title; returns the new stat Text.
+        // existing label as the title; returns the new stat Text. Pair with
+        // FlyoutEntryHeight so the entry is tall enough for both rows.
         public static Text SplitEntryText(Text titleLabel, string title, string statLine,
             int fontSize, float leftInset)
         {
-            const float vMargin = 4f, rightMargin = 6f;
             int statSize = Mathf.Max(10, fontSize - 8);
+            float titleH = fontSize + 4f;
+            float statH = statSize + 4f;
 
-            // Title → top half, hugging the top.
+            // Title → top row.
             titleLabel.text = title;
             titleLabel.supportRichText = true;
             titleLabel.alignment = TextAnchor.UpperLeft;
@@ -354,13 +369,13 @@ namespace CubeFly.Core
             titleLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
             titleLabel.verticalOverflow = VerticalWrapMode.Overflow;
             RectTransform trt = (RectTransform)titleLabel.transform;
-            trt.anchorMin = new Vector2(0f, 0.5f);
+            trt.anchorMin = new Vector2(0f, 1f);
             trt.anchorMax = new Vector2(1f, 1f);
             trt.pivot = new Vector2(0.5f, 1f);
-            trt.offsetMin = new Vector2(leftInset, 0f);
-            trt.offsetMax = new Vector2(-rightMargin, -vMargin);
+            trt.offsetMax = new Vector2(-FlyoutRightInset, -FlyoutTopMargin);
+            trt.offsetMin = new Vector2(leftInset, -(FlyoutTopMargin + titleH));
 
-            // Stat → bottom half, hugging the bottom; smaller + muted.
+            // Stat → row below the title, separated by FlyoutRowGap.
             GameObject sGO = new GameObject("EntryStats", typeof(RectTransform), typeof(CanvasRenderer));
             sGO.transform.SetParent(titleLabel.transform.parent, false);
             int uiLayer = LayerMask.NameToLayer("UI");
@@ -369,18 +384,18 @@ namespace CubeFly.Core
             stat.font = CscTheme.BodyOr;
             stat.fontSize = statSize;
             stat.color = CscPalette.Sand100;
-            stat.alignment = TextAnchor.LowerLeft;
+            stat.alignment = TextAnchor.UpperLeft;
             stat.supportRichText = true;
             stat.raycastTarget = false;
             stat.horizontalOverflow = HorizontalWrapMode.Overflow;
             stat.verticalOverflow = VerticalWrapMode.Overflow;
             stat.text = statLine;
             RectTransform srt = (RectTransform)stat.transform;
-            srt.anchorMin = new Vector2(0f, 0f);
-            srt.anchorMax = new Vector2(1f, 0.5f);
-            srt.pivot = new Vector2(0.5f, 0f);
-            srt.offsetMin = new Vector2(leftInset, vMargin);
-            srt.offsetMax = new Vector2(-rightMargin, 0f);
+            srt.anchorMin = new Vector2(0f, 1f);
+            srt.anchorMax = new Vector2(1f, 1f);
+            srt.pivot = new Vector2(0.5f, 1f);
+            srt.offsetMax = new Vector2(-FlyoutRightInset, -(FlyoutTopMargin + titleH + FlyoutRowGap));
+            srt.offsetMin = new Vector2(leftInset, -(FlyoutTopMargin + titleH + FlyoutRowGap + statH));
             return stat;
         }
 
@@ -394,6 +409,63 @@ namespace CubeFly.Core
             o.effectDistance = new Vector2(3f, -3f);
             o.enabled = false;
             return o;
+        }
+
+        // ---- Procedural lightning-bolt glyph (font-independent) ----
+        // A white, tintable bolt sprite for HUD "no power" marks etc. Cached —
+        // one texture shared by every user (tint via Image.color).
+        static Sprite _boltSprite;
+        public static Sprite BoltSprite()
+        {
+            if (_boltSprite == null) _boltSprite = MakeBoltSprite(64);
+            return _boltSprite;
+        }
+
+        // Rasterise a filled lightning-bolt polygon into an RGBA sprite (white,
+        // transparent outside). 2×2 supersampled for cheap edge anti-aliasing.
+        static Sprite MakeBoltSprite(int size)
+        {
+            // Normalised bolt outline (y up), a classic zig-zag flash.
+            Vector2[] poly =
+            {
+                new Vector2(0.60f, 1.00f),
+                new Vector2(0.12f, 0.46f),
+                new Vector2(0.44f, 0.46f),
+                new Vector2(0.30f, 0.00f),
+                new Vector2(0.88f, 0.56f),
+                new Vector2(0.56f, 0.56f),
+            };
+            Texture2D t = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            Color[] px = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    int inside = 0;
+                    for (int sy = 0; sy < 2; sy++)
+                        for (int sx = 0; sx < 2; sx++)
+                        {
+                            float u = (x + 0.25f + sx * 0.5f) / size;
+                            float v = (y + 0.25f + sy * 0.5f) / size;
+                            if (PointInPoly(u, v, poly)) inside++;
+                        }
+                    px[y * size + x] = new Color(1f, 1f, 1f, inside / 4f);
+                }
+            t.SetPixels(px);
+            t.Apply();
+            return Sprite.Create(t, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        static bool PointInPoly(float x, float y, Vector2[] p)
+        {
+            bool inside = false;
+            for (int i = 0, j = p.Length - 1; i < p.Length; j = i++)
+            {
+                if (((p[i].y > y) != (p[j].y > y)) &&
+                    (x < (p[j].x - p[i].x) * (y - p[i].y) / (p[j].y - p[i].y) + p[i].x))
+                    inside = !inside;
+            }
+            return inside;
         }
 
         // Builds a legacy uGUI Dropdown as a child of `parent`, with the

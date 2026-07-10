@@ -56,9 +56,12 @@ namespace CubeFly.Build
 
         [Header("Stat labels (bottom-left)")]
         [SerializeField] int statFontSize = 20;
-        [SerializeField] Vector2 massLabelAnchoredPosition = new Vector2(20f, 60f);
-        [SerializeField] Vector2 powerLabelAnchoredPosition = new Vector2(20f, 92f);
-        [SerializeField] Vector2 hpLabelAnchoredPosition = new Vector2(20f, 28f);
+        // Not [SerializeField]: the bottom-left stat column is positioned from
+        // code so the scene's stale serialized values don't override the layout.
+        // Even 40px spacing, lifted + inset a touch so the big values don't cram.
+        Vector2 massLabelAnchoredPosition = new Vector2(24f, 74f);
+        Vector2 powerLabelAnchoredPosition = new Vector2(24f, 114f);
+        Vector2 hpLabelAnchoredPosition = new Vector2(24f, 34f);
         [SerializeField] Vector2 statLabelSize = new Vector2(260f, 28f);
 
         [Header("Selected-cube stat label (bottom-left, right of Mass/HP)")]
@@ -447,21 +450,16 @@ namespace CubeFly.Build
             _deleteBackground = delBtn.GetComponent<Image>();
             _deleteSelectionOutline = UIStyle.AddSelectionOutline(delBtn.gameObject);
             UIStyle.DecorateToolbarSlot(delBtn, _ignored, null, null, deleteButtonLabel);
-            GameObject xGO = new GameObject("DeleteX", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            xGO.transform.SetParent(delBtn.transform, false);
-            RectTransform xRT = (RectTransform)xGO.transform;
+            // Build via UIStyle.BuildLabel so the glyph gets Overflow wrap modes:
+            // the previous hand-rolled Text defaulted to verticalOverflow=Truncate,
+            // so a 34pt glyph clipped out of its 40px rect and rendered nothing
+            // (✕ or X alike — the earlier "missing glyph" diagnosis was wrong).
+            Text xT = UIStyle.BuildLabel(delBtn.transform, "X", 34, FontStyle.Bold, CscTheme.CondOr);
+            RectTransform xRT = (RectTransform)xT.transform;
             xRT.anchorMin = xRT.anchorMax = xRT.pivot = new Vector2(0.5f, 0.5f);
             xRT.anchoredPosition = new Vector2(0f, 6f);
             xRT.sizeDelta = new Vector2(40f, 40f);
-            Text xT = xGO.GetComponent<Text>();
-            xT.font = CscTheme.CondOr;
-            xT.fontSize = 34;
-            xT.alignment = TextAnchor.MiddleCenter;
             xT.color = CscPalette.Critical;
-            xT.raycastTarget = false;
-            // Plain ASCII "X" — the ✕ multiplication glyph (U+2715) is absent
-            // from Saira Condensed, so it rendered blank; "X" is in every font.
-            xT.text = "X";
 
             // ---- Bottom-left stat labels ----
             _massLabel = UIStyle.BuildLabel(root, "Mass: 0 / 100", fontSize: statFontSize);
@@ -486,6 +484,7 @@ namespace CubeFly.Build
 
             _powerLabel = UIStyle.BuildLabel(root, "Power: +0", fontSize: statFontSize);
             _powerLabel.font = CscTheme.CondOr;
+            _powerLabel.supportRichText = true;
             _powerLabel.alignment = TextAnchor.LowerLeft;
             RectTransform powerRT = (RectTransform)_powerLabel.transform;
             powerRT.anchorMin = powerRT.anchorMax = powerRT.pivot = new Vector2(0f, 0f);
@@ -555,11 +554,16 @@ namespace CubeFly.Build
             _flyoutButtons = new Button[count];
             _flyoutBackgrounds = new Image[count];
 
+            // Entry size derived in code: width +5%, height sized to the stacked
+            // title + stat rows (see UIStyle.SplitEntryText).
+            Vector2 entrySize = new Vector2(
+                flyoutEntrySize.x * 1.05f, UIStyle.FlyoutEntryHeight(fontSize));
+
             _flyout = new GameObject("MaterialFlyout", typeof(RectTransform), typeof(CanvasGroup));
             RectTransform frt = (RectTransform)_flyout.transform;
             frt.SetParent(canvas, false);
             frt.anchorMin = frt.anchorMax = frt.pivot = new Vector2(0.5f, 0f);
-            frt.sizeDelta = new Vector2(flyoutEntrySize.x, count * flyoutEntrySize.y + Mathf.Max(0, count - 1) * flyoutEntrySpacing);
+            frt.sizeDelta = new Vector2(entrySize.x, count * entrySize.y + Mathf.Max(0, count - 1) * flyoutEntrySpacing);
 
             _flyoutGroup = _flyout.GetComponent<CanvasGroup>();
             _flyoutGroup.interactable = true;
@@ -574,7 +578,7 @@ namespace CubeFly.Build
                     ? $"HP {mdef.healthPoints:F0}  ·  AV {mdef.armourValue:F0}  ·  M {mdef.mass:F1}"
                     : "—";
 
-                (Button btn, Text label) = UIStyle.BuildLabeledButton(frt, title, flyoutEntrySize, fontSize);
+                (Button btn, Text label) = UIStyle.BuildLabeledButton(frt, title, entrySize, fontSize);
                 // Top-anchored title + bottom-anchored stats so the text clears
                 // the entry's top/bottom edges (material flyout has no glyph).
                 UIStyle.SplitEntryText(label, title, statLine, fontSize, 8f);
@@ -584,7 +588,7 @@ namespace CubeFly.Build
                 // shape button below the flyout); each subsequent
                 // entry stacks above it. Pivot at (0.5, 0) makes y
                 // the distance from the flyout root's bottom edge.
-                float y = i * (flyoutEntrySize.y + flyoutEntrySpacing);
+                float y = i * (entrySize.y + flyoutEntrySpacing);
                 brt.anchoredPosition = new Vector2(0f, y);
 
                 // Coloured swatch on the left side of each entry.
@@ -961,10 +965,10 @@ namespace CubeFly.Build
             float mass = buildManager.ComputeCurrentMass();
             float hp   = buildManager.ComputeCurrentHealthPoints();
             if (_massLabel != null)
-                _massLabel.text = $"MASS <size={statFontSize + 12}>{mass:F0}</size> / {buildManager.MassLimit:F0}";
+                _massLabel.text = $"MASS: <size={statFontSize + 12}>{mass:F0}</size> / {buildManager.MassLimit:F0}";
             if (_hpLabel != null)
             {
-                _hpLabel.text = $"HP <size={statFontSize + 12}>{hp:F0}</size>";
+                _hpLabel.text = $"HP: <size={statFontSize + 12}>{hp:F0}</size>";
                 _hpLabel.color = CscPalette.PowerPositive;
             }
             if (_powerLabel != null)
@@ -973,7 +977,7 @@ namespace CubeFly.Build
                 _powerLabel.enabled = hasPower;
                 if (hasPower)
                 {
-                    _powerLabel.text = $"Power: {(net >= 0f ? "+" : "")}{net:F0}";
+                    _powerLabel.text = $"POWER: <size={statFontSize + 12}>{(net >= 0f ? "+" : "")}{net:F0}</size>";
                     _powerLabel.color = net >= 0f ? PowerPositive : PowerNegative;
                 }
                 // Pulse the readout only while in deficit (net < 0) to flag that

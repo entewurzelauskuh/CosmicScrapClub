@@ -172,14 +172,19 @@ namespace CubeFly.Build
             _flyoutButtons = new Button[count];
             _flyoutBackgrounds = new Image[count];
 
+            // Entry size derived in code: width +5% off the base, height sized
+            // to fit the stacked title + stat rows (see UIStyle.SplitEntryText).
+            Vector2 entrySize = new Vector2(
+                _flyoutEntrySize.x * 1.05f, UIStyle.FlyoutEntryHeight(_fontSize));
+
             _flyout = new GameObject(_buttonLabel + "Flyout",
                 typeof(RectTransform), typeof(CanvasGroup));
             RectTransform frt = (RectTransform)_flyout.transform;
             frt.SetParent(canvas, false);
             frt.anchorMin = frt.anchorMax = frt.pivot = new Vector2(0.5f, 0f);
             frt.sizeDelta = new Vector2(
-                _flyoutEntrySize.x,
-                count * _flyoutEntrySize.y + Mathf.Max(0, count - 1) * _flyoutEntrySpacing);
+                entrySize.x,
+                count * entrySize.y + Mathf.Max(0, count - 1) * _flyoutEntrySpacing);
 
             _flyoutGroup = _flyout.GetComponent<CanvasGroup>();
             _flyoutGroup.interactable = true;
@@ -196,10 +201,10 @@ namespace CubeFly.Build
                     : "—";
 
                 (Button btn, Text label) = UIStyle.BuildLabeledButton(
-                    frt, title, _flyoutEntrySize, _fontSize);
+                    frt, title, entrySize, _fontSize);
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
-                float y = e * (_flyoutEntrySize.y + _flyoutEntrySpacing);
+                float y = e * (entrySize.y + _flyoutEntrySpacing);
                 brt.anchoredPosition = new Vector2(0f, y);
 
                 Sprite eg = shape != null ? CscSprites.ForShape(shape.displayName, 0) : null;

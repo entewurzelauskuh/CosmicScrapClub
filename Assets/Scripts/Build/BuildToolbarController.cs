@@ -459,7 +459,9 @@ namespace CubeFly.Build
             xT.alignment = TextAnchor.MiddleCenter;
             xT.color = CscPalette.Critical;
             xT.raycastTarget = false;
-            xT.text = "✕";
+            // Plain ASCII "X" — the ✕ multiplication glyph (U+2715) is absent
+            // from Saira Condensed, so it rendered blank; "X" is in every font.
+            xT.text = "X";
 
             // ---- Bottom-left stat labels ----
             _massLabel = UIStyle.BuildLabel(root, "Mass: 0 / 100", fontSize: statFontSize);

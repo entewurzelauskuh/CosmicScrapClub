@@ -23,16 +23,16 @@ namespace CubeFly.Fly
         [SerializeField] int powerFontSize = 18;
 
         [Header("Colours")]
-        [SerializeField] Color shieldFillColor = new Color(0.3f, 0.8f, 1f, 0.95f);
-        [SerializeField] Color shieldFrameColor = new Color(0.05f, 0.12f, 0.16f, 0.85f);
-        [SerializeField] Color shieldDownColor = new Color(0.4f, 0.4f, 0.45f, 0.6f);
-        [SerializeField] Color powerPositiveColor = new Color(0.4f, 1f, 0.5f, 1f);
-        [SerializeField] Color powerNegativeColor = new Color(1f, 0.4f, 0.35f, 1f);
+        Color shieldFillColor = new Color(CscPalette.Shield.r, CscPalette.Shield.g, CscPalette.Shield.b, 0.95f);
+        Color shieldFrameColor = CscPalette.HudPanel;
+        Color shieldDownColor = new Color(CscPalette.ShieldDown.r, CscPalette.ShieldDown.g, CscPalette.ShieldDown.b, 0.6f);
+        Color powerPositiveColor = CscPalette.PowerPositive;
+        Color powerNegativeColor = CscPalette.PowerNegative;
 
         [Header("Eject hint (top-left)")]
         [SerializeField] Vector2 ejectHintAnchoredPosition = new Vector2(20f, -20f);
         [SerializeField] int ejectHintFontSize = 22;
-        [SerializeField] Color ejectHintColor = new Color(1f, 0.55f, 0.2f, 1f);
+        Color ejectHintColor = CscPalette.Eject;
 
         ConstructEnergySystem _energy;
         RectTransform _frame;
@@ -72,7 +72,7 @@ namespace CubeFly.Fly
             }
 
             float net = _energy.NetPower;
-            _powerLabel.text = $"Power: {(net >= 0f ? "+" : "")}{net:F0}";
+            _powerLabel.text = $"POWER: {(net >= 0f ? "+" : "")}{net:F0}";
             _powerLabel.color = net >= 0f ? powerPositiveColor : powerNegativeColor;
         }
 
@@ -93,6 +93,7 @@ namespace CubeFly.Fly
             Image frameImg = frameGO.GetComponent<Image>();
             frameImg.color = shieldFrameColor;
             frameImg.raycastTarget = false;
+            CscTheme.AddToonOutline(frameGO);
 
             // Fill — left-anchored child so width = fraction shrinks from the right.
             GameObject fillGO = new GameObject("ShieldBarFill",
@@ -108,8 +109,10 @@ namespace CubeFly.Fly
             _fillImage.raycastTarget = false;
 
             // Power readout label.
-            _powerLabel = UIStyle.BuildLabel(root, "Power: +0", fontSize: powerFontSize);
+            _powerLabel = UIStyle.BuildLabel(root, "POWER: +0", fontSize: powerFontSize);
             _powerLabel.alignment = TextAnchor.LowerLeft;
+            _powerLabel.font = CscTheme.CondOr;
+            _powerLabel.supportRichText = true;
             RectTransform plRT = (RectTransform)_powerLabel.transform;
             plRT.anchorMin = plRT.anchorMax = plRT.pivot = new Vector2(0f, 0f);
             plRT.sizeDelta = new Vector2(220f, 28f);

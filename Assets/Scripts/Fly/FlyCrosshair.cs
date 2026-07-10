@@ -29,7 +29,7 @@ namespace CubeFly.Fly
         [SerializeField] float aimRange = 100f;
 
         [Header("Reticle visual")]
-        [SerializeField] Color crosshairColor = Color.white;
+        Color crosshairColor = CscPalette.Label;
         [SerializeField] Vector2 centerDotSize = new Vector2(4f, 4f);
         [Tooltip("x = arm thickness, y = arm length.")]
         [SerializeField] Vector2 armSize = new Vector2(2f, 12f);

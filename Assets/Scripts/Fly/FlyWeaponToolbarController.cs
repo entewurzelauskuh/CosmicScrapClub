@@ -20,22 +20,21 @@ namespace CubeFly.Fly
     {
         [SerializeField] FlyShootingController shootingController;
 
-        [Header("Layout")]
         Vector2 buttonSize = new Vector2(64f, 64f);
+        [Header("Layout")]
         [SerializeField] float spacing = 16f;
         [SerializeField] float bottomMargin = 30f;
         [SerializeField] int fontSize = 22;
 
-        [Header("Reload bar")]
         Vector2 reloadBarSize = new Vector2(54f, 4f);
-        Color reloadBarBackground = CscPalette.HudPanel;
+        // Reload-track backing: HudPanel hue at the original 0.6 alpha (spec alpha-preserve).
+        Color reloadBarBackground = new Color(CscPalette.HudPanel.r, CscPalette.HudPanel.g, CscPalette.HudPanel.b, 0.6f);
 
         [Header("Corner swatch")]
         [SerializeField] Vector2 swatchSize = new Vector2(18f, 18f);
 
-        [Header("Death response")]
-        [Tooltip("Color of the partial-death corner mark (the X glyph).")]
         Color deathMarkColor = CscPalette.Critical;
+        [Header("Death response")]
         [Tooltip("Size of the partial-death corner mark, in UI units.")]
         [SerializeField] Vector2 deathMarkSize = new Vector2(16f, 16f);
         [Tooltip("Period of the partial-death mark's alpha pulse, in seconds.")]
@@ -324,7 +323,8 @@ namespace CubeFly.Fly
                                 Mathf.Sin(Time.unscaledTime * (2f * Mathf.PI / period));
                             c.a = Mathf.Lerp(deathMarkAlphaMin, 1f, phase);
                         }
-                        // else: fullyDead — c.a stays at deathMarkColor.a (static, opaque).
+                        // else: fullyDead — the mark's own colour alpha stays opaque;
+                        // the slot's CanvasGroup separately dims the whole button to 40%.
                         _deathMarks[i].color = c;
                     }
                 }

@@ -22,7 +22,6 @@ namespace CubeFly.Fly
         [SerializeField] Vector2 powerLabelAnchoredPosition = new Vector2(20f, 122f);
         [SerializeField] int powerFontSize = 18;
 
-        [Header("Colours")]
         Color shieldFillColor = new Color(CscPalette.Shield.r, CscPalette.Shield.g, CscPalette.Shield.b, 0.95f);
         Color shieldFrameColor = CscPalette.HudPanel;
         Color shieldDownColor = new Color(CscPalette.ShieldDown.r, CscPalette.ShieldDown.g, CscPalette.ShieldDown.b, 0.6f);

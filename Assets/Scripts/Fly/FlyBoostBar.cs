@@ -52,9 +52,8 @@ namespace CubeFly.Fly
         [Tooltip("Seconds the flash label is hidden per cycle.")]
         [SerializeField] float flashOffSeconds = 0.12f;
 
-        [Header("Critical zone (bottom of the meter)")]
-        [Tooltip("Fill color while the meter is in its critical bottom band (FlyController.IsBoostCritical).")]
         Color criticalColor = CscPalette.Critical;
+        [Header("Critical zone (bottom of the meter)")]
         [Tooltip("Seconds for one full throb cycle (alpha + size) while critical. Larger = slower.")]
         [SerializeField] float criticalPulseSeconds = 1.2f;
         [Tooltip("Size throb amplitude while critical — the bar's localScale oscillates by +/- this fraction. 0.05 = +/-5%.")]

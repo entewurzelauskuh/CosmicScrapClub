@@ -28,8 +28,8 @@ namespace CubeFly.Fly
         [Tooltip("World-space distance projected along construct.forward to derive the aim point. Keep this in sync with FlyShootingController.aimRange so the reticle and the actual shot agree.")]
         [SerializeField] float aimRange = 100f;
 
-        [Header("Reticle visual")]
         Color crosshairColor = CscPalette.Label;
+        [Header("Reticle visual")]
         [SerializeField] Vector2 centerDotSize = new Vector2(4f, 4f);
         [Tooltip("x = arm thickness, y = arm length.")]
         [SerializeField] Vector2 armSize = new Vector2(2f, 12f);

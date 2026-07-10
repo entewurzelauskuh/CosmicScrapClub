@@ -56,7 +56,7 @@ namespace CubeFly.Fly
         Text[] _deathMarks;           // partial-death X mark, per button
         Outline[] _selectionOutlines; // ochre selection ring, per button
         CanvasGroup[] _canvasGroups;  // dead-dim group, per button
-        Text[] _noPowerTags;          // "NO PWR" amber tag, per button
+        Image[] _boltMarks;           // "no power" bolt glyph, per button (bottom-right)
 
         void Start()
         {
@@ -152,7 +152,7 @@ namespace CubeFly.Fly
                 _deathMarks = null;
                 _selectionOutlines = null;
                 _canvasGroups = null;
-                _noPowerTags = null;
+                _boltMarks = null;
                 HideContainer();
                 return;
             }
@@ -165,7 +165,7 @@ namespace CubeFly.Fly
             _deathMarks = new Text[count];
             _selectionOutlines = new Outline[count];
             _canvasGroups = new CanvasGroup[count];
-            _noPowerTags = new Text[count];
+            _boltMarks = new Image[count];
 
             float totalWidth = count * buttonSize.x + Mathf.Max(0, count - 1) * spacing;
             float startX = -totalWidth / 2f + buttonSize.x / 2f;
@@ -205,8 +205,8 @@ namespace CubeFly.Fly
                 // ---- Partial-death corner mark ----
                 _deathMarks[i] = BuildDeathMark(brt);
 
-                // ---- "NO PWR" tag (alive laser, not enough energy to fire) ----
-                _noPowerTags[i] = BuildNoPowerTag(brt);
+                // ---- "No power" bolt (alive laser, not enough energy to fire) ----
+                _boltMarks[i] = BuildBoltMark(brt);
 
                 // ---- Reload bar along the slot's bottom edge ----
                 float barY = bottomMargin + 3f;
@@ -284,22 +284,28 @@ namespace CubeFly.Fly
             return mark;
         }
 
-        // Build the "NO PWR" tag for a button — a small amber label centred in
-        // the slot, shown by RefreshWeaponStates when an alive laser can't
-        // afford to fire (distinct from the red ✕ dead mark). Disabled by
-        // default. All-ASCII so it renders in any font.
-        Text BuildNoPowerTag(RectTransform buttonRT)
+        // Build the "no power" bolt for a button — a bright lightning glyph in
+        // the bottom-right corner (same spot as the death ✕, and mutually
+        // exclusive with it). Shown by RefreshWeaponStates when an alive,
+        // undamaged laser can't afford to fire. A procedural sprite, so no
+        // font-glyph dependency. Disabled by default.
+        Image BuildBoltMark(RectTransform buttonRT)
         {
-            Text tag = UIStyle.BuildLabel(buttonRT, "NO PWR", 11, FontStyle.Bold);
-            RectTransform rt = (RectTransform)tag.transform;
-            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = new Vector2(0f, -12f);
-            rt.sizeDelta = new Vector2(62f, 16f);
-            tag.alignment = TextAnchor.MiddleCenter;
-            tag.color = CscPalette.Eject;
-            tag.raycastTarget = false;
-            tag.enabled = false;
-            return tag;
+            GameObject go = new GameObject("NoPowerBolt", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.transform.SetParent(buttonRT, false);
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0) go.layer = uiLayer;
+            RectTransform rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = new Vector2(-4f, 4f);
+            rt.sizeDelta = new Vector2(24f, 24f);
+            Image img = go.GetComponent<Image>();
+            img.sprite = UIStyle.BoltSprite();
+            img.color = CscPalette.HazardYellow;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            img.enabled = false;
+            return img;
         }
 
         // Per-frame weapon-state refresh — sole owner of button
@@ -323,13 +329,15 @@ namespace CubeFly.Fly
                     _buttonBackgrounds[i].color = UIStyle.BackgroundIdle;   // dark slot always
                 if (_selectionOutlines != null && _selectionOutlines[i] != null)
                     _selectionOutlines[i].enabled = (i == selected && !fullyDead);
-                // Alive laser with no spare power to fire: grey to 55% (vs the
-                // dead 40%) and show the "NO PWR" tag. Dead takes priority.
-                bool starved = !fullyDead && shootingController.GroupEnergyStarved(i);
+                // Alive, undamaged laser with no spare power to fire: show the
+                // bolt at the corner. Once it takes damage or dies it shows the
+                // ✕ there instead (below), so the bolt is suppressed then.
+                bool starved = !fullyDead && !partiallyDead
+                    && shootingController.GroupEnergyStarved(i);
                 if (_canvasGroups != null && _canvasGroups[i] != null)
-                    _canvasGroups[i].alpha = fullyDead ? 0.4f : (starved ? 0.55f : 1f);
-                if (_noPowerTags != null && _noPowerTags[i] != null)
-                    _noPowerTags[i].enabled = starved;
+                    _canvasGroups[i].alpha = fullyDead ? 0.4f : 1f;
+                if (_boltMarks != null && _boltMarks[i] != null)
+                    _boltMarks[i].enabled = starved;
 
                 if (_deathMarks[i] != null)
                 {

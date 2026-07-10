@@ -85,6 +85,16 @@ namespace CubeFly.Fly
             }
         }
 
+        // If the toolbar is disabled mid-flash, stop the routine and hide the
+        // "No Power!" label — it lives on the persistent FlyHud.Root, so it
+        // would otherwise linger visible until re-enabled.
+        void OnDisable()
+        {
+            if (_noPowerFlashRoutine != null) StopCoroutine(_noPowerFlashRoutine);
+            _noPowerFlashRoutine = null;
+            if (_noPowerFlash != null) _noPowerFlash.enabled = false;
+        }
+
         void Update()
         {
             if (shootingController == null || !shootingController.HasWeapons) return;

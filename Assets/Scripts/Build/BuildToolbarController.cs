@@ -591,7 +591,7 @@ namespace CubeFly.Build
                 float y = i * (entrySize.y + flyoutEntrySpacing);
                 brt.anchoredPosition = new Vector2(0f, y);
 
-                // Coloured swatch on the left side of each entry.
+                // Coloured swatch on the right side of each entry.
                 Image swatch = BuildEntrySwatch(brt, mdef != null ? mdef.SwatchColor : Color.gray);
 
                 btn.onClick.AddListener(() => OnFlyoutEntryClicked(idx));

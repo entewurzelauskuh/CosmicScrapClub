@@ -202,8 +202,6 @@ namespace CubeFly.Build
                 float y = e * (_flyoutEntrySize.y + _flyoutEntrySpacing);
                 brt.anchoredPosition = new Vector2(0f, y);
 
-                _buildEntrySwatch(brt, wmat != null ? wmat.SwatchColor : Color.gray);
-
                 Sprite eg = shape != null ? CscSprites.ForShape(shape.displayName, 0) : null;
                 // Top-anchored title + bottom-anchored stats (40px left inset
                 // when a glyph is present) so the text clears the entry edges.
@@ -221,6 +219,10 @@ namespace CubeFly.Build
                     egImg.sprite = eg; egImg.color = Color.white;
                     egImg.preserveAspect = true; egImg.raycastTarget = false;
                 }
+
+                // Swatch created last so it renders above the stat text —
+                // matches the material flyout's order (review consistency fix).
+                _buildEntrySwatch(brt, wmat != null ? wmat.SwatchColor : Color.gray);
 
                 int captured = shapeIndex;
                 btn.onClick.AddListener(() => OnFlyoutEntryClicked(captured));

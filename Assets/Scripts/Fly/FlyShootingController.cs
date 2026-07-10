@@ -45,6 +45,10 @@ namespace CubeFly.Fly
 
         public event Action TypesChanged;
         public event Action<int> SelectedChanged;
+        // Fired once per fresh fire-press when the selected laser can't afford
+        // even one shot (no/insufficient reactor power). Drives the "No Power!"
+        // HUD flash.
+        public event Action UnpoweredFireAttempt;
 
         readonly List<WeaponTypeGroup> _types = new();
         public IReadOnlyList<WeaponTypeGroup> Types => _types;
@@ -70,6 +74,11 @@ namespace CubeFly.Fly
         // actually beamed (>=1 cube powered + fired); consumed by
         // TickLaserHeat to decide rise vs cool. Reset each Update.
         bool _selectedLaserFiredThisFrame;
+        // Fire-press edge (this frame's press is a fresh press, not a hold).
+        // Tracked in Update so it stays valid even on frames the fire dispatch
+        // is skipped (pointer over UI); consumed by HandleFireInput.
+        bool _fireHeldPrev;
+        bool _fireEdgeThisFrame;
 
         const string TAG = "FlyShooting";
 
@@ -125,6 +134,10 @@ namespace CubeFly.Fly
             if (!HasWeapons) return;
 
             _selectedLaserFiredThisFrame = false; // HandleFireInput may set it
+
+            bool fireHeld = _input.Fly.Fire.IsPressed();
+            _fireEdgeThisFrame = fireHeld && !_fireHeldPrev;
+            _fireHeldPrev = fireHeld;
 
             // Auto-switch off a fully-dead selected type. Runs before the
             // pointer-over-UI gate — a weapon dying must move selection
@@ -215,6 +228,10 @@ namespace CubeFly.Fly
                 float drawPer = active.LaserPowerDraw;
                 float available = _energy != null ? _energy.AvailableForWeapons : 0f;
                 int budget = drawPer > 0f ? Mathf.FloorToInt(available / drawPer) : int.MaxValue;
+
+                // Can't power even one shot: flag the unpowered-fire attempt
+                // (edge-triggered) so the HUD flashes "No Power!" once per press.
+                if (budget == 0 && _fireEdgeThisFrame) UnpoweredFireAttempt?.Invoke();
 
                 int fired = 0;
                 for (int i = 0; i < active.Instances.Count; i++)

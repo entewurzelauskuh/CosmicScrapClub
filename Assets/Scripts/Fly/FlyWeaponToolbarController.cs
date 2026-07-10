@@ -1,3 +1,4 @@
+using System.Collections;
 using CubeFly.Core;
 using UnityEngine;
 using UnityEngine.UI;
@@ -30,13 +31,8 @@ namespace CubeFly.Fly
         // Reload-track backing: HudPanel hue at the original 0.6 alpha (spec alpha-preserve).
         Color reloadBarBackground = new Color(CscPalette.HudPanel.r, CscPalette.HudPanel.g, CscPalette.HudPanel.b, 0.6f);
 
-        [Header("Corner swatch")]
-        [SerializeField] Vector2 swatchSize = new Vector2(18f, 18f);
-
         Color deathMarkColor = CscPalette.Critical;
         [Header("Death response")]
-        [Tooltip("Size of the partial-death corner mark, in UI units.")]
-        [SerializeField] Vector2 deathMarkSize = new Vector2(16f, 16f);
         [Tooltip("Period of the partial-death mark's alpha pulse, in seconds.")]
         [SerializeField] float deathMarkPulseSeconds = 0.9f;
         [Tooltip("Minimum alpha at the dim end of the partial-death mark pulse.")]
@@ -52,11 +48,13 @@ namespace CubeFly.Fly
         Button[] _buttons;
         Image[] _buttonBackgrounds;
         Image[] _reloadBars;          // foreground fill (per-type colored)
-        Image[] _swatches;
         Text[] _deathMarks;           // partial-death X mark, per button
         Outline[] _selectionOutlines; // ochre selection ring, per button
         CanvasGroup[] _canvasGroups;  // dead-dim group, per button
-        Image[] _boltMarks;           // "no power" bolt glyph, per button (bottom-right)
+        Image[] _boltMarks;           // "no power" bolt glyph, per button (top-right)
+
+        Text _noPowerFlash;           // centre-screen "No Power!" flash (persistent)
+        Coroutine _noPowerFlashRoutine;
 
         void Start()
         {
@@ -70,6 +68,8 @@ namespace CubeFly.Fly
             }
 
             shootingController.TypesChanged += RebuildButtons;
+            shootingController.UnpoweredFireAttempt += FlashNoPower;
+            BuildNoPowerFlash();
 
             // FlyController.Start may have already called RegisterWeapons
             // before us — query current state.
@@ -81,6 +81,7 @@ namespace CubeFly.Fly
             if (shootingController != null)
             {
                 shootingController.TypesChanged -= RebuildButtons;
+                shootingController.UnpoweredFireAttempt -= FlashNoPower;
             }
         }
 
@@ -148,7 +149,6 @@ namespace CubeFly.Fly
                 _buttons = null;
                 _buttonBackgrounds = null;
                 _reloadBars = null;
-                _swatches = null;
                 _deathMarks = null;
                 _selectionOutlines = null;
                 _canvasGroups = null;
@@ -161,7 +161,6 @@ namespace CubeFly.Fly
             _buttons = new Button[count];
             _buttonBackgrounds = new Image[count];
             _reloadBars = new Image[count];
-            _swatches = new Image[count];
             _deathMarks = new Text[count];
             _selectionOutlines = new Outline[count];
             _canvasGroups = new CanvasGroup[count];
@@ -199,9 +198,6 @@ namespace CubeFly.Fly
                 _buttons[i] = btn;
                 _buttonBackgrounds[i] = btn.GetComponent<Image>();
 
-                // ---- Corner swatch ----
-                _swatches[i] = BuildSwatch(brt, swatchColor);
-
                 // ---- Partial-death corner mark ----
                 _deathMarks[i] = BuildDeathMark(brt);
 
@@ -218,21 +214,6 @@ namespace CubeFly.Fly
 
             RefreshWeaponStates();
             Debug.unityLogger.Log(TAG, $"Toolbar rebuilt with {count} weapon type(s).");
-        }
-
-        Image BuildSwatch(RectTransform buttonRT, Color color)
-        {
-            GameObject go = new GameObject("Swatch", typeof(RectTransform), typeof(Image));
-            RectTransform rt = (RectTransform)go.transform;
-            rt.SetParent(buttonRT, false);
-            rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
-            rt.pivot = new Vector2(1f, 1f);
-            rt.anchoredPosition = new Vector2(-4f, -4f);
-            rt.sizeDelta = swatchSize;
-            Image img = go.GetComponent<Image>();
-            img.color = color;
-            img.raycastTarget = false;
-            return img;
         }
 
         Image BuildReloadRect(RectTransform parent, string name, Vector2 size, Vector2 anchoredPos, Color color, bool isFill)
@@ -267,25 +248,24 @@ namespace CubeFly.Fly
 
         // ---------- Death-response construction + per-frame refresh ----------
 
-        // Build the partial-death X mark for a button — a bold red glyph
-        // anchored to the button's bottom-right corner (mirroring the
-        // top-right swatch). Disabled by default; RefreshWeaponStates
-        // enables it while the type is partially dead.
+        // Build the partial-death ✕ mark for a button — a bold red glyph in the
+        // top-right corner (the former swatch spot, clear of the bottom reload
+        // bar). Disabled by default; RefreshWeaponStates enables it while the
+        // type is partially or fully dead.
         Text BuildDeathMark(RectTransform buttonRT)
         {
-            Text mark = UIStyle.BuildLabel(
-                buttonRT, "✕", Mathf.RoundToInt(deathMarkSize.y), FontStyle.Bold);
+            Text mark = UIStyle.BuildLabel(buttonRT, "✕", 22, FontStyle.Bold);
             RectTransform rt = (RectTransform)mark.transform;
-            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
-            rt.anchoredPosition = new Vector2(-4f, 4f);
-            rt.sizeDelta = deathMarkSize;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-3f, -3f);
+            rt.sizeDelta = new Vector2(24f, 24f);
             mark.color = deathMarkColor;
             mark.enabled = false;
             return mark;
         }
 
         // Build the "no power" bolt for a button — a bright lightning glyph in
-        // the bottom-right corner (same spot as the death ✕, and mutually
+        // the top-right corner (same spot as the death ✕, and mutually
         // exclusive with it). Shown by RefreshWeaponStates when an alive,
         // undamaged laser can't afford to fire. A procedural sprite, so no
         // font-glyph dependency. Disabled by default.
@@ -296,8 +276,8 @@ namespace CubeFly.Fly
             int uiLayer = LayerMask.NameToLayer("UI");
             if (uiLayer >= 0) go.layer = uiLayer;
             RectTransform rt = (RectTransform)go.transform;
-            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 0f);
-            rt.anchoredPosition = new Vector2(-4f, 4f);
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-3f, -3f);
             rt.sizeDelta = new Vector2(24f, 24f);
             Image img = go.GetComponent<Image>();
             img.sprite = UIStyle.BoltSprite();
@@ -306,6 +286,44 @@ namespace CubeFly.Fly
             img.raycastTarget = false;
             img.enabled = false;
             return img;
+        }
+
+        // ---------- "No Power!" flash (fired weapon has no power) ----------
+
+        // Persistent centre-screen flash, built once under the HUD root (not the
+        // rebuilt toolbar container). Mirrors the Overboosted!/Overheated! flash
+        // style so the three warnings read as a family.
+        void BuildNoPowerFlash()
+        {
+            _noPowerFlash = UIStyle.BuildLabel(FlyHud.Instance.Root, "No Power!", 28, FontStyle.Normal, CscTheme.StencilOr);
+            _noPowerFlash.color = CscPalette.WarnFlash;
+            CscTheme.AddToonOutline(_noPowerFlash.gameObject, 0.5f);
+            RectTransform rt = (RectTransform)_noPowerFlash.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(360f, 44f);
+            rt.anchoredPosition = new Vector2(0f, 76f);
+            _noPowerFlash.enabled = false;
+        }
+
+        // FlyShootingController.UnpoweredFireAttempt handler: flash 3× then hide.
+        void FlashNoPower()
+        {
+            if (_noPowerFlash == null || !isActiveAndEnabled) return;
+            if (_noPowerFlashRoutine != null) StopCoroutine(_noPowerFlashRoutine);
+            _noPowerFlashRoutine = StartCoroutine(FlashNoPowerRoutine());
+        }
+
+        IEnumerator FlashNoPowerRoutine()
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                _noPowerFlash.enabled = true;
+                yield return new WaitForSecondsRealtime(0.27f);
+                _noPowerFlash.enabled = false;
+                yield return new WaitForSecondsRealtime(0.12f);
+            }
+            _noPowerFlash.enabled = false;
+            _noPowerFlashRoutine = null;
         }
 
         // Per-frame weapon-state refresh — sole owner of button

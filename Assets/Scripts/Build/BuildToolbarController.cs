@@ -99,6 +99,7 @@ namespace CubeFly.Build
         Text _massLabel;
         Text _hpLabel;
         Text _powerLabel;
+        UIPulse _powerPulse;          // pulses the power label while in deficit
         Text _selectedStatsLabel;
         Text _floatingMessage;
         Coroutine _floatingRoutine;
@@ -489,6 +490,8 @@ namespace CubeFly.Build
             powerRT.anchoredPosition = powerLabelAnchoredPosition;
             powerRT.sizeDelta = statLabelSize;
             _powerLabel.enabled = false;
+            _powerPulse = _powerLabel.gameObject.AddComponent<UIPulse>();
+            _powerPulse.enabled = false;
 
             _selectedStatsLabel = UIStyle.BuildLabel(root, string.Empty, fontSize: statFontSize);
             _selectedStatsLabel.alignment = TextAnchor.LowerLeft;
@@ -971,6 +974,9 @@ namespace CubeFly.Build
                     _powerLabel.text = $"Power: {(net >= 0f ? "+" : "")}{net:F0}";
                     _powerLabel.color = net >= 0f ? PowerPositive : PowerNegative;
                 }
+                // Pulse the readout only while in deficit (net < 0) to flag that
+                // the construct can't sustain everything attached.
+                if (_powerPulse != null) _powerPulse.enabled = hasPower && net < 0f;
             }
         }
 

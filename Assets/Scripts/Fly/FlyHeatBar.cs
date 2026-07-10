@@ -26,14 +26,14 @@ namespace CubeFly.Fly
         [Tooltip("Anchored position of the bar centre relative to screen centre. Positive x sits it right of the crosshair (mirror of the boost bar).")]
         [SerializeField] Vector2 anchoredPosition = new Vector2(90f, 0f);
         [SerializeField] Vector2 barSize = new Vector2(12f, 120f);
-        [SerializeField] Color coolColor = new Color(1f, 0.6f, 0.2f, 1f);
-        [SerializeField] Color hotColor = new Color(1f, 0.2f, 0.1f, 1f);
-        [SerializeField] Color frameColor = new Color(0.12f, 0.06f, 0.04f, 1f);
+        Color coolColor = CscPalette.HeatCool;
+        Color hotColor = CscPalette.HeatHot;
+        Color frameColor = CscPalette.HudPanel;
 
         [Header("Overheated flash")]
         [SerializeField] Vector2 flashAnchoredPosition = new Vector2(0f, 70f);
         [SerializeField] int flashFontSize = 26;
-        [SerializeField] Color flashColor = new Color(1f, 0.4f, 0.25f, 1f);
+        Color flashColor = CscPalette.WarnFlash;
         [SerializeField] int flashCount = 3;
         [SerializeField] float flashOnSeconds = 0.27f;
         [SerializeField] float flashOffSeconds = 0.12f;
@@ -166,6 +166,7 @@ namespace CubeFly.Fly
             _frameImage = frameGO.GetComponent<Image>();
             _frameImage.color = frameColor;
             _frameImage.raycastTarget = false;
+            CscTheme.AddToonOutline(frameGO);
 
             GameObject fillGO = new GameObject("HeatBarFill",
                 typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));

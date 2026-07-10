@@ -21,24 +21,21 @@ namespace CubeFly.Fly
         [SerializeField] FlyShootingController shootingController;
 
         [Header("Layout")]
-        [SerializeField] Vector2 buttonSize = new Vector2(160f, 60f);
+        Vector2 buttonSize = new Vector2(64f, 64f);
         [SerializeField] float spacing = 16f;
         [SerializeField] float bottomMargin = 30f;
         [SerializeField] int fontSize = 22;
 
         [Header("Reload bar")]
-        [SerializeField] Vector2 reloadBarSize = new Vector2(140f, 6f);
-        [SerializeField] float reloadBarGap = 6f;
-        [SerializeField] Color reloadBarBackground = new Color(0f, 0f, 0f, 0.6f);
+        Vector2 reloadBarSize = new Vector2(54f, 4f);
+        Color reloadBarBackground = CscPalette.HudPanel;
 
         [Header("Corner swatch")]
         [SerializeField] Vector2 swatchSize = new Vector2(18f, 18f);
 
         [Header("Death response")]
-        [Tooltip("Background color of a fully-dead weapon type's button.")]
-        [SerializeField] Color deadColor = new Color(0.32f, 0.32f, 0.34f, 0.9f);
         [Tooltip("Color of the partial-death corner mark (the X glyph).")]
-        [SerializeField] Color deathMarkColor = new Color(0.95f, 0.2f, 0.2f, 1f);
+        Color deathMarkColor = CscPalette.Critical;
         [Tooltip("Size of the partial-death corner mark, in UI units.")]
         [SerializeField] Vector2 deathMarkSize = new Vector2(16f, 16f);
         [Tooltip("Period of the partial-death mark's alpha pulse, in seconds.")]
@@ -58,8 +55,8 @@ namespace CubeFly.Fly
         Image[] _reloadBars;          // foreground fill (per-type colored)
         Image[] _swatches;
         Text[] _deathMarks;           // partial-death X mark, per button
-
-        static readonly Color SelectedTypeColor = new Color(0.25f, 0.45f, 0.85f, 0.95f);
+        Outline[] _selectionOutlines; // ochre selection ring, per button
+        CanvasGroup[] _canvasGroups;  // dead-dim group, per button
 
         void Start()
         {
@@ -153,6 +150,8 @@ namespace CubeFly.Fly
                 _reloadBars = null;
                 _swatches = null;
                 _deathMarks = null;
+                _selectionOutlines = null;
+                _canvasGroups = null;
                 HideContainer();
                 return;
             }
@@ -163,6 +162,8 @@ namespace CubeFly.Fly
             _reloadBars = new Image[count];
             _swatches = new Image[count];
             _deathMarks = new Text[count];
+            _selectionOutlines = new Outline[count];
+            _canvasGroups = new CanvasGroup[count];
 
             float totalWidth = count * buttonSize.x + Mathf.Max(0, count - 1) * spacing;
             float startX = -totalWidth / 2f + buttonSize.x / 2f;
@@ -178,7 +179,11 @@ namespace CubeFly.Fly
                     : Color.gray;
 
                 // ---- Button ----
-                (Button btn, Text _) = UIStyle.BuildLabeledButton(_container, label, buttonSize, fontSize);
+                (Button btn, Text lbl) = UIStyle.BuildLabeledButton(_container, label, buttonSize, fontSize);
+                Sprite glyph = shape != null ? CscSprites.ForShape(shape.displayName, 0) : null;
+                UIStyle.DecorateToolbarSlot(btn, lbl, glyph, (idx + 1).ToString(), string.Empty);   // caption suppressed; glyph identifies the weapon
+                _selectionOutlines[i] = UIStyle.AddSelectionOutline(btn.gameObject);
+                _canvasGroups[i] = btn.gameObject.AddComponent<CanvasGroup>();
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
                 brt.anchoredPosition = new Vector2(startX + i * (buttonSize.x + spacing), bottomMargin);
@@ -198,8 +203,8 @@ namespace CubeFly.Fly
                 // ---- Partial-death corner mark ----
                 _deathMarks[i] = BuildDeathMark(brt);
 
-                // ---- Reload bar (background + foreground fill) ----
-                float barY = bottomMargin + buttonSize.y + reloadBarGap + reloadBarSize.y / 2f;
+                // ---- Reload bar along the slot's bottom edge ----
+                float barY = bottomMargin + 3f;
                 Vector2 barCenter = new Vector2(startX + i * (buttonSize.x + spacing), barY);
 
                 BuildReloadRect(_container, "ReloadBarBg" + i, reloadBarSize, barCenter, reloadBarBackground, isFill: false);
@@ -292,13 +297,11 @@ namespace CubeFly.Fly
                     _buttons[i].interactable = !fullyDead;
 
                 if (_buttonBackgrounds[i] != null)
-                {
-                    Color bg;
-                    if (fullyDead)          bg = deadColor;
-                    else if (i == selected) bg = SelectedTypeColor;
-                    else                    bg = UIStyle.BackgroundIdle;
-                    _buttonBackgrounds[i].color = bg;
-                }
+                    _buttonBackgrounds[i].color = UIStyle.BackgroundIdle;   // dark slot always
+                if (_selectionOutlines != null && _selectionOutlines[i] != null)
+                    _selectionOutlines[i].enabled = (i == selected && !fullyDead);
+                if (_canvasGroups != null && _canvasGroups[i] != null)
+                    _canvasGroups[i].alpha = fullyDead ? 0.4f : 1f;
 
                 if (_deathMarks[i] != null)
                 {

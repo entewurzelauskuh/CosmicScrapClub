@@ -37,14 +37,14 @@ namespace CubeFly.Fly
         [SerializeField] Vector2 anchoredPosition = new Vector2(-90f, 0f);
         [Tooltip("Bar size in pixels — thin and tall (a vertical bar).")]
         [SerializeField] Vector2 barSize = new Vector2(12f, 120f);
-        [SerializeField] Color fillColor = new Color(0.36f, 0.62f, 1f, 1f);
-        [SerializeField] Color frameColor = new Color(0.05f, 0.07f, 0.12f, 1f);
+        Color fillColor = CscPalette.Boost;
+        Color frameColor = CscPalette.HudPanel;
 
         [Header("Overboosted flash")]
         [Tooltip("Anchored position of the flash label relative to screen centre. Sits above the crosshair.")]
         [SerializeField] Vector2 flashAnchoredPosition = new Vector2(0f, 70f);
         [SerializeField] int flashFontSize = 26;
-        [SerializeField] Color flashColor = new Color(1f, 0.45f, 0.3f, 1f);
+        Color flashColor = CscPalette.WarnFlash;
         [Tooltip("Number of visible/hidden flash cycles on overboosted entry.")]
         [SerializeField] int flashCount = 3;
         [Tooltip("Seconds the flash label is visible per cycle.")]
@@ -54,7 +54,7 @@ namespace CubeFly.Fly
 
         [Header("Critical zone (bottom of the meter)")]
         [Tooltip("Fill color while the meter is in its critical bottom band (FlyController.IsBoostCritical).")]
-        [SerializeField] Color criticalColor = new Color(0.95f, 0.25f, 0.20f, 1f);
+        Color criticalColor = CscPalette.Critical;
         [Tooltip("Seconds for one full throb cycle (alpha + size) while critical. Larger = slower.")]
         [SerializeField] float criticalPulseSeconds = 1.2f;
         [Tooltip("Size throb amplitude while critical — the bar's localScale oscillates by +/- this fraction. 0.05 = +/-5%.")]
@@ -187,6 +187,7 @@ namespace CubeFly.Fly
             _frameImage = frameGO.GetComponent<Image>();
             _frameImage.color = frameColor;
             _frameImage.raycastTarget = false;
+            CscTheme.AddToonOutline(frameGO);
 
             // Fill — child of the frame, pinned to the frame's BOTTOM
             // edge (anchor + pivot y = 0) so it grows upward as the

@@ -291,6 +291,22 @@ namespace CubeFly.Fly
                 }
             }
         }
+
+        // True when this weapon type is a laser with living instances that
+        // currently can't afford even one shot (spare weapon power < per-cube
+        // draw). Non-laser types never energy-starve; a fully-dead type reports
+        // false (that's the dead state, shown separately by the toolbar).
+        // Mirrors the exact gate HandleFireInput uses to power lasers.
+        public bool GroupEnergyStarved(int index)
+        {
+            if (index < 0 || index >= _types.Count) return false;
+            WeaponTypeGroup t = _types[index];
+            if (!t.IsLaser || t.IsFullyDead) return false;
+            float draw = t.LaserPowerDraw;
+            if (draw <= 0f) return false;
+            float available = _energy != null ? _energy.AvailableForWeapons : 0f;
+            return available < draw;
+        }
     }
 
     // One per distinct weapon ShapeDefinition. Tracks every instance

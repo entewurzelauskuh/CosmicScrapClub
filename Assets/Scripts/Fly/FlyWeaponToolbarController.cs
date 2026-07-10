@@ -56,6 +56,7 @@ namespace CubeFly.Fly
         Text[] _deathMarks;           // partial-death X mark, per button
         Outline[] _selectionOutlines; // ochre selection ring, per button
         CanvasGroup[] _canvasGroups;  // dead-dim group, per button
+        Text[] _noPowerTags;          // "NO PWR" amber tag, per button
 
         void Start()
         {
@@ -151,6 +152,7 @@ namespace CubeFly.Fly
                 _deathMarks = null;
                 _selectionOutlines = null;
                 _canvasGroups = null;
+                _noPowerTags = null;
                 HideContainer();
                 return;
             }
@@ -163,6 +165,7 @@ namespace CubeFly.Fly
             _deathMarks = new Text[count];
             _selectionOutlines = new Outline[count];
             _canvasGroups = new CanvasGroup[count];
+            _noPowerTags = new Text[count];
 
             float totalWidth = count * buttonSize.x + Mathf.Max(0, count - 1) * spacing;
             float startX = -totalWidth / 2f + buttonSize.x / 2f;
@@ -201,6 +204,9 @@ namespace CubeFly.Fly
 
                 // ---- Partial-death corner mark ----
                 _deathMarks[i] = BuildDeathMark(brt);
+
+                // ---- "NO PWR" tag (alive laser, not enough energy to fire) ----
+                _noPowerTags[i] = BuildNoPowerTag(brt);
 
                 // ---- Reload bar along the slot's bottom edge ----
                 float barY = bottomMargin + 3f;
@@ -278,6 +284,24 @@ namespace CubeFly.Fly
             return mark;
         }
 
+        // Build the "NO PWR" tag for a button — a small amber label centred in
+        // the slot, shown by RefreshWeaponStates when an alive laser can't
+        // afford to fire (distinct from the red ✕ dead mark). Disabled by
+        // default. All-ASCII so it renders in any font.
+        Text BuildNoPowerTag(RectTransform buttonRT)
+        {
+            Text tag = UIStyle.BuildLabel(buttonRT, "NO PWR", 11, FontStyle.Bold);
+            RectTransform rt = (RectTransform)tag.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(0f, -12f);
+            rt.sizeDelta = new Vector2(62f, 16f);
+            tag.alignment = TextAnchor.MiddleCenter;
+            tag.color = CscPalette.Eject;
+            tag.raycastTarget = false;
+            tag.enabled = false;
+            return tag;
+        }
+
         // Per-frame weapon-state refresh — sole owner of button
         // interactability, background color, and the partial-death mark.
         // Background priority: dead > selected > idle.
@@ -299,8 +323,13 @@ namespace CubeFly.Fly
                     _buttonBackgrounds[i].color = UIStyle.BackgroundIdle;   // dark slot always
                 if (_selectionOutlines != null && _selectionOutlines[i] != null)
                     _selectionOutlines[i].enabled = (i == selected && !fullyDead);
+                // Alive laser with no spare power to fire: grey to 55% (vs the
+                // dead 40%) and show the "NO PWR" tag. Dead takes priority.
+                bool starved = !fullyDead && shootingController.GroupEnergyStarved(i);
                 if (_canvasGroups != null && _canvasGroups[i] != null)
-                    _canvasGroups[i].alpha = fullyDead ? 0.4f : 1f;
+                    _canvasGroups[i].alpha = fullyDead ? 0.4f : (starved ? 0.55f : 1f);
+                if (_noPowerTags != null && _noPowerTags[i] != null)
+                    _noPowerTags[i].enabled = starved;
 
                 if (_deathMarks[i] != null)
                 {

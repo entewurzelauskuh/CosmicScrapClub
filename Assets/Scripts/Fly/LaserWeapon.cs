@@ -95,7 +95,7 @@ namespace CubeFly.Fly
             _line.enabled = false;
 
             // Same target layers + fallback as Bullet/Rocket.
-            _hitLayerMask = LayerMask.GetMask("PlacedCube", "AlphaCube");
+            _hitLayerMask = LayerMask.GetMask("PlacedCube", "AlphaCube", "World");
             if (_hitLayerMask == 0)
                 _hitLayerMask = ~(1 << LayerMask.NameToLayer("Ignore Raycast"));
         }

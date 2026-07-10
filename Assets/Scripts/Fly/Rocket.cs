@@ -171,7 +171,7 @@ namespace CubeFly.Fly
 
             // Same layer-mask logic as Bullet — see ProjectileHit for the
             // rationale on construct-layers + Ignore-Raycast fallback.
-            _hitLayerMask = LayerMask.GetMask("PlacedCube", "AlphaCube");
+            _hitLayerMask = LayerMask.GetMask("PlacedCube", "AlphaCube", "World");
             if (_hitLayerMask == 0)
             {
                 int ignoreRaycast = 1 << LayerMask.NameToLayer("Ignore Raycast");

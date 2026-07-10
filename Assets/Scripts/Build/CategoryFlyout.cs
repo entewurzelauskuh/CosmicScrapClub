@@ -196,11 +196,7 @@ namespace CubeFly.Build
                     : "—";
 
                 (Button btn, Text label) = UIStyle.BuildLabeledButton(
-                    frt,
-                    $"{title}\n<size={Mathf.Max(10, _fontSize - 8)}>{statLine}</size>",
-                    _flyoutEntrySize, _fontSize);
-                label.supportRichText = true;
-                label.alignment = TextAnchor.MiddleLeft;
+                    frt, title, _flyoutEntrySize, _fontSize);
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
                 float y = e * (_flyoutEntrySize.y + _flyoutEntrySpacing);
@@ -209,6 +205,9 @@ namespace CubeFly.Build
                 _buildEntrySwatch(brt, wmat != null ? wmat.SwatchColor : Color.gray);
 
                 Sprite eg = shape != null ? CscSprites.ForShape(shape.displayName, 0) : null;
+                // Top-anchored title + bottom-anchored stats (40px left inset
+                // when a glyph is present) so the text clears the entry edges.
+                UIStyle.SplitEntryText(label, title, statLine, _fontSize, eg != null ? 40f : 8f);
                 if (eg != null)
                 {
                     GameObject egGO = new GameObject("EntryGlyph", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -221,8 +220,6 @@ namespace CubeFly.Build
                     Image egImg = egGO.GetComponent<Image>();
                     egImg.sprite = eg; egImg.color = Color.white;
                     egImg.preserveAspect = true; egImg.raycastTarget = false;
-                    RectTransform elrt = (RectTransform)label.transform;
-                    elrt.offsetMin = new Vector2(40f, elrt.offsetMin.y);   // inset text to clear the glyph
                 }
 
                 int captured = shapeIndex;

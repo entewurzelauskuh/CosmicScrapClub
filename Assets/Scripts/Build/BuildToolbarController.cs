@@ -572,10 +572,10 @@ namespace CubeFly.Build
                     ? $"HP {mdef.healthPoints:F0}  ·  AV {mdef.armourValue:F0}  ·  M {mdef.mass:F1}"
                     : "—";
 
-                (Button btn, Text label) = UIStyle.BuildLabeledButton(frt, $"{title}\n<size={Mathf.Max(10, fontSize - 8)}>{statLine}</size>", flyoutEntrySize, fontSize);
-                label.supportRichText = true;
-                label.alignment = TextAnchor.MiddleLeft;
-                label.color = CscPalette.Sand100;
+                (Button btn, Text label) = UIStyle.BuildLabeledButton(frt, title, flyoutEntrySize, fontSize);
+                // Top-anchored title + bottom-anchored stats so the text clears
+                // the entry's top/bottom edges (material flyout has no glyph).
+                UIStyle.SplitEntryText(label, title, statLine, fontSize, 8f);
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
                 // Stack bottom-up: entry 0 sits at y=0 (closest to the

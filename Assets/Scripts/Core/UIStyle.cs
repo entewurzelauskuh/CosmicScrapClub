@@ -334,6 +334,56 @@ namespace CubeFly.Core
             return glyphImg;
         }
 
+        // Splits a flyout entry's single label into a top-anchored TITLE and a
+        // bottom-anchored STAT line — each pinned to its own half of the entry,
+        // hugging the outer edge with a small margin — so neither text hugs the
+        // entry's top/bottom edge and the empty middle sits between them.
+        // `leftInset` clears an optional entry glyph. Reuses the button's
+        // existing label as the title; returns the new stat Text.
+        public static Text SplitEntryText(Text titleLabel, string title, string statLine,
+            int fontSize, float leftInset)
+        {
+            const float vMargin = 4f, rightMargin = 6f;
+            int statSize = Mathf.Max(10, fontSize - 8);
+
+            // Title → top half, hugging the top.
+            titleLabel.text = title;
+            titleLabel.supportRichText = true;
+            titleLabel.alignment = TextAnchor.UpperLeft;
+            titleLabel.fontSize = fontSize;
+            titleLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            titleLabel.verticalOverflow = VerticalWrapMode.Overflow;
+            RectTransform trt = (RectTransform)titleLabel.transform;
+            trt.anchorMin = new Vector2(0f, 0.5f);
+            trt.anchorMax = new Vector2(1f, 1f);
+            trt.pivot = new Vector2(0.5f, 1f);
+            trt.offsetMin = new Vector2(leftInset, 0f);
+            trt.offsetMax = new Vector2(-rightMargin, -vMargin);
+
+            // Stat → bottom half, hugging the bottom; smaller + muted.
+            GameObject sGO = new GameObject("EntryStats", typeof(RectTransform), typeof(CanvasRenderer));
+            sGO.transform.SetParent(titleLabel.transform.parent, false);
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0) sGO.layer = uiLayer;
+            Text stat = sGO.AddComponent<Text>();
+            stat.font = CscTheme.BodyOr;
+            stat.fontSize = statSize;
+            stat.color = CscPalette.Sand100;
+            stat.alignment = TextAnchor.LowerLeft;
+            stat.supportRichText = true;
+            stat.raycastTarget = false;
+            stat.horizontalOverflow = HorizontalWrapMode.Overflow;
+            stat.verticalOverflow = VerticalWrapMode.Overflow;
+            stat.text = statLine;
+            RectTransform srt = (RectTransform)stat.transform;
+            srt.anchorMin = new Vector2(0f, 0f);
+            srt.anchorMax = new Vector2(1f, 0.5f);
+            srt.pivot = new Vector2(0.5f, 0f);
+            srt.offsetMin = new Vector2(leftInset, vMargin);
+            srt.offsetMax = new Vector2(-rightMargin, 0f);
+            return stat;
+        }
+
         // Adds a disabled ochre selection Outline (distinct from the ink toon
         // outline BuildLabeledButton already carries). Toggle .enabled to show
         // the "selected" ring. Returns it so the caller can keep the ref.

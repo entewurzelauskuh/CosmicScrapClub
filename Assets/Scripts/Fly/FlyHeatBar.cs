@@ -30,10 +30,10 @@ namespace CubeFly.Fly
         Color hotColor = CscPalette.HeatHot;
         Color frameColor = CscPalette.HudPanel;
 
-        [Header("Overheated flash")]
-        [SerializeField] Vector2 flashAnchoredPosition = new Vector2(0f, 70f);
-        [SerializeField] int flashFontSize = 26;
+        Vector2 flashAnchoredPosition = new Vector2(0f, 76f);
+        int flashFontSize = 28;
         Color flashColor = CscPalette.WarnFlash;
+        [Header("Overheated flash")]
         [SerializeField] int flashCount = 3;
         [SerializeField] float flashOnSeconds = 0.27f;
         [SerializeField] float flashOffSeconds = 0.12f;
@@ -180,8 +180,9 @@ namespace CubeFly.Fly
             _fillImage.color = coolColor;
             _fillImage.raycastTarget = false;
 
-            _flashLabel = UIStyle.BuildLabel(canvasRoot, "Overheated!", fontSize: flashFontSize, style: FontStyle.Bold, font: CscTheme.StencilOr);
+            _flashLabel = UIStyle.BuildLabel(canvasRoot, "Overheated!", fontSize: flashFontSize, style: FontStyle.Normal, font: CscTheme.StencilOr);
             _flashLabel.color = flashColor;
+            CscTheme.AddToonOutline(_flashLabel.gameObject, 0.5f);
             RectTransform flashRT = (RectTransform)_flashLabel.transform;
             flashRT.anchorMin = flashRT.anchorMax = flashRT.pivot = new Vector2(0.5f, 0.5f);
             flashRT.sizeDelta = new Vector2(360f, 44f);

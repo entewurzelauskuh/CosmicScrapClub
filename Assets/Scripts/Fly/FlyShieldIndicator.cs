@@ -31,7 +31,7 @@ namespace CubeFly.Fly
         [Header("Eject hint (top-left)")]
         [SerializeField] Vector2 ejectHintAnchoredPosition = new Vector2(20f, -20f);
         [SerializeField] int ejectHintFontSize = 22;
-        Color ejectHintColor = CscPalette.Eject;
+        Color ejectHintColor = CscPalette.PowerNegative;
 
         ConstructEnergySystem _energy;
         RectTransform _frame;
@@ -39,6 +39,7 @@ namespace CubeFly.Fly
         Image _fillImage;
         Text _powerLabel;
         Text _ejectHint;
+        UIPulse _ejectHintPulse;
 
         const string TAG = "FlyShield";
 
@@ -59,7 +60,9 @@ namespace CubeFly.Fly
             if (_frame != null && _frame.gameObject.activeSelf != hasShield)
                 _frame.gameObject.SetActive(hasShield);
             if (_powerLabel != null) _powerLabel.enabled = hasPower;
-            if (_ejectHint != null) _ejectHint.enabled = _energy != null && _energy.CanEject;
+            bool canEject = _energy != null && _energy.CanEject;
+            if (_ejectHint != null) _ejectHint.enabled = canEject;
+            if (_ejectHintPulse != null) _ejectHintPulse.enabled = canEject;
             if (!hasPower) return;
 
             if (hasShield)
@@ -119,7 +122,7 @@ namespace CubeFly.Fly
 
             // "Eject: P" hint, top-left. Shown only while CanEject (all
             // reactors lost but power-drawing cubes remain) — see Update.
-            _ejectHint = UIStyle.BuildLabel(root, "Eject: P", ejectHintFontSize, FontStyle.Bold);
+            _ejectHint = UIStyle.BuildLabel(root, "EJECT: P", ejectHintFontSize, FontStyle.Bold);
             _ejectHint.color = ejectHintColor;
             _ejectHint.alignment = TextAnchor.UpperLeft;
             RectTransform ehRT = (RectTransform)_ejectHint.transform;
@@ -127,6 +130,10 @@ namespace CubeFly.Fly
             ehRT.sizeDelta = new Vector2(260f, 36f);
             ehRT.anchoredPosition = ejectHintAnchoredPosition;
             _ejectHint.enabled = false;
+            // Pulse red while shown — same red + pulse as the hangar POWER
+            // readout in a deficit (see BuildToolbarController / UIPulse).
+            _ejectHintPulse = _ejectHint.gameObject.AddComponent<UIPulse>();
+            _ejectHintPulse.enabled = false;
         }
     }
 }

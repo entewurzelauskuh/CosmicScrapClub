@@ -40,11 +40,10 @@ namespace CubeFly.Fly
         Color fillColor = CscPalette.Boost;
         Color frameColor = CscPalette.HudPanel;
 
-        [Header("Overboosted flash")]
-        [Tooltip("Anchored position of the flash label relative to screen centre. Sits above the crosshair.")]
-        [SerializeField] Vector2 flashAnchoredPosition = new Vector2(0f, 70f);
-        [SerializeField] int flashFontSize = 26;
+        Vector2 flashAnchoredPosition = new Vector2(0f, 76f);
+        int flashFontSize = 28;
         Color flashColor = CscPalette.WarnFlash;
+        [Header("Overboosted flash")]
         [Tooltip("Number of visible/hidden flash cycles on overboosted entry.")]
         [SerializeField] int flashCount = 3;
         [Tooltip("Seconds the flash label is visible per cycle.")]
@@ -205,8 +204,9 @@ namespace CubeFly.Fly
 
             // "Overboosted!" flash label — screen-centre relative,
             // offset above the crosshair. Hidden until a flash fires.
-            _flashLabel = UIStyle.BuildLabel(canvasRoot, "Overboosted!", fontSize: flashFontSize, style: FontStyle.Bold, font: CscTheme.StencilOr);
+            _flashLabel = UIStyle.BuildLabel(canvasRoot, "Overboosted!", fontSize: flashFontSize, style: FontStyle.Normal, font: CscTheme.StencilOr);
             _flashLabel.color = flashColor;
+            CscTheme.AddToonOutline(_flashLabel.gameObject, 0.5f);
             RectTransform flashRT = (RectTransform)_flashLabel.transform;
             flashRT.anchorMin = flashRT.anchorMax = flashRT.pivot = new Vector2(0.5f, 0.5f);
             flashRT.sizeDelta = new Vector2(360f, 44f);

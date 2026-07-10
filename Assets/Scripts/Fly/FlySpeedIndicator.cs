@@ -56,7 +56,7 @@ namespace CubeFly.Fly
         {
             if (_label == null) return;
             float speed = _constructRb != null ? _constructRb.linearVelocity.magnitude : 0f;
-            _label.text = $"Speed: {speed:F1} u/s";
+            _label.text = $"SPEED <size={fontSize + 12}>{speed:F0}</size> u/s";
         }
 
         void BuildUI()
@@ -65,6 +65,9 @@ namespace CubeFly.Fly
 
             _label = UIStyle.BuildLabel(canvasRoot, "Speed: 0.0 u/s", fontSize: fontSize);
             _label.alignment = TextAnchor.MiddleLeft;
+            _label.font = CscTheme.CondOr;
+            _label.supportRichText = true;
+            _label.color = CscPalette.Label;
             RectTransform rt = (RectTransform)_label.transform;
             // Anchor and pivot bottom-left so anchoredPosition reads as
             // an offset from the screen's bottom-left corner.

@@ -187,7 +187,7 @@ Repair node cubes · cube-blueprint export / import for sharing builds · day/ni
 
 ## Contributing
 
-The project is a small Unity 6.3 LTS / URP demo at the moment. The codebase is around six thousand lines of C# spread across well-bounded MonoBehaviours and ScriptableObjects, and every file in `Assets/Scripts/` is documented in [`docs/full_architecture.md`](docs/full_architecture.md) with its responsibility in one sentence. If you've ever wanted to learn Unity by extending a real project rather than another todo list, this is meant to be a friendly entry point.
+The project is a small Unity 6.3 LTS / URP demo at the moment. The codebase is around fifteen thousand lines of C# spread across well-bounded MonoBehaviours and ScriptableObjects, and every file in `Assets/Scripts/` is documented in [`docs/full_architecture.md`](docs/full_architecture.md) with its responsibility in one sentence. If you've ever wanted to learn Unity by extending a real project rather than another todo list, this is meant to be a friendly entry point.
 
 Concretely:
 

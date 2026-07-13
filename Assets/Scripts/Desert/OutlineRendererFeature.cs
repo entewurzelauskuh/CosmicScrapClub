@@ -132,7 +132,9 @@ namespace CubeFly.Desert
                         builder.UseTexture(resourceData.cameraDepthTexture, AccessFlags.Read);
                     if (resourceData.cameraNormalsTexture.IsValid())
                         builder.UseTexture(resourceData.cameraNormalsTexture, AccessFlags.Read);
-                    builder.UseAllGlobalTextures(true);
+                    // Only the source copy + depth + normals are sampled, and
+                    // each is declared above. No blanket UseAllGlobalTextures —
+                    // over-declaring reads inhibits RenderGraph culling/aliasing. (CR-016)
 
                     builder.SetRenderAttachment(activeColor, 0, AccessFlags.Write);
 

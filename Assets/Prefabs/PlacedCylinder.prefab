@@ -171,5 +171,4 @@ MonoBehaviour:
   projectilePrefab: {fileID: 8100000, guid: c2c2c2c2000000410000000000000041, type: 3}
   reloadSeconds: 3.0
   damage: 20
-  armorPenetration: 2
   launchExitDistance: 0.5

@@ -92,8 +92,14 @@ namespace CubeFly.Input
 
         public void Dispose()
         {
+            // Disable first, then Dispose: InputActionMap.Dispose releases the
+            // map's managed + unmanaged internal action state, which Disable
+            // alone does not. FlyController / FlyCamera / FlyShootingController
+            // and BuildManager each own an instance, so leaking here multiplies. (CR-015)
             _buildMap?.Disable();
             _flyMap?.Disable();
+            _buildMap?.Dispose();
+            _flyMap?.Dispose();
         }
 
         public readonly struct BuildActions

@@ -17,10 +17,10 @@ namespace CubeFly.Fly
     // Sells "small jets firing in pulses" instead of "main engine".
     //
     // Toggle: when VfxSettings.RcsPuff == false, Update early-returns
-    // (no new bursts), and ApplyEnabledState SetActive(false)'s each
-    // corner emitter's GameObject so any in-flight particles fade
-    // out naturally. The RcsPuffVfx component itself stays enabled
-    // so it can re-enable the emitters when the toggle flips back on.
+    // (no new bursts) and ApplyEnabledState Stop()s each corner emitter
+    // (StopEmitting) so any in-flight burst particles finish their
+    // lifetime and fade out naturally rather than vanishing instantly.
+    // The emitters stay active; a flip back on Play()s them again.
     //
     // No thruster-coverage exclusion in v1: attitude (pitch/yaw/roll)
     // is rotational torque, applied directly by FlyController via
@@ -205,10 +205,19 @@ namespace CubeFly.Fly
 
         void ApplyEnabledState()
         {
+            // Stop emission rather than SetActive(false): stopping only halts
+            // new particles, so any in-flight burst finishes its lifetime and
+            // fades out naturally instead of vanishing the instant the toggle
+            // flips off. Update() already gates manual bursts on the same
+            // toggle, so a stopped-but-active emitter stays silent until
+            // re-enabled, when Play() resumes it. (CR-020)
             bool on = VfxSettings.RcsPuff;
             for (int i = 0; i < 4; i++)
-                if (_emitters[i] != null && _emitters[i].gameObject.activeSelf != on)
-                    _emitters[i].gameObject.SetActive(on);
+            {
+                if (_emitters[i] == null) continue;
+                if (on) _emitters[i].Play();
+                else    _emitters[i].Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            }
         }
     }
 }

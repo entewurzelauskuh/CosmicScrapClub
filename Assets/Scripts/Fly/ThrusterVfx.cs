@@ -103,8 +103,15 @@ namespace CubeFly.Fly
         {
             if (_plumePs == null || _thruster == null) return;
 
-            float input = _thruster.CurrentInputLevel;
-            bool boostingThisFrame = _thruster.IsBoosting && VfxSettings.BoostFlare;
+            // Gate emission on IsAlive. A thruster killed mid-thrust keeps its
+            // last CurrentInputLevel / IsBoosting values frozen (FlyController's
+            // VFX loop skips dead thrusters without zeroing them), so without
+            // this a stale plume would ride the detached cube through its ~2 s
+            // death drift. Treating a dead thruster as zero-input flows through
+            // the logic below to rateOverTime = 0 and drops the shock diamond. (CR-009)
+            bool alive = _thruster.IsAlive;
+            float input = alive ? _thruster.CurrentInputLevel : 0f;
+            bool boostingThisFrame = alive && _thruster.IsBoosting && VfxSettings.BoostFlare;
             bool boostCueActive = boostingThisFrame && input > 0f;
 
             // Main plume emission rate. Three cases:

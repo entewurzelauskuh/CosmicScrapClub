@@ -113,20 +113,30 @@ namespace CubeFly.Core
             for (int i = 0; i < volumes.Length; i++)
             {
                 Volume v = volumes[i];
-                // Skip disabled volumes — a disabled global/high-priority
-                // Volume must not win selection and receive the toggles. (AP-11, PR review)
-                if (v == null || !v.isActiveAndEnabled || v.profile == null) continue;
+                // Filter on sharedProfile, not profile: the Volume.profile getter
+                // instantiates a runtime clone on first access, so probing it for
+                // every candidate (including losers) needlessly allocates and can
+                // hand an empty auto-created profile priority. Skip disabled
+                // volumes too — a disabled high-priority Volume must not win. (AP-11, CR-013)
+                if (v == null || !v.isActiveAndEnabled || v.sharedProfile == null) continue;
                 if (best == null
                     || (v.isGlobal && !best.isGlobal)
                     || (v.isGlobal == best.isGlobal && v.priority > best.priority))
                     best = v;
             }
-            if (best != null && best.profile != null)
+            // Mutate the winner's own instance profile (Volume.profile): the
+            // instance is unique to this Volume, so toggling override.active
+            // affects only what this Volume renders and never dirties a shared
+            // .asset on disk. Only the winner is cloned, not every candidate.
+            if (best != null)
                 return best.profile;
 
-            URPDefaultVolumeProfileSettings settings =
-                GraphicsSettings.GetRenderPipelineSettings<URPDefaultVolumeProfileSettings>();
-            return settings != null ? settings.volumeProfile : null;
+            // No scene Volume: do NOT fall back to URP's global default profile
+            // asset — Apply() would toggle override.active on that SHARED asset,
+            // permanently dirtying it in the Editor. Scenes without a Volume
+            // (MainMenu / HangarSelect / BuildScene) simply have nothing to
+            // apply the VFX toggles to; add a scene Volume if they need one. (CR-013)
+            return null;
         }
     }
 }

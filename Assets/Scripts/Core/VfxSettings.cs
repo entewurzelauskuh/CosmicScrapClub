@@ -58,6 +58,11 @@ namespace CubeFly.Core
 
         static void Set(string key, bool value)
         {
+            // No-op guard: skip the PlayerPrefs write, the synchronous disk
+            // flush, and the Changed re-apply when the value is unchanged. Get
+            // defaults to ON, so a redundant "set ON" on an unwritten key is
+            // correctly treated as a no-op. (CR-021)
+            if (Get(key) == value) return;
             PlayerPrefs.SetInt(key, value ? 1 : 0);
             PlayerPrefs.Save();
             Changed?.Invoke();

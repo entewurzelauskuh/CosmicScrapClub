@@ -716,7 +716,14 @@ namespace CubeFly.Build
                     save.totalHealthPoints += alpha.healthPoints;
                 }
             }
-            SaveManager.Save(slot, save);
+            if (!SaveManager.Save(slot, save))
+            {
+                // SaveManager logs the low-level cause; add autosave context so a
+                // silent disk failure (permission denied, full disk, AV lock) is
+                // at least diagnosable. A player-facing "autosave failed" status
+                // is a larger UX piece (SaveResult + dirty flag) left out of scope. (CR-002)
+                Debug.unityLogger.LogError(TAG, $"Autosave to slot {slot} failed; latest edits are NOT on disk.");
+            }
         }
 
         // Writes a pending debounced save immediately and cancels the timer.

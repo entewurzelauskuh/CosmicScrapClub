@@ -100,7 +100,6 @@ MonoBehaviour:
   projectilePrefab: {fileID: 0}
   reloadSeconds: 0
   damage: 6
-  armorPenetration: 0
   range: 100
   tickInterval: 0.1
   powerDraw: 5

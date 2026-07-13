@@ -28,9 +28,8 @@ namespace CubeFly.Fly
         [Tooltip("Wired by FlyController.BuildConstruct after weapon instantiation. Per subclass: Pyramid → MuzzleFlashStarburst.prefab; Cylinder → MuzzleFlashDisc.prefab. If null, no muzzle VFX fires.")]
         [SerializeField] GameObject muzzlePrefab;
 
-        [Header("Stats (consumed by v2 damage pass)")]
+        [Header("Stats")]
         [SerializeField] protected float damage = 1f;
-        [SerializeField] protected float armorPenetration = 0f;
 
         public Transform Construct { get; set; }
         public ShapeDefinition Shape { get; set; }

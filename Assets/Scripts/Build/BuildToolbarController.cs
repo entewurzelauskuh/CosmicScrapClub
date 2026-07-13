@@ -606,10 +606,15 @@ namespace CubeFly.Build
         {
             if (_flyoutOwnerShape < 0) return;
             buildManager.SetMaterialForShape(_flyoutOwnerShape, materialIndex);
-            // Selecting a material implies the player wants this shape
-            // armed too — switch the active shape if it isn't already.
+            // Selecting a material implies the player wants this shape armed and
+            // placing. SetCurrentShape also resets the tool to Place, but the
+            // guard skips it when the owner shape is already current — so if
+            // Delete mode was on it would stay on. Force Place explicitly in
+            // that branch so a palette pick always leaves Delete mode. (CR-018)
             if (buildManager.CurrentShapeIndex != _flyoutOwnerShape)
                 buildManager.SetCurrentShape(_flyoutOwnerShape);
+            else if (buildManager.CurrentTool != BuildTool.Place)
+                buildManager.SetCurrentTool(BuildTool.Place);
             HideFlyout();
         }
 
@@ -686,10 +691,17 @@ namespace CubeFly.Build
             // frame while a flyout is open; an EventSystem.RaycastAll +
             // PointerEventData + List<RaycastResult> per frame was a
             // steady GC source. ScreenSpaceOverlay canvas → null camera.
-            return RectTransformUtility.RectangleContainsScreenPoint(
-                (RectTransform)_flyout.transform,
-                Mouse.current.position.ReadValue(),
-                null);
+            Vector2 mouse = Mouse.current.position.ReadValue();
+            if (RectTransformUtility.RectangleContainsScreenPoint(
+                    (RectTransform)_flyout.transform, mouse, null))
+                return true;
+            // Also count the owner button as "over" so the flyout doesn't time
+            // out while the cursor rests on the control that opened it. (CR-018)
+            return _flyoutOwnerShape >= 0 && _shapeButtons != null
+                && _flyoutOwnerShape < _shapeButtons.Length
+                && _shapeButtons[_flyoutOwnerShape] != null
+                && RectTransformUtility.RectangleContainsScreenPoint(
+                    (RectTransform)_shapeButtons[_flyoutOwnerShape].transform, mouse, null);
         }
 
         void RefreshFlyoutEntryHighlights()

@@ -393,10 +393,14 @@ namespace CubeFly.Build
             // Allocation-free rect test — see BuildToolbarController.
             // TickAwayTimer calls this every frame; the old
             // EventSystem.RaycastAll path was a steady GC source.
-            return RectTransformUtility.RectangleContainsScreenPoint(
-                (RectTransform)_flyout.transform,
-                Mouse.current.position.ReadValue(),
-                null);
+            Vector2 mouse = Mouse.current.position.ReadValue();
+            if (RectTransformUtility.RectangleContainsScreenPoint(
+                    (RectTransform)_flyout.transform, mouse, null))
+                return true;
+            // Also count the owner button so the flyout doesn't time out while
+            // the cursor rests on the category button that opened it. (CR-018)
+            return _button != null && RectTransformUtility.RectangleContainsScreenPoint(
+                (RectTransform)_button.transform, mouse, null);
         }
     }
 }

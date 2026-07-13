@@ -398,10 +398,15 @@ namespace CubeFly.HangarSelect
 
         void CommitDelete(int slot)
         {
-            SaveManager.Delete(slot);
-            // Refresh from disk — the card flips back to its empty state.
+            bool deleted = SaveManager.Delete(slot);
+            // Refresh from disk regardless: on success the card flips to empty;
+            // on failure the file is still there so the card stays filled,
+            // instead of the UI implying a delete that didn't happen. (CR-002)
             RefreshCard(slot);
-            Debug.unityLogger.Log(TAG, $"Slot {slot}: deleted.");
+            if (deleted)
+                Debug.unityLogger.Log(TAG, $"Slot {slot}: deleted.");
+            else
+                Debug.unityLogger.LogError(TAG, $"Slot {slot}: delete failed; slot left intact.");
         }
 
         // ---------- Helpers ----------

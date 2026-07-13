@@ -216,7 +216,15 @@ namespace CubeFly.Build
             if (shapes == null) return;
 
             ShapeDefinition shape = shapes.Get(shapeIndex);
-            if (shape == null || shape.prefab == null) return;
+            if (shape == null || shape.prefab == null)
+            {
+                // Clear any stale preview so a failed resolution doesn't leave
+                // the previously-selected mesh standing in for the new invalid
+                // item. A null _innerMesh forces a rebuild on the next valid
+                // selection. (CR-018)
+                if (_innerMesh != null) { Destroy(_innerMesh); _innerMesh = null; }
+                return;
+            }
 
             if (_innerMesh != null) Destroy(_innerMesh);
             _innerMesh = Instantiate(shape.prefab, _previewRoot.transform);

@@ -1,6 +1,6 @@
 # Weapon Toolbar Death Response — Design Spec
 
-**Status:** Approved design, ready for implementation planning
+**Status:** ✅ Implemented — but this is the **original (2026-05-18) design record**, since **substantially revised** by the Milestone B UI rebrand (B3d). The alive-count / auto-switch / fire-liveness **logic** below is current; the **visual** details are not. Current toolbar behaviour (authoritative: `full_architecture.md` → `FlyWeaponToolbarController`, and the code): the per-slot material **swatch was removed**; slots are **64×64 brand glyph slots** with the reload bar along the **bottom** edge and an ochre selection outline; the death **✕** sits in the **top-right** corner and shows for **both** partially-dead (pulsing) **and** fully-dead types (static, on a slot dimmed to **40% via `CanvasGroup`** — no grey `deadColor`); a yellow **no-power bolt** shares that corner for an alive-but-unpowered laser; and pressing fire on an unpowered laser triggers a centre-screen **"No Power!"** flash. The `deadColor` / `deathMarkSize` serialized fields no longer exist.
 **Date:** 2026-05-18
 **Prerequisite:** none — independent of PR #30 and of the Boost Overboost Tuning work
 

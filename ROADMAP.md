@@ -6,7 +6,7 @@ A living planning doc. What works today, what we're building next, and where the
 
 ## Vision
 
-Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, thrusters, reactors, and shields — then fly it. You can already place shapes, save / load three constructs, fly a physics-driven construct that bounces off the world, shoot bullets and rockets, fire a continuous energy laser, register hits, blow cubes off targets, take kinetic damage when you crash, boost with thruster cubes, power reactors that run shields and energy weapons, and lose the run when your anchor cube dies. The next chunk of work is a polish pass — VFX and a settings menu.
+Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, thrusters, reactors, and shields — then fly it. You can already place shapes, save / load three constructs, fly a physics-driven construct that bounces off the world, shoot bullets and rockets, fire a continuous energy laser, register hits, blow cubes off targets, take kinetic damage when you crash, boost with thruster cubes, power reactors that run shields and energy weapons, and lose the run when your anchor cube dies. Since then it's gained a full 500×500 cel-shaded desert combat level and a complete UI rebrand to the *Cosmic Scrap Club* brand. The next chunk of work is the remaining Extended-VFX phases (weapons, destruction, HUD feedback).
 
 It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DOTS), pure C# everywhere, and the docs are kept honest so you can read [`docs/full_architecture.md`](docs/full_architecture.md) and immediately know which file does what. If you've been wanting to mess around in a Unity codebase that's neither toy-sized nor incomprehensible, this might be the project for you.
 
@@ -14,7 +14,7 @@ It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DO
 
 ## Where we are today
 
-Read [`docs/cube_fly_spec.md`](docs/cube_fly_spec.md) for the canonical product spec and [`docs/full_architecture.md`](docs/full_architecture.md) for the file-by-file implementation map. In a sentence: four scenes (`MainMenu → HangarSelect → BuildScene ⇄ FlyScene`), three save slots, three ship classes (Allrounder / Tank / Scout) chosen per slot, ESC pause overlay, a decoupled Shape × Material build system (Cube / Slope armour · Pyramid / Cylinder / Laser weapons · Thruster / Reactor / Shield utilities × four armour materials), per-cube HP / Armour / Mass stats, symmetric face-validity placement rules, Rigidbody-driven 6-axis flight with real bouncing off the world and an adaptive third-person camera, a Left-Ctrl boost mechanic fed by thruster cubes, a screen-space crosshair, three weapons (bullets, rockets, and a continuous energy laser) selected from a toolbar with digit keys and mouse-wheel cycling, Speed + HP + Boost + Shield + Power + laser-heat HUD readouts, a basic 200×200 world map seeded with 20 target dummies, projectile hit registration with armour-aware damage, an outward-drift cube destruction animation, kinetic crash damage on collision, a construct-wide power system (reactors power shields + the laser; a shared shield pool absorbs damage before HP with projectile / energy / kinetic profiles; an "Eject" sheds dead-weight power cubes when all reactors are lost), and an end-of-run condition when the alpha cube dies.
+Read [`docs/cube_fly_spec.md`](docs/cube_fly_spec.md) for the canonical product spec and [`docs/full_architecture.md`](docs/full_architecture.md) for the file-by-file implementation map. In a sentence: four scenes (`MainMenu → HangarSelect → BuildScene ⇄ FlyScene`), three save slots, three ship classes (Allrounder / Tank / Scout) chosen per slot, ESC pause overlay, a decoupled Shape × Material build system (Cube / Slope armour · Pyramid / Cylinder / Laser weapons · Thruster / Reactor / Shield utilities × four armour materials), per-cube HP / Armour / Mass stats, symmetric face-validity placement rules, Rigidbody-driven 6-axis flight with real bouncing off the world and an adaptive third-person camera, a Left-Ctrl boost mechanic fed by thruster cubes, a screen-space crosshair, three weapons (bullets, rockets, and a continuous energy laser) selected from a toolbar with digit keys and mouse-wheel cycling, Speed + HP + Boost + Shield + Power + laser-heat HUD readouts, a 500×500 cel-shaded desert combat level (destructible targets + auto-turrets, projectiles stop at terrain), projectile hit registration with armour-aware damage, an outward-drift cube destruction animation, kinetic crash damage on collision, a construct-wide power system (reactors power shields + the laser; a shared shield pool absorbs damage before HP with projectile / energy / kinetic profiles; an "Eject" sheds dead-weight power cubes when all reactors are lost), and an end-of-run condition when the alpha cube dies.
 
 ### Shipped since the last roadmap pass
 
@@ -39,7 +39,7 @@ Read [`docs/cube_fly_spec.md`](docs/cube_fly_spec.md) for the canonical product 
 
 In running order. Phase 1 (HitContext + HUD consolidation) and phase 2 (Power & Energy + Laser) are done. The polish pass is in motion: the Settings menu scaffold (six placeholder tabs + Debug) has shipped, VFX phase 1 (post-processing + Debug-tab toggles) has shipped, and VFX phase B-1 (engines + boost flare + RCS puffs) has shipped. Remaining: VFX phases B-2 / B-3 / B-4 / C / D and an AA settings dropdown for the Graphics tab.
 
-**Note (2026-05-31):** item 4 (desert map → FlyScene, then the UI rebrand) has been **pulled forward** ahead of the remaining VFX phases by decision — see that section for the scoped arc. Docs are re-synced at logical close-outs.
+**Note:** item 4 (desert map → FlyScene + the UI rebrand) was pulled forward ahead of the remaining VFX phases and is now **✅ COMPLETE** — both milestones merged to `main` (2026-07-10). The remaining Up-Next work is the VFX phases B-2…D. Docs are re-synced at logical close-outs.
 
 ### 1. Extended VFX pass
 
@@ -70,7 +70,7 @@ A seventh **Debug** tab is added during the VFX pass (item 1 above): a per-effec
 
 Refresh `README.md`, `ROADMAP.md`, `docs/full_architecture.md`, `docs/cube_fly_spec.md` to reflect the VFX pass + settings menu. Audit the docs index in `README.md`'s companion-docs list and trim anything that's outlived its usefulness.
 
-### 4. Desert map → FlyScene, then the UI rebrand  *(pulled forward; arc scoped 2026-05-31)*
+### 4. Desert map → FlyScene, then the UI rebrand  ✅ *(COMPLETE — both milestones merged to `main`, 2026-07-10)*
 
 The desert demonstrator (`DesertSandbox.unity` + `Assets/Scripts/Desert/` + shaders +
 formation prefabs + `Desert_Renderer`) is **already merged to `main`** as a standalone,
@@ -128,18 +128,27 @@ Terrain-first, cel-look-second — the two risks were split so each got its own 
   merged to `main`. See `docs/superpowers/specs/2026-07-04-desert-flyscene-a4-design.md`.
   **Milestone A complete → Milestone B next.**
 
-**Milestone B — UI rebrand** *(separate milestone, all scenes; after A)*
-Consume the `unity_handoff/` design-system drop (palette `CscPalette` + theme `CscTheme`
-+ 12 UI sprites + brand fonts, already fetched into `Assets/Resources/Fonts/`).
-- **B1 — Drop-in groundwork** (zero visual change): copy `CscPalette`/`CscTheme` into
-  `Assets/Scripts/Core/`, import the 12 sprites, commit the staged fonts + add the font
-  bootstrap.
-- **B2 — Wire it up** (HANDOFF Step 4 — *brainstorm before implementing*): refactor
-  `UIStyle` to source colors/fonts from the theme, add toon outlines + primary (ochre)
-  buttons, point the Fly HUD literals at `CscPalette`.
-- **B3 — Sprites into the build toolbar / HUD**, then retire `unity_handoff/`.
+**Milestone B — UI rebrand** ✅ *(COMPLETE — B1–B3d + a post-merge fix batch landed + merged to `main` via PR #55, 2026-07-10)*
+Rebranded all four surfaces (MainMenu / HangarSelect / BuildScene / FlyScene HUD) to the
+**Cosmic Scrap Club** identity, consuming the `unity_handoff/` design drop into a code-built UI system.
+- **B1–B2 — Groundwork + wire-up.** `CscPalette` (brand colours) + `CscTheme` (semantic roles,
+  fonts, toon-outline/shadow helpers) + `CscThemeBootstrap` (font load); brand fonts
+  (Anton / Saira / Saira Condensed / Saira Stencil One) in `Assets/Resources/Fonts/`, 12 UI glyph
+  sprites in `Assets/Resources/UI/Sprites/`; `UIStyle` routed through the theme (fonts, colours,
+  `AddToonOutline`, ochre `ButtonKind.Primary/Danger`).
+- **B3a–B3d — Restyle each surface.** MainMenu wordmark + warm procedural background
+  (`UIStyle.BuildBrandBackground` + feathered procedural plates); HangarSelect rounded cards;
+  BuildScene branded toolbar (glyph slots via `CscSprites` + `DecorateToolbarSlot`, class dropdown,
+  `MASS:/HP:/POWER:` big-value readouts, hazard trim); FlyScene HUD (ink-framed meters, 64×64
+  weapon slots, big HP/Speed values, HP red < 25%). New shared UI primitives: `UIClickBounce`,
+  `LetterSpacing`, `UIPulse`, procedural `MakePlateSprite/MakeRoundedPlate/MakeHazardStripe/BoltSprite`.
+- **Post-merge fix batch** (surfaced in play-testing): projectiles (laser/bullet/rocket) now stop
+  at desert terrain (`World` layer added to the hit masks); hangar `POWER` folds in weapon draw +
+  red-pulses on a deficit; a fly "No Power!" flash + slot bolt glyph for an unpowered laser; flat
+  shadowless hangar lighting (`BuildManager.ConfigureHangarLighting`). Reviewed clean, Play-verified.
 
-Each milestone gets its own spec → plan → implement cycle when reached.
+Specs/plans under `docs/superpowers/{specs,plans}/2026-07-*-ui-rebrand-*`. `unity_handoff/` kept as
+brand reference (BRAND.md / mockups / `.kit.jsx`). Each milestone got its own spec → plan → implement cycle.
 
 ---
 

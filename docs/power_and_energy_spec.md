@@ -159,14 +159,17 @@ build-scene power readout, which lives on the build toolbar.
 | Element | Where | Source |
 |---|---|---|
 | **Shield bar** (`FlyShieldIndicator`) | bottom-left, above HP | cyan fill = `ShieldPoints / ShieldMax`; greyed when collapsed; hidden when no shield cubes |
-| **`Power:` readout** (`FlyShieldIndicator` / `BuildToolbarController`) | bottom-left | `Power: +N / −N` (green ≥ 0, red < 0); shown in **both** FlyScene and BuildScene; hidden when no power cubes |
+| **`POWER:` readout** (`FlyShieldIndicator` / `BuildToolbarController`) | bottom-left | `POWER: ±N` (green ≥ 0, red < 0); shown in **both** FlyScene and BuildScene; the hangar readout uses a big value + red-**pulses** on a deficit (`UIPulse`); hidden when no power cubes |
 | **Heat bar** (`FlyHeatBar`) | right of crosshair (mirrors the boost bar) | fill + opacity = `Heat / 100` — invisible when cold, fades in with use, fades out on regen; red throb + "Overheated!" flash at lockout; shown only while a laser is the selected type |
-| **"Eject: P" hint** (`FlyShieldIndicator`) | top-left | shown only while `CanEject` |
+| **"EJECT: P" hint** (`FlyShieldIndicator`) | top-left | shown only while `CanEject`; red + pulsing |
 
-The build-scene `Power:` readout is computed by
+The build-scene `POWER:` readout is computed by
 `BuildManager.ComputeCurrentNetPower(out hasPowerCubes)` — summing reactor
-`Output` − shield `Draw` across the placed cubes — so power balance is
-visible while building, not just in flight.
+`Output` − (shield `Draw` + laser `PowerDraw`) across the placed cubes — so power
+balance is visible while building, not just in flight. Unlike flight's steady
+`NetPower` (which excludes weapon draw, since it's contended at fire time), the
+hangar folds laser draw in as a worst-case "can everything run at once?" budget,
+so a laser without enough reactor reads negative and the readout pulses red.
 
 ---
 

@@ -7,8 +7,8 @@ Pipeline (URP) — Universal 3D template.
 opens a Main Menu, picks one of three save slots, builds a cube
 construct in a Hangar, and then pilots the assembled construct like a
 plane — including shooting with weapon-cube types, registering hits
-on a 200×200 practice arena seeded with destructible target dummies,
-and taking kinetic damage when crashing into things. Construct data is
+across a 500×500 cel-shaded desert combat level of destructible targets
+and auto-turrets, and taking kinetic damage when crashing into things. Construct data is
 held in-memory by a static class for cross-scene transitions and
 persisted to disk per slot.
 
@@ -35,11 +35,12 @@ This document is the single canonical spec. Companion docs:
 | `MainMenu`      | First scene the player sees. Shows three buttons: **Hangar** → HangarSelect, **Settings** (placeholder), **Exit**. |
 | `HangarSelect`  | Save-slot picker. Three cards (one per slot); each shows stats + last-edited timestamp when filled, "<empty>" otherwise. Selecting a slot loads its `ConstructSave` into `GameData` (or clears `GameData` for an empty slot) and transitions to `BuildScene` with that slot armed for autosave. |
 | `BuildScene`    | Hangar. The player places, rotates, and deletes cubes around a fixed semi-transparent **alpha cube**. Construct changes autosave (debounced) to the armed slot. |
-| `FlyScene`      | Pilot mode. The construct is rebuilt from in-memory `GameData` and flown with 6-axis thrust + pitch / yaw / roll + camera mouse-look. Weapon-cubes fire on LMB; weapon-type selection on digits / scroll wheel. Hits register against placed cubes and world targets; crashes deal kinetic damage. A flat 200×200 world map seeded with 20 target dummies provides the practice arena. |
+| `FlyScene`      | Pilot mode. The construct is rebuilt from in-memory `GameData` and flown with 6-axis thrust + pitch / yaw / roll + camera mouse-look. Weapon-cubes fire on LMB; weapon-type selection on digits / scroll wheel. Hits register against placed cubes and desert targets; crashes deal kinetic damage. A 500×500 cel-shaded desert combat level (rock formations, destructible targets, auto-turrets) provides the arena. |
 
-A persistent corner button (`Fly!` / `Hangar`) sits in the top-right of
-BuildScene and FlyScene and toggles between them. The button is hidden
-on MainMenu and HangarSelect.
+A persistent corner button (`FLY!` in BuildScene) sits top-right and switches
+to FlyScene; in FlyScene the reverse Hangar switch is routed through the pause
+menu instead, so the corner button is hidden there (as it is on MainMenu and
+HangarSelect).
 
 A pause overlay (`PauseMenu`) self-bootstraps before the first scene
 loads. ESC opens / closes the overlay in BuildScene and FlyScene only.
@@ -427,7 +428,7 @@ and need reactors to stay up; the power model is in *Power & Energy* below.
 
 ### Hit registration
 
-- `Bullet` and `Rocket` do **per-frame swept raycasts** in their `Update` (not Unity triggers) so they don't tunnel through cubes. At the default bullet speed of 80 u/s a projectile travels ~1.33 units per 60 fps frame — wider than a 1-unit cube — so trigger-based detection would intermittently miss. The raycast covers from the previous frame's projectile position to the current one.
+- `Bullet`, `Rocket`, and the `LaserWeapon` beam do **per-frame swept raycasts** (not Unity triggers) so they don't tunnel through cubes. At the default bullet speed of 80 u/s a projectile travels ~1.33 units per 60 fps frame — wider than a 1-unit cube — so trigger-based detection would intermittently miss. The raycast covers from the previous frame's projectile position to the current one, against the `PlacedCube|AlphaCube|World` mask — so shots also **stop at the desert terrain** (`World` layer) instead of passing through it (a World hit has no `CubeStats`, so it deals no damage and just blocks the shot).
 - Self-construct hits are filtered: the firing weapon hands its construct `Transform` to the projectile at `Launch`, and any hit whose collider is a descendant of that transform is skipped. Treats Unity's "destroyed object" sentinel as not-self so in-flight projectiles outlive their firing cube.
 - On a non-self hit, the projectile resolves the hit object's `CubeStats` (via `GetComponentInParent`), constructs a `HitContext` with `DamageType.Projectile` + `HitFlags.None` + the swept-ray hit point and normal, routes it through `CubeDamage.ApplyAndLog`, then `Destroy`s itself.
 
@@ -480,9 +481,11 @@ section is a summary; the detailed design lives in
   can't cover it, the shield stays offline and frees its budget for the laser.
   Either way a laser needs spare power, so **a laser can't fire without a
   reactor**.
-- **Power readout.** `Power: +N / −N` (green when ≥ 0, red when negative)
+- **Power readout.** `POWER: ±N` (green when ≥ 0, red when negative)
   shows the net balance in **both** BuildScene and FlyScene, so power is
-  visible while building, not just in flight.
+  visible while building, not just in flight. The hangar readout uses a big
+  value, folds each laser's draw into the balance, and **red-pulses** when
+  negative (a laser without enough reactor).
 - **Eject (P).** When all reactors are gone but power-drawing cubes
   (shields and/or lasers) remain, those cubes are dead weight that can never
   function again. A top-left **"Eject: P"** hint appears; pressing **P**
@@ -659,7 +662,7 @@ convention.
 
 ### `MainMenu.unity`
 
-- Three buttons stacked centre-screen: **Hangar**, **Settings**, **Exit**.
+- The **COSMIC SCRAP CLUB** wordmark over a warm procedural brand background, and three toon-shadowed buttons stacked centre-screen: **Hangar** (ochre call-to-action), **Settings**, **Exit**.
 - The persistent corner button is hidden while this scene is active (`UIManager.OnSceneStateChanged` toggles its GameObject inside `PersistentHud`'s shared canvas).
 - Clicking **Hangar** loads `HangarSelect` (not BuildScene directly). **Settings** is a placeholder hook. **Exit** quits the application (or stops Editor play mode).
 
@@ -703,9 +706,9 @@ Build-scene UI overlays (built at runtime by `BuildToolbarController`):
 - **Top-left** — `Rotate: R/T` hint label.
 - **Top-centre** — fading red floating message slot (used for "Too much mass!").
 - **Bottom-left** — stat readouts:
-  - `Mass: X / cap` (live, recomputed on `ConstructChanged`; the denominator is the active ship class's mass cap).
-  - `HP: Y` (sum of all placed cubes' health, including alpha).
-  - `Power: +N / −N` (green when ≥ 0, red when negative; hidden when the construct has no power cubes) — `BuildManager.ComputeCurrentNetPower` sums reactor output − shield draw across the placed cubes, so power balance is visible while building. See *Power & Energy*.
+  - `MASS: X / cap` (uppercase, big value; live, recomputed on `ConstructChanged`; the denominator is the active ship class's mass cap).
+  - `HP: Y` (uppercase, big value; sum of all placed cubes' health, including alpha).
+  - `POWER: ±N` (uppercase, big value; green when ≥ 0, red-**pulsing** when negative via `UIPulse`; hidden when no power cubes) — `BuildManager.ComputeCurrentNetPower` sums reactor output − (shield draw + laser draw) across the placed cubes, so a laser without enough reactor reads negative while building. See *Power & Energy*.
 
 Tools:
 
@@ -730,8 +733,8 @@ Scene contents:
 - `Main Camera` with `FlyCamera`.
 - `FlyShootingController` — owns the per-frame fire / weapon-selection dispatch.
 - `FlyCrashHandler` — `OnCollisionEnter`-based crash damage on the construct's Rigidbody. See **Combat** above.
-- `FlyHUD` GameObject — carries the `FlyHud` component (the FlyScene-attached shared UI canvas at `sortingOrder 100`) and also hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom weapon toolbar with reload bars), `FlySpeedIndicator` (bottom-left `Speed: NN.N u/s`), `FlyHpIndicator` (bottom-left `HP: current / initial`), `FlyBoostBar` (Boost meter bar left of the crosshair, with a critical-zone red throb and an "Overboosted!" flash), `FlyShieldIndicator` (bottom-left shield bar + the `Power:` readout + the "Eject: P" hint), and `FlyHeatBar` (laser heat bar right of the crosshair, mirroring the boost bar). Every HUD script parents its UI tree under `FlyHud.Instance.Root`.
-- One `Ground` prefab instance at the origin (200×200 flat plane) and 20 `WorldTargetCube` prefab instances scattered in front of the spawn position — the basic flat-plain practice arena. Targets are tuned fragile (HP 30, AV 0) so the demo is actually destructible.
+- `FlyHUD` GameObject — carries the `FlyHud` component (the FlyScene-attached shared UI canvas at `sortingOrder 100`) and also hosts `FlyCrosshair` (screen-space reticle projecting `construct.forward * 100`), `FlyWeaponToolbarController` (bottom 64×64 brand glyph slots — bottom-edge reload bar, ochre selection ring, top-right ✕ / no-power-bolt, plus the centre "No Power!" flash), `FlySpeedIndicator` (bottom-left `SPEED <big>N</big> u/s`), `FlyHpIndicator` (bottom-left `HP <big>N</big> / initial`, red below 25%), `FlyBoostBar` (ink-framed Boost bar left of the crosshair, with a critical-zone red throb and an "Overboosted!" flash), `FlyShieldIndicator` (bottom-left ink-framed shield bar + the `POWER:` readout + the red-pulsing "EJECT: P" hint), and `FlyHeatBar` (ink-framed laser heat bar right of the crosshair). Every HUD script parents its UI tree under `FlyHud.Instance.Root`.
+- A `DesertEnvironment` prefab instance — a 500×500 dune basin with a perimeter ridge and five rock formations, all on the `World` layer — and a `DesertTargets` container of ~21 destructible `DesertTarget`s (HP 30, AV 0; a prefab variant of `WorldTargetCube`) + 3 `Turret`s. A `DesertLook` GameObject drives the live cel-look toggle + scene-local shadows. See `desert_level_spec.md`.
 - Directional Light.
 
 Flight model:
@@ -806,13 +809,14 @@ ESC, digits `1`–`9`, and mouse wheel are polled by
 
 ## Custom Layers
 
-The project adds three user layers (`ProjectSettings/TagManager.asset`):
+The project adds four user layers (`ProjectSettings/TagManager.asset`):
 
 | Layer index | Name          | Used by                                                                          |
 |-------------|---------------|----------------------------------------------------------------------------------|
-| 6           | `PlacedCube`  | All placed shape instances (cube / slope / weapon). Build raycasts include this. |
-| 7           | `AlphaCube`   | The single alpha cube. Build raycasts include this layer.                       |
+| 6           | `PlacedCube`  | All placed shape instances (cube / slope / weapon). Build + projectile raycasts include this. |
+| 7           | `AlphaCube`   | The single alpha cube. Build + projectile raycasts include this layer.           |
 | 8           | `PreviewCube` | The preview ghost (root + children). Excluded from raycasts so it cannot hit itself. |
+| 9           | `World`       | Desert terrain (`DesertEnvironment` ground + ridge + formations). **Projectile** raycasts include this, so bullets / rockets / the laser beam stop at terrain instead of passing through. |
 
 `BuildManager` uses `LayerMask.GetMask` and falls back to "everything except `Ignore Raycast` and `PreviewCube`" if the layer names cannot be resolved (defensive — covers the case where a clean checkout has not yet imported `TagManager.asset`).
 
@@ -930,9 +934,11 @@ wiring required.
   Projectiles, however, still move kinematically: they have no
   Rigidbody / Collider and do their own swept raycasts for hit
   detection.
-- **TextMeshPro is not used.** The shipped UI is built in code with
-  legacy `UnityEngine.UI.Text` + `Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")`. This avoids requiring users to import
-  *TMP Essentials* before the UI renders.
+- **TextMeshPro is not used.** The shipped UI is built in code with legacy
+  `UnityEngine.UI.Text`, themed through `CscTheme` / `CscPalette` (the *Cosmic
+  Scrap Club* brand) in the brand fonts (Anton / Saira family, loaded from
+  `Assets/Resources/Fonts/`); Unity's built-in `LegacyRuntime.ttf` is the
+  fallback. Avoiding TMP means the UI renders without importing *TMP Essentials*.
 - **Construct flight is Rigidbody-driven** — a non-kinematic
   `Rigidbody` on `CubeConstruct`, driven by `AddForce` / `AddTorque`.
   `Rigidbody.linearDamping` / `angularDamping` handle decay.

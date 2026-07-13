@@ -1,6 +1,6 @@
 # Weapon Shooting System — Implementation Spec
 
-Status: **implemented in PR #6 ([entewurzelauskuh/CosmicScrapClub#6](https://github.com/entewurzelauskuh/CosmicScrapClub/pull/6))**. v1 surface (crosshair + projectiles + selection toolbar) is live; v2 damage / hit-detection is the next planned PR.
+Status: **Historical — the v1 PR #6 design record** ([entewurzelauskuh/CosmicScrapClub#6](https://github.com/entewurzelauskuh/CosmicScrapClub/pull/6)). The v1 surface (crosshair + projectiles + selection toolbar) shipped; damage, hit-detection, shields, and the energy laser have all landed since, and the toolbar was rebranded in Milestone B (B3d). Treat §3 (projectiles) and §5 (toolbar) as the *original* design — the current behaviour is authoritative in [`full_architecture.md`](full_architecture.md) (the `Bullet` / `Rocket` / `LaserWeapon` / `ProjectileHit` / `FlyWeaponToolbarController` rows) and the code. In particular: projectile hit-detection is a swept raycast against `PlacedCube|AlphaCube|World`, so shots now **stop at desert terrain**; the toolbar is 64×64 brand glyph slots (no per-slot swatch).
 
 This document tracks the work package for the construct's weapon
 firing system. It covers:

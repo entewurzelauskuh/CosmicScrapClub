@@ -143,6 +143,12 @@ namespace CubeFly.Fly
         [Tooltip("BulletImpactDust.prefab (Assets/VFX/Prefabs/). Passed to ProjectileHit.ConfigureImpactPrefabs once in Awake. If null, no dust VFX fires (even on upward hits).")]
         [SerializeField] GameObject bulletImpactDustPrefab;
 
+        [Header("Phase B-3a VFX")]
+        [Tooltip("CubeDeathBurst.prefab (Assets/VFX/Prefabs/). Passed to CubeDeath.ConfigureVfx in Awake. If null, no cube-death burst fires.")]
+        [SerializeField] GameObject cubeDeathBurstPrefab;
+        [Tooltip("Trail material for the dying-cube flame/smoke trail (RocketSmokeTrailMat to start). Passed to CubeDeath.ConfigureVfx. If null, no death trail.")]
+        [SerializeField] Material cubeDeathTrailMaterial;
+
         CubeFlyInputActions _input;
 
         // Per-frame input snapshots, sampled in Update, applied in FixedUpdate.
@@ -223,6 +229,7 @@ namespace CubeFly.Fly
             // presses fire, both of which happen after Start; Awake is one
             // phase earlier, so refs are always set in time.
             ProjectileHit.ConfigureImpactPrefabs(bulletImpactSparkPrefab, bulletImpactDustPrefab);
+            CubeDeath.ConfigureVfx(cubeDeathBurstPrefab, cubeDeathTrailMaterial);
             Debug.unityLogger.Log(TAG, "FlyController initialised.");
         }
 

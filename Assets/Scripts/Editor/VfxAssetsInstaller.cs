@@ -57,6 +57,8 @@ namespace CubeFly.EditorTools
         const string BulletImpactDustPrefabPath  = PrefabsDir + "/BulletImpactDust.prefab";
         const string RocketExhaustPlumePrefabPath = PrefabsDir + "/RocketExhaustPlume.prefab";
         const string RocketSmokePuffPrefabPath    = PrefabsDir + "/RocketSmokePuff.prefab";
+        const string CubeDebrisMatPath        = MaterialsDir + "/CubeDebrisMat.mat";
+        const string CubeDeathBurstPrefabPath = PrefabsDir + "/CubeDeathBurst.prefab";
         const string BulletPrefabPath = "Assets/Prefabs/Projectiles/Bullet.prefab";
         const string RocketPrefabPath = "Assets/Prefabs/Projectiles/Rocket.prefab";
 
@@ -100,6 +102,12 @@ namespace CubeFly.EditorTools
             EnsureRocketExhaustPlumePrefab(rocketExhaust);
             EnsureRocketSmokePuffPrefab(rcsPuff);             // reuses RcsPuffMat from B-1
 
+            // B-3a: cube-death burst. Flash + spark reuse MuzzleStarburstMat
+            // (additive); debris uses a new opaque Lit material.
+            Material cubeDebris = EnsureOpaqueLitMaterial(
+                CubeDebrisMatPath, new Color(0.22f, 0.16f, 0.13f, 1f));
+            EnsureCubeDeathBurstPrefab(muzzleStarburst, cubeDebris);
+
             // Load the just-generated prefabs as assets for wiring into
             // the projectile prefabs that consume them.
             GameObject exhaustPlumeAsset = AssetDatabase.LoadAssetAtPath<GameObject>(RocketExhaustPlumePrefabPath);
@@ -116,7 +124,8 @@ namespace CubeFly.EditorTools
                 "BulletTracerMat, BulletImpactDustMat, RocketExhaustMat, RocketSmokeTrailMat; " +
                 "EnginePlume.prefab, RcsPuff.prefab, MuzzleFlashStarburst.prefab, MuzzleFlashDisc.prefab, " +
                 "BulletImpactSpark.prefab, BulletImpactDust.prefab, " +
-                "RocketExhaustPlume.prefab, RocketSmokePuff.prefab).");
+                "RocketExhaustPlume.prefab, RocketSmokePuff.prefab; " +
+                "CubeDebrisMat; CubeDeathBurst.prefab [B-3a]).");
         }
 
         static void EnsureDir(string assetDir)
@@ -357,6 +366,27 @@ namespace CubeFly.EditorTools
             mat.renderQueue = 3000;
             mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
 
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        // Opaque URP/Lit material for the cube-death debris mesh particles —
+        // solid dark-metal chunks (NOT additive/transparent) so they read as
+        // wreckage, not glow. (B-3a)
+        static Material EnsureOpaqueLitMaterial(string path, Color tint)
+        {
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null) shader = Shader.Find("Standard");
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            if (mat.HasProperty("_BaseColor"))  mat.SetColor("_BaseColor", tint);
+            if (mat.HasProperty("_Color"))      mat.SetColor("_Color", tint);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.2f);
+            if (mat.HasProperty("_Metallic"))   mat.SetFloat("_Metallic", 0.3f);
             EditorUtility.SetDirty(mat);
             return mat;
         }
@@ -699,6 +729,170 @@ namespace CubeFly.EditorTools
             {
                 Object.DestroyImmediate(root);
             }
+        }
+
+        // One-shot cube-death burst. Root = debris (Mesh-mode chunks thrown
+        // along local +Z = drift direction), plus a bright flash child and a
+        // warm spark-burst child. Instantiated by CubeDeath.BeginDeath,
+        // oriented to the drift. The root is the LONGEST-lived layer
+        // (debris ~2 s) so its stopAction = Destroy doesn't cull the shorter
+        // flash/spark children early. (B-3a)
+        static void EnsureCubeDeathBurstPrefab(Material additiveMat, Material debrisMat)
+        {
+            GameObject root = new GameObject("CubeDeathBurst");
+            try
+            {
+                // Layer 1 (root) — debris chunks (Mesh particles, longest-lived)
+                ParticleSystem ps = root.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var main = ps.main;
+                main.duration = 0.2f;
+                main.loop = false;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(1.8f, 2.2f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(3f, 5f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.15f, 0.25f);
+                main.startRotation = new ParticleSystem.MinMaxCurve(0f, 6.283f); // random initial spin
+                main.startColor = Color.white;   // mesh shows debrisMat's colour
+                main.gravityModifier = 0.7f;
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.maxParticles = 8;
+                main.playOnAwake = true;
+                main.stopAction = ParticleSystemStopAction.Destroy;
+
+                var emission = ps.emission;
+                emission.enabled = true;
+                emission.rateOverTime = 0f;
+                emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 4) });
+
+                var shape = ps.shape;
+                shape.enabled = true;
+                shape.shapeType = ParticleSystemShapeType.Cone;
+                shape.angle = 35f;
+                shape.radius = 0.1f;
+
+                var rot = ps.rotationOverLifetime;
+                rot.enabled = true;
+                rot.separateAxes = true;
+                rot.x = new ParticleSystem.MinMaxCurve(-3f, 3f);
+                rot.y = new ParticleSystem.MinMaxCurve(-3f, 3f);
+                rot.z = new ParticleSystem.MinMaxCurve(-3f, 3f);
+
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Mesh;
+                renderer.mesh = GetBuiltinCubeMesh();
+                renderer.sharedMaterial = debrisMat;
+
+                // Layer 2 — flash (child, bright additive disc)
+                GameObject flashGo = new GameObject("Flash");
+                flashGo.transform.SetParent(root.transform, false);
+                ParticleSystem flashPs = flashGo.AddComponent<ParticleSystem>();
+                flashPs.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var fm = flashPs.main;
+                fm.duration = 0.1f;
+                fm.loop = false;
+                fm.startLifetime = 0.09f;
+                fm.startSpeed = 0f;
+                fm.startSize = 1.0f;
+                fm.startColor = new Color(1f, 0.96f, 0.75f, 1f) * 3f;
+                fm.simulationSpace = ParticleSystemSimulationSpace.Local;
+                fm.maxParticles = 2;
+                fm.playOnAwake = true;
+                fm.stopAction = ParticleSystemStopAction.None;
+
+                var fe = flashPs.emission;
+                fe.enabled = true;
+                fe.rateOverTime = 0f;
+                fe.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+
+                var fShape = flashPs.shape;
+                fShape.enabled = false;
+
+                var fsz = flashPs.sizeOverLifetime;
+                fsz.enabled = true;
+                AnimationCurve fCurve = new AnimationCurve(
+                    new Keyframe(0f, 0.6f), new Keyframe(0.3f, 1f), new Keyframe(1f, 0.2f));
+                fsz.size = new ParticleSystem.MinMaxCurve(1f, fCurve);
+
+                var fcol = flashPs.colorOverLifetime;
+                fcol.enabled = true;
+                Gradient fGrad = new Gradient();
+                fGrad.SetKeys(
+                    new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                    new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+                fcol.color = new ParticleSystem.MinMaxGradient(fGrad);
+
+                var fRenderer = flashGo.GetComponent<ParticleSystemRenderer>();
+                fRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+                fRenderer.sharedMaterial = additiveMat;
+
+                // Layer 3 — sparks (child, warm additive streaks)
+                GameObject sparksGo = new GameObject("Sparks");
+                sparksGo.transform.SetParent(root.transform, false);
+                ParticleSystem sparksPs = sparksGo.AddComponent<ParticleSystem>();
+                sparksPs.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var sm = sparksPs.main;
+                sm.duration = 0.1f;
+                sm.loop = false;
+                sm.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.35f);
+                sm.startSpeed = new ParticleSystem.MinMaxCurve(4f, 7f);
+                sm.startSize = 0.06f;
+                sm.startColor = new Color(1f, 0.85f, 0.55f, 1f) * 3f;
+                sm.simulationSpace = ParticleSystemSimulationSpace.World;
+                sm.maxParticles = 24;
+                sm.playOnAwake = true;
+                sm.stopAction = ParticleSystemStopAction.None;
+
+                var se = sparksPs.emission;
+                se.enabled = true;
+                se.rateOverTime = 0f;
+                se.SetBursts(new[] { new ParticleSystem.Burst(0f, 20) });
+
+                var sShape = sparksPs.shape;
+                sShape.enabled = true;
+                sShape.shapeType = ParticleSystemShapeType.Sphere;
+                sShape.radius = 0.1f;
+
+                var ssz = sparksPs.sizeOverLifetime;
+                ssz.enabled = true;
+                AnimationCurve sCurve = new AnimationCurve(
+                    new Keyframe(0f, 1f), new Keyframe(1f, 0.2f));
+                ssz.size = new ParticleSystem.MinMaxCurve(1f, sCurve);
+
+                var scol = sparksPs.colorOverLifetime;
+                scol.enabled = true;
+                Gradient sGrad = new Gradient();
+                sGrad.SetKeys(
+                    new[]
+                    {
+                        new GradientColorKey(Color.white, 0f),
+                        new GradientColorKey(new Color(1f, 0.5f, 0.25f), 1f),
+                    },
+                    new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+                scol.color = new ParticleSystem.MinMaxGradient(sGrad);
+
+                var sRenderer = sparksGo.GetComponent<ParticleSystemRenderer>();
+                sRenderer.renderMode = ParticleSystemRenderMode.Stretch;
+                sRenderer.lengthScale = 0f;
+                sRenderer.velocityScale = 0.3f;
+                sRenderer.sharedMaterial = additiveMat;
+
+                PrefabUtility.SaveAsPrefabAsset(root, CubeDeathBurstPrefabPath);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        // Built-in unit cube mesh for the debris mesh-particles. Grabbed off
+        // a throwaway primitive (robust across Unity versions vs the
+        // Resources.GetBuiltinResource path-name lookup).
+        static Mesh GetBuiltinCubeMesh()
+        {
+            GameObject temp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Mesh mesh = temp.GetComponent<MeshFilter>().sharedMesh;
+            Object.DestroyImmediate(temp);
+            return mesh;
         }
 
         // Bullet impact ground dust. Single-layer warm tan puff cluster.

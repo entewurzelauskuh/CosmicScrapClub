@@ -394,6 +394,12 @@ namespace CubeFly.Core
                 ("Rocket smoke puffs",
                     "Soft white cloud puffs emitted from the rocket's tail.",
                     () => VfxSettings.RocketSmokePuff,     v => VfxSettings.RocketSmokePuff     = v),
+                ("Cube death burst",
+                    "Flash + spark burst + debris chunks thrown off a cube when it's destroyed.",
+                    () => VfxSettings.CubeDeathBurst,      v => VfxSettings.CubeDeathBurst      = v),
+                ("Cube death trail",
+                    "Grey flame/smoke ribbon trailing a destroyed cube as it drifts away.",
+                    () => VfxSettings.CubeDeathTrail,      v => VfxSettings.CubeDeathTrail      = v),
             };
 
             // Column-major fill: first half of the list goes in the

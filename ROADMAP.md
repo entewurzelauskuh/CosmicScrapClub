@@ -6,7 +6,7 @@ A living planning doc. What works today, what we're building next, and where the
 
 ## Vision
 
-Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, thrusters, reactors, and shields — then fly it. You can already place shapes, save / load three constructs, fly a physics-driven construct that bounces off the world, shoot bullets and rockets, fire a continuous energy laser, register hits, blow cubes off targets, take kinetic damage when you crash, boost with thruster cubes, power reactors that run shields and energy weapons, and lose the run when your anchor cube dies. Since then it's gained a full 500×500 cel-shaded desert combat level and a complete UI rebrand to the *Cosmic Scrap Club* brand. The next chunk of work is the remaining Extended-VFX phases (weapons, destruction, HUD feedback).
+Cube Fly is a sandbox where you build a flying construct out of cubes, weapons, thrusters, reactors, and shields — then fly it. You can already place shapes, save / load three constructs, fly a physics-driven construct that bounces off the world, shoot bullets and rockets, fire a continuous energy laser, register hits, blow cubes off targets, take kinetic damage when you crash, boost with thruster cubes, power reactors that run shields and energy weapons, and lose the run when your anchor cube dies. Since then it's gained a full 500×500 cel-shaded desert combat level and a complete UI rebrand to the *Cosmic Scrap Club* brand. The next chunk of work is the remaining Extended-VFX phases (destruction, HUD feedback, shaders).
 
 It's intentionally small in scope (Unity 6.3 LTS, URP, MonoBehaviour-only, no DOTS), pure C# everywhere, and the docs are kept honest so you can read [`docs/full_architecture.md`](docs/full_architecture.md) and immediately know which file does what. If you've been wanting to mess around in a Unity codebase that's neither toy-sized nor incomprehensible, this might be the project for you.
 
@@ -37,9 +37,9 @@ Read [`docs/cube_fly_spec.md`](docs/cube_fly_spec.md) for the canonical product 
 
 ## Up Next
 
-In running order. Phase 1 (HitContext + HUD consolidation) and phase 2 (Power & Energy + Laser) are done. The polish pass is in motion: the Settings menu scaffold (six placeholder tabs + Debug) has shipped, VFX phase 1 (post-processing + Debug-tab toggles) has shipped, and VFX phase B-1 (engines + boost flare + RCS puffs) has shipped. Remaining: VFX phases B-2 / B-3 / B-4 / C / D and an AA settings dropdown for the Graphics tab.
+In running order. Phase 1 (HitContext + HUD consolidation) and phase 2 (Power & Energy + Laser) are done. The polish pass is in motion: the Settings menu scaffold (six placeholder tabs + Debug) has shipped, VFX phase 1 (post-processing + Debug-tab toggles) has shipped, and VFX phase B-1 (engines + boost flare + RCS puffs) has shipped. Remaining: VFX phases B-3 / B-4 / C / D and an AA settings dropdown for the Graphics tab.
 
-**Note:** item 4 (desert map → FlyScene + the UI rebrand) was pulled forward ahead of the remaining VFX phases and is now **✅ COMPLETE** — both milestones merged to `main` (2026-07-10). The remaining Up-Next work is the VFX phases B-2…D. Docs are re-synced at logical close-outs.
+**Note:** item 4 (desert map → FlyScene + the UI rebrand) was pulled forward ahead of the remaining VFX phases and is now **✅ COMPLETE** — both milestones merged to `main` (2026-07-10). The remaining Up-Next work is the VFX phases B-3…D. Docs are re-synced at logical close-outs.
 
 ### 1. Extended VFX pass
 
@@ -50,7 +50,7 @@ Phasing per `docs/vfx_pass_ideas.md`:
 - **Phase 1 — Post-processing + Debug tab (shipped).** Bloom, Vignette, Tonemapping (ACES), ColorAdjustments, ChromaticAberration as URP Volume overrides on the main game profile, plus the seventh `Debug` tab in Settings with per-effect toggles backed by PlayerPrefs. Established the Debug-tab pattern subsequent phases append to. Plus reusable Tooltip helper.
 - **Phase B — Small prefabs / new behaviours.** Decomposed into per-area sub-PRs:
   - **Phase B-1 — Engines + boost flare + RCS puffs (shipped).** Per-thruster ParticleSystem plumes with input-driven emission, boost-time amplification with shock-diamond sprite, attitude-jet corner puffs at per-sector best-cube positions that recompute as outer cubes are destroyed. EnginePlume and BoostFlare toggles are independent, with a baseline boost-cue plume in the "main plume off, flare on" case so the shock-diamond has a stream to sit on.
-  - **Phase B-2 — Weapons + impacts (planned).** Muzzle flash + bullet tracer + bullet impact spark + rocket exhaust / smoke trail.
+  - **Phase B-2 — Weapons + impacts (shipped, PR #51).** Muzzle flash (pyramid starburst / cylinder disc) spawned from each weapon's `Fire`; bullet tracer (`TrailRenderer`); bullet impact spark + upward-surface dust via `ProjectileHit.SpawnImpactVfx` (fires on cube **and** desert-terrain hits); rocket exhaust plume + grey smoke trail + smoke puffs. Assets procedurally generated by `VfxAssetsInstaller`, wired through `FlyController` + serialized prefab refs, each effect independently toggleable in the Settings → Debug tab. (A later desert-verify pass corrected the additive-blend setup on the particle materials.)
   - **Phase B-3 — Destruction + crash (planned).** Cube-death enhancement (flash + spark + debris + flame/smoke trail), sustained smoke + emissive flicker on low-HP cubes, camera shake on crash + nearby detonation.
   - **Phase B-4 — HUD feedback (planned).** Damage vignette pulse, low-HP chromatic-aberration ramp, boost speed lines, crosshair hit-confirm pulse.
 - **Phase C — Shaders + scripted sequences.** Laser beam glow + impact heat-distortion + scorch decal, shield dome (hex/fresnel) + hit ripple + collapse, rocket detonation multi-emitter, delete-tool dissolve, reactor inner glow + stress sparks.
@@ -76,7 +76,7 @@ The desert demonstrator (`DesertSandbox.unity` + `Assets/Scripts/Desert/` + shad
 formation prefabs + `Desert_Renderer`) is **already merged to `main`** as a standalone,
 detached scene — FlyScene has zero desert references today. The remaining work is the
 **integration**, scoped into two milestones with a small housekeeping phase first. This
-is being pulled ahead of the remaining VFX phases (B-2…D) by decision on 2026-05-31.
+is being pulled ahead of the remaining VFX phases (B-3…D) by decision on 2026-05-31.
 
 > One coupling to watch: VFX **Phase C** adds shaders (laser glow, shield dome) that will
 > have to coexist with the desert cel renderer. Not blocking — just sequence-aware.

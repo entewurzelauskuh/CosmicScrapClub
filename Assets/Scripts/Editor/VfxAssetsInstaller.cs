@@ -306,10 +306,16 @@ namespace CubeFly.EditorTools
             if (mat.HasProperty("_MainTex") && texture != null)
                 mat.SetTexture("_MainTex", texture);
 
-            // Configure additive blending. URP/Particles/Unlit uses
-            // _Surface = 1 (Transparent) + _Blend = 1 (Additive).
+            // Configure additive blending. URP/Particles/Unlit: _Surface = 1
+            // (Transparent) + _Blend = 2 (Additive).
+            // NOTE: _Blend = 1 is *Premultiply*, not Additive. Using 1 lets
+            // URP's material validation silently revert _SrcBlend/_DstBlend
+            // from the additive SrcAlpha/One back to premultiply
+            // One/OneMinusSrcAlpha on every reimport — which both dulls the
+            // intended bloom glow and leaves the .mat perpetually dirty in
+            // git. Must be 2. (B-2 desert-verify fix)
             if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
-            if (mat.HasProperty("_Blend"))   mat.SetFloat("_Blend", 1f);
+            if (mat.HasProperty("_Blend"))   mat.SetFloat("_Blend", 2f);
             if (mat.HasProperty("_SrcBlend")) mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             if (mat.HasProperty("_DstBlend")) mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
             if (mat.HasProperty("_ZWrite"))   mat.SetInt("_ZWrite", 0);

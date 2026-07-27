@@ -305,6 +305,8 @@ MonoBehaviour:
   muzzleFlashDiscPrefab: {fileID: 8992904473152764929, guid: f5da28d8c294a43e3aa7a93d041e3ae3, type: 3}
   bulletImpactSparkPrefab: {fileID: 707531004614925794, guid: 246891c12e0bc4a4885899f9c397e32f, type: 3}
   bulletImpactDustPrefab: {fileID: 403627228423837864, guid: 2cc79914106174bf38a9c7482a4b6ae9, type: 3}
+  cubeDeathBurstPrefab: {fileID: 8400195037477631914, guid: 24a6cad072c2746da80bdc3ff639845d, type: 3}
+  cubeDeathTrailMaterial: {fileID: 2100000, guid: 57750217a0ff74e778319c9288b42d07, type: 2}
 --- !u!114 &300003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -665,7 +667,6 @@ MonoBehaviour:
   flyController: {fileID: 300002}
   flyCamera: {fileID: 0}
   aimRange: 100
-  crosshairColor: {r: 1, g: 1, b: 1, a: 1}
   centerDotSize: {x: 4, y: 4}
   armSize: {x: 2, y: 12}
   armGap: 2
@@ -682,17 +683,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   shootingController: {fileID: 300003}
-  buttonSize: {x: 160, y: 60}
   spacing: 16
   bottomMargin: 30
   fontSize: 22
-  reloadBarSize: {x: 140, y: 6}
-  reloadBarGap: 6
-  reloadBarBackground: {r: 0, g: 0, b: 0, a: 0.6}
-  swatchSize: {x: 18, y: 18}
-  deadColor: {r: 0.32, g: 0.32, b: 0.34, a: 0.9}
-  deathMarkColor: {r: 0.95, g: 0.2, b: 0.2, a: 1}
-  deathMarkSize: {x: 16, y: 16}
   deathMarkPulseSeconds: 0.9
   deathMarkAlphaMin: 0.25
 --- !u!114 &700004
@@ -742,15 +735,9 @@ MonoBehaviour:
   flyController: {fileID: 0}
   anchoredPosition: {x: -90, y: 0}
   barSize: {x: 12, y: 120}
-  fillColor: {r: 0.36, g: 0.62, b: 1, a: 1}
-  frameColor: {r: 0.05, g: 0.07, b: 0.12, a: 1}
-  flashAnchoredPosition: {x: 0, y: 70}
-  flashFontSize: 26
-  flashColor: {r: 1, g: 0.45, b: 0.3, a: 1}
   flashCount: 3
   flashOnSeconds: 0.27
   flashOffSeconds: 0.12
-  criticalColor: {r: 0.95, g: 0.25, b: 0.2, a: 1}
   criticalPulseSeconds: 1.2
   criticalSizePulse: 0.05
   criticalAlphaMin: 0.55
@@ -782,14 +769,8 @@ MonoBehaviour:
   barSize: {x: 180, y: 16}
   powerLabelAnchoredPosition: {x: 20, y: 122}
   powerFontSize: 18
-  shieldFillColor: {r: 0.3, g: 0.8, b: 1, a: 0.95}
-  shieldFrameColor: {r: 0.05, g: 0.12, b: 0.16, a: 0.85}
-  shieldDownColor: {r: 0.4, g: 0.4, b: 0.45, a: 0.6}
-  powerPositiveColor: {r: 0.4, g: 1, b: 0.5, a: 1}
-  powerNegativeColor: {r: 1, g: 0.4, b: 0.35, a: 1}
   ejectHintAnchoredPosition: {x: 20, y: -20}
   ejectHintFontSize: 22
-  ejectHintColor: {r: 1, g: 0.55, b: 0.2, a: 1}
 --- !u!114 &700009
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -805,12 +786,6 @@ MonoBehaviour:
   shootingController: {fileID: 0}
   anchoredPosition: {x: 90, y: 0}
   barSize: {x: 12, y: 120}
-  coolColor: {r: 1, g: 0.6, b: 0.2, a: 1}
-  hotColor: {r: 1, g: 0.2, b: 0.1, a: 1}
-  frameColor: {r: 0.12, g: 0.06, b: 0.04, a: 1}
-  flashAnchoredPosition: {x: 0, y: 70}
-  flashFontSize: 26
-  flashColor: {r: 1, g: 0.4, b: 0.25, a: 1}
   flashCount: 3
   flashOnSeconds: 0.27
   flashOffSeconds: 0.12

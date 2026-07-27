@@ -40,6 +40,7 @@ namespace CubeFly.Core
         const string TAG = "CubeDeath";
 
         bool _dying;
+        LingeringTrail _trailChild;
 
         // Raised when a genuine player-construct cube has been removed in
         // flight — dropped from GameData with its death sequence kicked
@@ -59,6 +60,20 @@ namespace CubeFly.Core
         // (damage deaths) and ConstructEnergySystem.Eject (eject).
         public static void RaiseCubeDied() => CubeDied?.Invoke();
 
+        // Cube-death VFX, configured once per FlyScene load by
+        // FlyController.Awake (mirrors ProjectileHit.ConfigureImpactPrefabs).
+        // Static because CubeDeath is lazily AddComponent'd and every death
+        // path shares one config. Null in unconfigured scenes (menus) →
+        // no VFX, drift unchanged.
+        public static GameObject BurstPrefab;
+        public static Material TrailMaterial;
+
+        public static void ConfigureVfx(GameObject burst, Material trail)
+        {
+            BurstPrefab = burst;
+            TrailMaterial = trail;
+        }
+
         public void BeginDeath(Vector3 outwardOrigin)
         {
             if (CompareTag("AlphaCube")) return;
@@ -75,7 +90,58 @@ namespace CubeFly.Core
             Debug.unityLogger.Log(TAG,
                 $"'{name}' destroyed at {transform.position} (drift dir {driftDir}).");
 
+            SpawnDeathVfx(driftDir);
+
             StartCoroutine(DriftAndDespawn(driftDir));
+        }
+
+        // Spawns the one-shot burst (flash + spark + debris) at the cube and
+        // attaches a lingering flame/smoke trail child for the drift. Both
+        // toggle- and null-guarded, so an unconfigured scene or a disabled
+        // Debug toggle simply skips them. (B-3a)
+        void SpawnDeathVfx(Vector3 driftDir)
+        {
+            if (VfxSettings.CubeDeathBurst && BurstPrefab != null)
+            {
+                // World-space one-shot; oriented so the debris cone (local
+                // +Z) throws along the drift direction. The prefab self-
+                // destroys via main.stopAction = Destroy.
+                Instantiate(BurstPrefab, transform.position, Quaternion.LookRotation(driftDir));
+            }
+
+            if (VfxSettings.CubeDeathTrail && TrailMaterial != null)
+            {
+                // TrailRenderer on a dedicated child so it can detach and
+                // fade past the cube's despawn (same pattern as Bullet's
+                // tracer). The child rides the cube through the drift.
+                GameObject trailGo = new GameObject("DeathTrail");
+                trailGo.transform.SetParent(transform, false);
+                trailGo.transform.localPosition = Vector3.zero;
+
+                TrailRenderer trail = trailGo.AddComponent<TrailRenderer>();
+                trail.time = DriftDuration;      // 2 s — matches the drift
+                trail.startWidth = 0.3f;
+                trail.endWidth = 0f;
+                trail.minVertexDistance = 0.1f;
+                trail.sharedMaterial = TrailMaterial;   // no per-cube clone
+                trail.emitting = true;
+
+                Gradient grad = new Gradient();
+                grad.SetKeys(
+                    new[]
+                    {
+                        new GradientColorKey(Color.white, 0f),
+                        new GradientColorKey(new Color(0.8f, 0.8f, 0.8f), 1f),
+                    },
+                    new[]
+                    {
+                        new GradientAlphaKey(0.6f, 0f),
+                        new GradientAlphaKey(0f, 1f),
+                    });
+                trail.colorGradient = grad;
+
+                _trailChild = trailGo.AddComponent<LingeringTrail>();
+            }
         }
 
         Vector3 ComputeDriftDirection(Vector3 outwardOrigin)
@@ -106,6 +172,7 @@ namespace CubeFly.Core
                 elapsed += Time.deltaTime;
                 yield return null;
             }
+            if (_trailChild != null) _trailChild.DetachAndFade();
             Destroy(gameObject);
         }
     }

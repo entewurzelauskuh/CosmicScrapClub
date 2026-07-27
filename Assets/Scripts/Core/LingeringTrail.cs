@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace CubeFly.Fly
+namespace CubeFly.Core
 {
     // Tiny detach helper for TrailRenderers that are children of
     // short-lived projectiles. Without this, killing the projectile

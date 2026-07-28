@@ -400,6 +400,12 @@ namespace CubeFly.Core
                 ("Cube death trail",
                     "Grey flame/smoke ribbon trailing a destroyed cube as it drifts away.",
                     () => VfxSettings.CubeDeathTrail,      v => VfxSettings.CubeDeathTrail      = v),
+                ("Low-HP smoke",
+                    "Sustained dark smoke rising off any cube below 25% HP.",
+                    () => VfxSettings.LowHpSmoke,   v => VfxSettings.LowHpSmoke   = v),
+                ("Low-HP flicker",
+                    "Pulsing red emissive alarm on your own construct's cubes below 25% HP.",
+                    () => VfxSettings.LowHpFlicker, v => VfxSettings.LowHpFlicker = v),
             };
 
             // Column-major fill: first half of the list goes in the

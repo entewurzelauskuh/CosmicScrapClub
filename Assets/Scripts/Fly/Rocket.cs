@@ -30,6 +30,12 @@ namespace CubeFly.Fly
         [Tooltip("RocketSmokeTrailMat.mat (Assets/VFX/Materials/). Wired by VfxAssetsInstaller. Used by the TrailRenderer added at Awake if VfxRocketSmokeTrail is on.")]
         [SerializeField] Material smokeTrailMaterial;
 
+        [Header("Camera shake (B-3c)")]
+        [Tooltip("Trauma added to the camera shake when this rocket detonates point-blank; falls off to 0 by shakeRange.")]
+        [SerializeField] float shakeTrauma = 0.4f;
+        [Tooltip("Distance (u) beyond which a rocket detonation adds no camera shake.")]
+        [SerializeField] float shakeRange = 40f;
+
         enum Phase { Exit, Seek }
         Phase _phase = Phase.Exit;
         Vector3 _launchDir;
@@ -214,6 +220,17 @@ namespace CubeFly.Fly
                 // (Tuned from initial 1.10 after play-test; 1.20 reads
                 // more proportionate to the warhead size.)
                 ProjectileHit.SpawnImpactVfx(hit, scale: 1.20f);
+                // Nearby-detonation camera shake, distance-scaled (B-3c).
+                if (VfxSettings.CameraShake)
+                {
+                    Camera cam = Camera.main;
+                    if (cam != null)
+                    {
+                        float dist = Vector3.Distance(cam.transform.position, hit.point);
+                        float falloff = Mathf.Clamp01(1f - dist / shakeRange);
+                        if (falloff > 0f) CameraShake.Add(shakeTrauma * falloff);
+                    }
+                }
                 Destroy(gameObject);
                 return;
             }

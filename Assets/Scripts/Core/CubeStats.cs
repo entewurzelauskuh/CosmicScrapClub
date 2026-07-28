@@ -18,6 +18,16 @@ namespace CubeFly.Core
         [Tooltip("Mass of this cube. Reserved for fly-mode inertia calculations.")]
         public float mass = 1f;
 
+        // Peak HP, captured lazily as the pre-damage HP on the first
+        // HP-reducing hit. HP is monotonic (never heals), so the first real
+        // hit always sees the peak — this needs no build-time wiring and
+        // covers player cubes, world targets, and turrets uniformly. (B-3b)
+        public float MaxHealthPoints { get; private set; }
+
+        // Fraction of max HP remaining (1 before any damage). Drives the
+        // <25% low-HP feedback trigger.
+        public float HealthFraction => MaxHealthPoints > 0f ? healthPoints / MaxHealthPoints : 1f;
+
         // Apply incoming damage with armour absorbing sub-armour hits — the
         // formula stated on armourValue's tooltip and the MaterialDefinition
         // contract. HP clamps to zero. Returns the actual HP lost so callers
@@ -38,6 +48,7 @@ namespace CubeFly.Core
             float effective = Mathf.Max(0f, incoming - armourValue);
             if (effective <= 0f) return 0f;
             float hpBefore = healthPoints;
+            if (MaxHealthPoints <= 0f) MaxHealthPoints = hpBefore;
             healthPoints = Mathf.Max(0f, healthPoints - effective);
             return hpBefore - healthPoints;
         }
@@ -50,6 +61,7 @@ namespace CubeFly.Core
         {
             if (incoming <= 0f) return 0f;
             float hpBefore = healthPoints;
+            if (MaxHealthPoints <= 0f) MaxHealthPoints = hpBefore;
             healthPoints = Mathf.Max(0f, healthPoints - incoming);
             return hpBefore - healthPoints;
         }

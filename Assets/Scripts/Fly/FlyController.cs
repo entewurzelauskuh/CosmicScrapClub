@@ -149,6 +149,10 @@ namespace CubeFly.Fly
         [Tooltip("Trail material for the dying-cube flame/smoke trail (RocketSmokeTrailMat to start). Passed to CubeDeath.ConfigureVfx. If null, no death trail.")]
         [SerializeField] Material cubeDeathTrailMaterial;
 
+        [Header("Phase B-3b VFX")]
+        [Tooltip("LowHpSmoke.prefab (Assets/VFX/Prefabs/). Passed to LowHpVfx.ConfigureVfx in Awake. If null, no low-HP smoke.")]
+        [SerializeField] GameObject lowHpSmokePrefab;
+
         CubeFlyInputActions _input;
 
         // Per-frame input snapshots, sampled in Update, applied in FixedUpdate.
@@ -230,6 +234,7 @@ namespace CubeFly.Fly
             // phase earlier, so refs are always set in time.
             ProjectileHit.ConfigureImpactPrefabs(bulletImpactSparkPrefab, bulletImpactDustPrefab);
             CubeDeath.ConfigureVfx(cubeDeathBurstPrefab, cubeDeathTrailMaterial);
+            LowHpVfx.ConfigureVfx(lowHpSmokePrefab);
             Debug.unityLogger.Log(TAG, "FlyController initialised.");
         }
 

@@ -20,6 +20,19 @@ namespace CubeFly.Fly
         [SerializeField] float maxPitch = 60f;
         [SerializeField] float snapBackSpeed = 8f;
 
+        [Header("Camera shake (B-3c)")]
+        [Tooltip("Max positional shake offset (world units) at full trauma.")]
+        [SerializeField] float maxShakeOffset = 0.35f;
+        [Tooltip("Max roll (degrees about the view axis) at full trauma.")]
+        [SerializeField] float maxShakeRoll = 2f;
+        [Tooltip("Perlin sample rate — higher = buzzier shake.")]
+        [SerializeField] float shakeFrequency = 25f;
+        [Tooltip("Trauma recovered per second (how fast the shake settles).")]
+        [SerializeField] float shakeRecovery = 1.2f;
+
+        Vector3 _shakeOffset;
+        float _shakeRoll;
+
         // Local-space offset baseline (behind/above the construct), computed
         // once from bounds. The camera then gets construct.TransformPoint(...)
         // applied each frame, so it follows the construct's full orientation —
@@ -116,6 +129,12 @@ namespace CubeFly.Fly
         {
             if (construct == null) return;
 
+            // Strip last frame's shake so the follow Lerp/Slerp operate on the
+            // clean pose — shake is a pure additive overlay (ApplyShake, below).
+            transform.position -= _shakeOffset;
+            if (_shakeRoll != 0f)
+                transform.rotation = Quaternion.AngleAxis(-_shakeRoll, transform.forward) * transform.rotation;
+
             // Adaptive follow speed: the camera's target sweeps through
             // world space as the construct rotates — at angular speed ω
             // and offset distance r, the target moves at roughly ω·r u/s.
@@ -140,6 +159,37 @@ namespace CubeFly.Fly
             Vector3 lookTarget = construct.position + construct.up * lookHeightOffset;
             Quaternion targetRot = Quaternion.LookRotation(lookTarget - transform.position, construct.up);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, adaptiveFollow * Time.deltaTime);
+
+            ApplyShake();
+        }
+
+        // Trauma-based additive camera shake (B-3c). Offset ∝ trauma² (so a
+        // little trauma barely moves), driven by per-axis Perlin noise in
+        // screen space + a small roll. Toggle- and trauma-guarded; stores the
+        // applied offset/roll so LateUpdate can strip them next frame.
+        void ApplyShake()
+        {
+            float trauma = CameraShake.Trauma;
+            if (!VfxSettings.CameraShake || trauma <= 0f)
+            {
+                _shakeOffset = Vector3.zero;
+                _shakeRoll = 0f;
+                return;
+            }
+
+            float shake = trauma * trauma;
+            float t = Time.time * shakeFrequency;
+            float nx = Mathf.PerlinNoise(t, 0f) * 2f - 1f;
+            float ny = Mathf.PerlinNoise(0f, t) * 2f - 1f;
+            float nz = Mathf.PerlinNoise(t, t) * 2f - 1f;
+
+            _shakeOffset = (transform.right * nx + transform.up * ny) * (shake * maxShakeOffset);
+            _shakeRoll = nz * shake * maxShakeRoll;
+
+            transform.position += _shakeOffset;
+            transform.rotation = Quaternion.AngleAxis(_shakeRoll, transform.forward) * transform.rotation;
+
+            CameraShake.Decay(shakeRecovery, Time.deltaTime);
         }
 
         void LockCursor()

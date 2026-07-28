@@ -59,6 +59,8 @@ namespace CubeFly.EditorTools
         const string RocketSmokePuffPrefabPath    = PrefabsDir + "/RocketSmokePuff.prefab";
         const string CubeDebrisMatPath        = MaterialsDir + "/CubeDebrisMat.mat";
         const string CubeDeathBurstPrefabPath = PrefabsDir + "/CubeDeathBurst.prefab";
+        const string LowHpSmokeMatPath    = MaterialsDir + "/LowHpSmokeMat.mat";
+        const string LowHpSmokePrefabPath = PrefabsDir + "/LowHpSmoke.prefab";
         const string BulletPrefabPath = "Assets/Prefabs/Projectiles/Bullet.prefab";
         const string RocketPrefabPath = "Assets/Prefabs/Projectiles/Rocket.prefab";
 
@@ -108,6 +110,11 @@ namespace CubeFly.EditorTools
                 CubeDebrisMatPath, new Color(0.22f, 0.16f, 0.13f, 1f));
             EnsureCubeDeathBurstPrefab(muzzleStarburst, cubeDebris);
 
+            // B-3b: low-HP sustained smoke (alpha-blended dark wisp).
+            Material lowHpSmoke = EnsureAlphaBlendedParticleMaterial(
+                LowHpSmokeMatPath, glow, new Color(0.15f, 0.15f, 0.15f, 1f));
+            EnsureLowHpSmokePrefab(lowHpSmoke);
+
             // Load the just-generated prefabs as assets for wiring into
             // the projectile prefabs that consume them.
             GameObject exhaustPlumeAsset = AssetDatabase.LoadAssetAtPath<GameObject>(RocketExhaustPlumePrefabPath);
@@ -125,7 +132,8 @@ namespace CubeFly.EditorTools
                 "EnginePlume.prefab, RcsPuff.prefab, MuzzleFlashStarburst.prefab, MuzzleFlashDisc.prefab, " +
                 "BulletImpactSpark.prefab, BulletImpactDust.prefab, " +
                 "RocketExhaustPlume.prefab, RocketSmokePuff.prefab; " +
-                "CubeDebrisMat; CubeDeathBurst.prefab [B-3a]).");
+                "CubeDebrisMat; CubeDeathBurst.prefab [B-3a]; " +
+                "LowHpSmokeMat; LowHpSmoke.prefab [B-3b]).");
         }
 
         static void EnsureDir(string assetDir)
@@ -893,6 +901,68 @@ namespace CubeFly.EditorTools
             Mesh mesh = temp.GetComponent<MeshFilter>().sharedMesh;
             Object.DestroyImmediate(temp);
             return mesh;
+        }
+
+        // B-3b low-HP sustained smoke: a single LOOPING dark wisp that rides
+        // a <25%-HP cube. Steady low-rate emission (not a burst), slow rise,
+        // World space so puffs detach as the cube moves. Alpha-blended.
+        static void EnsureLowHpSmokePrefab(Material smokeMat)
+        {
+            GameObject root = new GameObject("LowHpSmoke");
+            try
+            {
+                ParticleSystem ps = root.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var main = ps.main;
+                main.loop = true;
+                main.duration = 1f;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(1.0f, 1.4f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(0.4f, 0.9f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.25f, 0.4f);
+                main.startColor = new Color(0.15f, 0.15f, 0.15f, 0.5f);
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.maxParticles = 16;
+                main.playOnAwake = true;
+                main.stopAction = ParticleSystemStopAction.None;
+
+                var emission = ps.emission;
+                emission.enabled = true;
+                emission.rateOverTime = 8f;
+
+                var shape = ps.shape;
+                shape.enabled = true;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 0.15f;
+
+                var vel = ps.velocityOverLifetime;
+                vel.enabled = true;
+                vel.space = ParticleSystemSimulationSpace.World;
+                vel.y = new ParticleSystem.MinMaxCurve(1f);   // gentle rise
+
+                var sz = ps.sizeOverLifetime;
+                sz.enabled = true;
+                AnimationCurve szCurve = new AnimationCurve(
+                    new Keyframe(0f, 0.6f), new Keyframe(0.3f, 1f), new Keyframe(1f, 1.2f));
+                sz.size = new ParticleSystem.MinMaxCurve(1f, szCurve);
+
+                var col = ps.colorOverLifetime;
+                col.enabled = true;
+                Gradient grad = new Gradient();
+                grad.SetKeys(
+                    new[] { new GradientColorKey(new Color(0.15f, 0.15f, 0.15f), 0f), new GradientColorKey(new Color(0.2f, 0.2f, 0.2f), 1f) },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.5f, 0.2f), new GradientAlphaKey(0f, 1f) });
+                col.color = new ParticleSystem.MinMaxGradient(grad);
+
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sharedMaterial = smokeMat;
+
+                PrefabUtility.SaveAsPrefabAsset(root, LowHpSmokePrefabPath);
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
         }
 
         // Bullet impact ground dust. Single-layer warm tan puff cluster.

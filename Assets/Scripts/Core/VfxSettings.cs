@@ -36,6 +36,8 @@ namespace CubeFly.Core
         const string KRocketSmokePuff     = "VfxRocketSmokePuff";
         const string KCubeDeathBurst      = "VfxCubeDeathBurst";
         const string KCubeDeathTrail      = "VfxCubeDeathTrail";
+        const string KLowHpSmoke          = "VfxLowHpSmoke";
+        const string KLowHpFlicker        = "VfxLowHpFlicker";
 
         public static event Action Changed;
 
@@ -57,6 +59,8 @@ namespace CubeFly.Core
         public static bool RocketSmokePuff     { get => Get(KRocketSmokePuff);     set => Set(KRocketSmokePuff,     value); }
         public static bool CubeDeathBurst      { get => Get(KCubeDeathBurst);      set => Set(KCubeDeathBurst,      value); }
         public static bool CubeDeathTrail      { get => Get(KCubeDeathTrail);      set => Set(KCubeDeathTrail,      value); }
+        public static bool LowHpSmoke          { get => Get(KLowHpSmoke);          set => Set(KLowHpSmoke,          value); }
+        public static bool LowHpFlicker        { get => Get(KLowHpFlicker);        set => Set(KLowHpFlicker,        value); }
 
         static bool Get(string key) => PlayerPrefs.GetInt(key, 1) != 0;
 

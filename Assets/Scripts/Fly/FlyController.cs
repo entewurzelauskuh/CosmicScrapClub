@@ -235,6 +235,7 @@ namespace CubeFly.Fly
             ProjectileHit.ConfigureImpactPrefabs(bulletImpactSparkPrefab, bulletImpactDustPrefab);
             CubeDeath.ConfigureVfx(cubeDeathBurstPrefab, cubeDeathTrailMaterial);
             LowHpVfx.ConfigureVfx(lowHpSmokePrefab);
+            CameraShake.Reset();   // clear leftover trauma across scene reloads (B-3c)
             Debug.unityLogger.Log(TAG, "FlyController initialised.");
         }
 

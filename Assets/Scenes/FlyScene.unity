@@ -307,6 +307,7 @@ MonoBehaviour:
   bulletImpactDustPrefab: {fileID: 403627228423837864, guid: 2cc79914106174bf38a9c7482a4b6ae9, type: 3}
   cubeDeathBurstPrefab: {fileID: 8400195037477631914, guid: 24a6cad072c2746da80bdc3ff639845d, type: 3}
   cubeDeathTrailMaterial: {fileID: 2100000, guid: 57750217a0ff74e778319c9288b42d07, type: 2}
+  lowHpSmokePrefab: {fileID: 5766160280987908271, guid: 00927ff21bf334a5eb2c305d09ee5b8f, type: 3}
 --- !u!114 &300003
 MonoBehaviour:
   m_ObjectHideFlags: 0

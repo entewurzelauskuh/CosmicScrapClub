@@ -25,6 +25,9 @@ namespace CubeFly.Fly
     // won't accidentally animate the alpha away.
     public static class CubeDamage
     {
+        // Fraction of max HP below which a cube shows low-HP feedback (B-3b).
+        const float LowHpThreshold = 0.25f;
+
         public static float ApplyAndLog(in HitContext context)
         {
             CubeStats stats = context.Target;
@@ -63,7 +66,19 @@ namespace CubeFly.Fly
                     $"HP: {hpBefore:F1} → {stats.healthPoints:F1}.");
             }
 
-            if (stats.healthPoints > 0f) return applied;
+            if (stats.healthPoints > 0f)
+            {
+                // B-3b: low-HP feedback. Smoke for any cube; the red flicker
+                // is gated player-only inside LowHpVfx via isPlayer (energy
+                // != null ⇔ player construct — world targets/turrets have no
+                // energy system). Attach at most one per cube.
+                if (stats.HealthFraction < LowHpThreshold
+                    && stats.GetComponent<LowHpVfx>() == null)
+                {
+                    stats.gameObject.AddComponent<LowHpVfx>().Configure(energy != null);
+                }
+                return applied;
+            }
 
             // Fatal hit on the alpha cube → end-of-run. The alpha
             // doesn't run CubeDeath's drift animation (it's the

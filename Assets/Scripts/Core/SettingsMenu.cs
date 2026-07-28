@@ -406,6 +406,9 @@ namespace CubeFly.Core
                 ("Low-HP flicker",
                     "Pulsing red emissive alarm on your own construct's cubes below 25% HP.",
                     () => VfxSettings.LowHpFlicker, v => VfxSettings.LowHpFlicker = v),
+                ("Camera shake",
+                    "Camera kick on a ship crash + nearby rocket detonations.",
+                    () => VfxSettings.CameraShake,  v => VfxSettings.CameraShake  = v),
             };
 
             // Column-major fill: first half of the list goes in the

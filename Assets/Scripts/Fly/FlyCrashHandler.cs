@@ -37,6 +37,8 @@ namespace CubeFly.Fly
         [SerializeField] float maxDamage = 10f;
         [Tooltip("Normal-component impact speeds below this don't produce damage at all — landing gently shouldn't hurt.")]
         [SerializeField] float minSpeedForDamage = 3f;
+        [Tooltip("Trauma per (u/s) of normal-component impact speed → camera shake. 0.03 maps a ~33 u/s crash to full trauma.")]
+        [SerializeField] float shakeCrashScale = 0.03f;
 
         const string TAG = "Crash";
 
@@ -53,6 +55,11 @@ namespace CubeFly.Fly
             // produce little damage; head-on hits dump the full speed.
             float normalImpactSpeed = Mathf.Abs(Vector3.Dot(collision.relativeVelocity, contact.normal));
             if (normalImpactSpeed < minSpeedForDamage) return;
+
+            // Camera shake scaled by head-on impact speed (B-3c). Reuses the
+            // minSpeedForDamage gate above, so gentle landings don't shake.
+            if (VfxSettings.CameraShake)
+                CameraShake.Add(Mathf.Clamp01(normalImpactSpeed * shakeCrashScale));
 
             float damage = Mathf.Clamp(normalImpactSpeed * damageScale, minDamage, maxDamage);
 

@@ -18,8 +18,12 @@ namespace CubeFly.Core
 
         static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
         // Red the flicker pulses toward, HDR-scaled so bloom picks it up.
-        static readonly Color FlickerColor = new Color(1f, 0.15f, 0.1f) * 2f;
-        const float FlickerHz = 3.5f;
+        // Darker target red (−20% vs the first pass) so the alarm reads as a
+        // warning glow, not a beacon.
+        static readonly Color FlickerColor = new Color(1f, 0.15f, 0.1f) * 1.6f;
+        // Intermittent "heartbeat": a short fast pulse, then a ~2 s wait.
+        const float PulsePeriod = 2.2f;    // pulse-to-pulse interval
+        const float PulseDuration = 0.2f;  // length of each quick pulse
 
         bool _canFlicker;
         CubeStats _stats;
@@ -83,7 +87,10 @@ namespace CubeFly.Core
                         _flickerMat = _renderer.material;   // per-instance clone
                         _flickerMat.EnableKeyword("_EMISSION");
                     }
-                    float t = (Mathf.Sin(Time.time * FlickerHz * Mathf.PI * 2f) + 1f) * 0.5f;
+                    // Short fast pulse (0 → 1 → 0 over PulseDuration) then dark
+                    // until the next PulsePeriod — a slow warning heartbeat.
+                    float phase = Time.time % PulsePeriod;
+                    float t = phase < PulseDuration ? Mathf.Sin(phase / PulseDuration * Mathf.PI) : 0f;
                     _flickerMat.SetColor(EmissionColorId, FlickerColor * t);
                     _flickering = true;
                 }

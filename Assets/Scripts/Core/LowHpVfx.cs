@@ -25,7 +25,7 @@ namespace CubeFly.Core
         CubeStats _stats;
         ParticleSystem _smoke;
         Renderer _renderer;
-        MaterialPropertyBlock _mpb;
+        Material _flickerMat;
         bool _flickering;
         bool _done;
 
@@ -69,16 +69,22 @@ namespace CubeFly.Core
                 em.enabled = VfxSettings.LowHpSmoke;
             }
 
-            // Flicker (player cubes only) — live toggle.
+            // Flicker (player cubes only) — live toggle. The cube materials
+            // ship with _EMISSION off, so a MaterialPropertyBlock can't make
+            // emission render (a MPB can't toggle shader keywords). Use a
+            // per-renderer material instance — asset-safe, never touches the
+            // shared .mat, freed with the cube — and enable the keyword once.
             if (_canFlicker && _renderer != null)
             {
                 if (VfxSettings.LowHpFlicker)
                 {
-                    if (_mpb == null) _mpb = new MaterialPropertyBlock();
+                    if (_flickerMat == null)
+                    {
+                        _flickerMat = _renderer.material;   // per-instance clone
+                        _flickerMat.EnableKeyword("_EMISSION");
+                    }
                     float t = (Mathf.Sin(Time.time * FlickerHz * Mathf.PI * 2f) + 1f) * 0.5f;
-                    _renderer.GetPropertyBlock(_mpb);
-                    _mpb.SetColor(EmissionColorId, FlickerColor * t);
-                    _renderer.SetPropertyBlock(_mpb);
+                    _flickerMat.SetColor(EmissionColorId, FlickerColor * t);
                     _flickering = true;
                 }
                 else if (_flickering)
@@ -88,11 +94,12 @@ namespace CubeFly.Core
             }
         }
 
-        // Restore the cube's baseline emissive (mirror the delete tool's
-        // clear-on-un-hover). SetPropertyBlock(null) drops the override.
+        // Kill the emissive glow (toggle off / death). Leaves the now
+        // emission-black instance material in place — invisible; it's freed
+        // when the cube despawns.
         void ClearFlicker()
         {
-            if (_flickering && _renderer != null) _renderer.SetPropertyBlock(null);
+            if (_flickering && _flickerMat != null) _flickerMat.SetColor(EmissionColorId, Color.black);
             _flickering = false;
         }
 

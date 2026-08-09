@@ -25,6 +25,16 @@ namespace CubeFly.Fly
         [Header("Layout")]
         [SerializeField] float spacing = 16f;
         [SerializeField] float bottomMargin = 30f;
+
+        [Header("Selection cue")]
+        [Tooltip("Alpha of alive-but-unselected weapon slots. The selected slot stays at 1 — the dim contrast is the primary at-a-glance cue; the ochre ring + tracer are the flair on top.")]
+        [SerializeField] float unselectedAlpha = 0.55f;
+        [Tooltip("Seconds for the tracer to travel once around the selected slot. Slow on purpose — it should read as 'active', not flicker for attention.")]
+        [SerializeField] float tracerLapSeconds = 3f;
+        [Tooltip("Length of the travelling tracer segment, in pixels along the slot edge.")]
+        [SerializeField] float tracerLength = 18f;
+        [Tooltip("Thickness of the travelling tracer segment, in pixels.")]
+        [SerializeField] float tracerThickness = 2f;
         [SerializeField] int fontSize = 22;
 
         Vector2 reloadBarSize = new Vector2(54f, 4f);
@@ -52,6 +62,7 @@ namespace CubeFly.Fly
         Outline[] _selectionOutlines; // ochre selection ring, per button
         CanvasGroup[] _canvasGroups;  // dead-dim group, per button
         Image[] _boltMarks;           // "no power" bolt glyph, per button (top-right)
+        Image _selectionTracer;       // single ochre segment lapping the selected slot's rim
 
         Text _noPowerFlash;           // centre-screen "No Power!" flash (persistent)
         Coroutine _noPowerFlashRoutine;
@@ -163,6 +174,7 @@ namespace CubeFly.Fly
                 _selectionOutlines = null;
                 _canvasGroups = null;
                 _boltMarks = null;
+                _selectionTracer = null;   // destroyed with the container's children above
                 HideContainer();
                 return;
             }
@@ -194,6 +206,11 @@ namespace CubeFly.Fly
                 Sprite glyph = shape != null ? CscSprites.ForShape(shape.displayName, 0) : null;
                 UIStyle.DecorateToolbarSlot(btn, lbl, glyph, (idx + 1).ToString(), string.Empty);   // caption suppressed; glyph identifies the weapon
                 _selectionOutlines[i] = UIStyle.AddSelectionOutline(btn.gameObject);
+                // Beef the ring locally rather than in UIStyle.AddSelectionOutline —
+                // that helper is shared with the Build screen's shape/category/delete
+                // slots, whose look is already signed off. Fly slots sit over a busy
+                // desert, so they need a heavier ring than the Build UI does.
+                _selectionOutlines[i].effectDistance = new Vector2(4f, -4f);
                 _canvasGroups[i] = btn.gameObject.AddComponent<CanvasGroup>();
                 RectTransform brt = (RectTransform)btn.transform;
                 brt.anchorMin = brt.anchorMax = brt.pivot = new Vector2(0.5f, 0f);
@@ -221,6 +238,9 @@ namespace CubeFly.Fly
                 BuildReloadRect(_container, "ReloadBarBg" + i, reloadBarSize, barCenter, reloadBarBackground, isFill: false);
                 _reloadBars[i] = BuildReloadRect(_container, "ReloadBarFg" + i, reloadBarSize, barCenter, swatchColor, isFill: true);
             }
+
+            // Built last so it draws over the slots it laps.
+            _selectionTracer = BuildSelectionTracer(_container);
 
             RefreshWeaponStates();
             Debug.unityLogger.Log(TAG, $"Toolbar rebuilt with {count} weapon type(s).");
@@ -362,8 +382,12 @@ namespace CubeFly.Fly
                 // ✕ there instead (below), so the bolt is suppressed then.
                 bool starved = !fullyDead && !partiallyDead
                     && shootingController.GroupEnergyStarved(i);
+                // Dimming the unselected slots is the primary selection cue —
+                // it survives a busy background and reads peripherally, where a
+                // thin border alone doesn't. Dead slots stay dimmest.
                 if (_canvasGroups != null && _canvasGroups[i] != null)
-                    _canvasGroups[i].alpha = fullyDead ? 0.4f : 1f;
+                    _canvasGroups[i].alpha = fullyDead ? 0.4f
+                                           : (i == selected ? 1f : unselectedAlpha);
                 if (_boltMarks != null && _boltMarks[i] != null)
                     _boltMarks[i].enabled = starved;
 
@@ -394,6 +418,92 @@ namespace CubeFly.Fly
                     }
                 }
             }
+
+            UpdateSelectionTracer(selected);
+        }
+
+        // ---------- Selection tracer ----------
+
+        // Build the single travelling selection tracer — a thin ochre segment
+        // that laps the selected slot's rim. One instance serves the whole bar
+        // (only ever one selection). Anchored bottom-centre like the buttons so
+        // it shares their coordinate space; a sibling rather than a child, so
+        // the per-slot CanvasGroup dimming doesn't fade it.
+        Image BuildSelectionTracer(RectTransform parent)
+        {
+            GameObject go = new GameObject("SelectionTracer", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.transform.SetParent(parent, false);
+            int uiLayer = LayerMask.NameToLayer("UI");
+            if (uiLayer >= 0) go.layer = uiLayer;
+            RectTransform rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            Image img = go.GetComponent<Image>();
+            img.color = CscPalette.Ochre300;
+            img.raycastTarget = false;
+            img.enabled = false;
+            return img;
+        }
+
+        // Walk the tracer around the selected slot's perimeter: top edge
+        // left→right, down the right edge, bottom edge right→left, up the left
+        // edge — the segment swapping between horizontal and vertical
+        // proportions as it turns each corner. Unscaled time so it keeps
+        // ticking behind the pause overlay, matching the death-mark pulse.
+        void UpdateSelectionTracer(int selected)
+        {
+            if (_selectionTracer == null) return;
+
+            // Reuse the ring's own "alive and selected" verdict so the two
+            // cues can never disagree.
+            bool show = _buttons != null
+                     && selected >= 0 && selected < _buttons.Length
+                     && _buttons[selected] != null
+                     && _selectionOutlines != null
+                     && _selectionOutlines[selected] != null
+                     && _selectionOutlines[selected].enabled;
+            _selectionTracer.enabled = show;
+            if (!show) return;
+
+            // Buttons pivot at bottom-centre, so their centre sits half a slot
+            // above the stored anchoredPosition.
+            Vector2 slotPos = ((RectTransform)_buttons[selected].transform).anchoredPosition;
+            Vector2 centre = new Vector2(slotPos.x, slotPos.y + buttonSize.y * 0.5f);
+            float halfW = buttonSize.x * 0.5f;
+            float halfH = buttonSize.y * 0.5f;
+
+            float perimeter = 2f * (buttonSize.x + buttonSize.y);
+            float d = Mathf.Repeat(Time.unscaledTime / Mathf.Max(0.01f, tracerLapSeconds), 1f) * perimeter;
+
+            Vector2 pos;
+            Vector2 size;
+            if (d < buttonSize.x)                              // top edge, left → right
+            {
+                pos = new Vector2(centre.x - halfW + d, centre.y + halfH);
+                size = new Vector2(tracerLength, tracerThickness);
+            }
+            else if (d < buttonSize.x + buttonSize.y)          // right edge, top → bottom
+            {
+                float t = d - buttonSize.x;
+                pos = new Vector2(centre.x + halfW, centre.y + halfH - t);
+                size = new Vector2(tracerThickness, tracerLength);
+            }
+            else if (d < 2f * buttonSize.x + buttonSize.y)     // bottom edge, right → left
+            {
+                float t = d - buttonSize.x - buttonSize.y;
+                pos = new Vector2(centre.x + halfW - t, centre.y - halfH);
+                size = new Vector2(tracerLength, tracerThickness);
+            }
+            else                                               // left edge, bottom → top
+            {
+                float t = d - 2f * buttonSize.x - buttonSize.y;
+                pos = new Vector2(centre.x - halfW, centre.y - halfH + t);
+                size = new Vector2(tracerThickness, tracerLength);
+            }
+
+            RectTransform trt = _selectionTracer.rectTransform;
+            trt.anchoredPosition = pos;
+            trt.sizeDelta = size;
         }
     }
 }
